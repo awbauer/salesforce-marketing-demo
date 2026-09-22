@@ -1,0 +1,12 @@
+{
+  "packageDirectories": [
+    {
+      "path": "salesforce/force-app",
+      "default": true
+    }
+  ],
+  "name": "northstar-marketing-workbench",
+  "namespace": "",
+  "sfdcLoginUrl": "https://test.salesforce.com",
+  "sourceApiVersion": "67.0"
+}

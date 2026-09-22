@@ -1,0 +1,395 @@
+# Migrated AgentScript created by CopilotTemplateConverterService on 2026-02-05T19:49:37.225329356Z using Salesforce Spring '26
+# Generated from sfdc_cms__ContentBuilderAgent
+system:
+    instructions: "You are an AI Agent."
+    messages:
+        welcome: "Hi, I'm your content builder agent! I use generative AI to help you draft new content and refine existing content within the content builder. I may make mistakes, so check my work. What can I help you with?"
+        error: "Something went wrong. Try again later or ask your Salesforce admin for help."
+
+config:
+    agent_label: "Northstar Content Builder"
+    agent_template: "sfdc_cms__ContentBuilderAgent"
+    agent_type: "AgentforceEmployeeAgent"
+    description: "Interacts with the user to draft or revise content for Marketing Cloud from Salesforce CMS in the content builder."
+    developer_name: "Northstar_Content_Builder"
+
+variables:
+    EndUserId: linked string
+        source: @MessagingSession.MessagingEndUserId
+        description: "This variable may also be referred to as MessagingEndUser Id"
+    RoutableId: linked string
+        source: @MessagingSession.Id
+        description: "This variable may also be referred to as MessagingSession Id"
+    ContactId: linked string
+        source: @MessagingEndUser.ContactId
+        description: "This variable may also be referred to as MessagingEndUser ContactId"
+    EndUserLanguage: linked string
+        source: @MessagingSession.EndUserLanguage
+        description: "This variable may also be referred to as MessagingSession EndUserLanguage"
+    ChannelType: linked string
+        source: @MessagingSession.ChannelType
+        description: "This variable may also be referred to as MessagingSession ChannelType"
+    VerifiedCustomerId: mutable string
+        description: "This variable may also be referred to as VerifiedCustomerId"
+        visibility: "Internal"
+
+language:
+    additional_locales: "en_GB"
+    default_locale: "en_US"
+    all_additional_locales: False
+
+knowledge:
+    citations_enabled: False
+
+start_agent topic_selector:
+    description: "Welcome the user and determine the appropriate topic based on user input"
+    label: "Topic Selector"
+    reasoning:
+        instructions: ->
+            | Select the best tool to call based on conversation history and user's intent.
+        actions:
+            go_to_ContentCreation: @utils.transition to @topic.ContentCreation
+
+topic ContentCreation:
+    description: "Interacts with the user to draft or revise content from Salesforce CMS in the content builder."
+    label: "Content Creation"
+    reasoning:
+        instructions: ->
+            | Your job is to handle requests to generate new or refine existing pieces of content in the content builder. This could be tasks such as drafting subject lines or preheaders, optimizing SMS messages, generating headings, paragraphs, and button text, and creating blocks or components with or without corresponding text for emails or landing pages.
+              Additional instructions follow:
+              - Never use this topic to draft or refine Sales emails.
+              - If a specific property or element for generation cannot be identified, encourage the user to make a more explicit request.
+              - If the user asks for a refinement, use the conversation history to identify the previous user request that the refinement pertains to, and include that request in the 'userInput' input variable if applicable.
+              - If a user uses "this" in a request (for example, "Draft a different version of this paragraph," or "Revise the text in this section") the user likely intends to modify the text in the currently selected component or the most recently generated section. Do not ask the user to provide a value.
+        actions:
+            DraftOrRefineTextForProperty: @actions.DraftOrRefineTextForProperty
+                with contentKey=...
+                with contentTypeFqn=...
+                with userInput=...
+                with targetAudience=...
+                with keyMessage=...
+                with personality=...
+                with identity=...
+                with currentSelection=...
+            CreateOrRefineSectionWithContent: @actions.CreateOrRefineSectionWithContent
+                with contentKey=...
+                with contentTypeFqn=...
+                with userInput=...
+                with targetAudience=...
+                with keyMessage=...
+                with personality=...
+                with identity=...
+                with generatedSectionId=...
+            CreateOrRefineSection: @actions.CreateOrRefineSection
+                with contentKey=...
+                with contentTypeFqn=...
+                with userInput=...
+                with targetAudience=...
+                with keyMessage=...
+                with personality=...
+                with identity=...
+                with generatedSectionId=...
+    actions:
+        DraftOrRefineTextForProperty:
+            description: "Handles requests for text generation and refinement in the application where users create emails, SMS messages, and other types of content. No other action, such as IdentifyObjectByName, should precede this action. This action returns a JSON Patch object"
+            label: "Marketing Cloud: Draft Content"
+            require_user_confirmation: True
+            include_in_progress_indicator: True
+            source: "sfdc_cms__DraftOrRefineTextForProperty"
+            target: "standardInvocableAction://generateOrRefineTextForProperty"
+            inputs:
+                "contentKey": string
+                    description: "The unique identifier for a piece of saved or unsaved content. The content key is visible in Salesforce CMS on the content detail page of the associated piece of content."
+                    label: "Content Key"
+                    is_required: True
+                    is_user_input: False
+                    complex_data_type_name: "lightning__textType"
+                "contentTypeFqn": string
+                    description: "The content type that the user is actively creating or editing. For example: email, sms, landingPage."
+                    label: "Content Type"
+                    is_required: False
+                    is_user_input: False
+                    complex_data_type_name: "lightning__textType"
+                "userInput": string
+                    description: "The complete original input received from the user. Don’t omit the input or remove words from it. For example, if the user input is \"Generate a new subject line for my promotional email,\" the input for the action must be \"Generate a new subject line for my promotional email.\""
+                    label: "User Input"
+                    is_required: True
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "targetAudience": string
+                    description: "The specific audience that the generated text is intended for. It can encompass a particular group of individuals or demographic segment."
+                    label: "Target Audience"
+                    is_required: False
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "keyMessage": string
+                    description: "A concise statement or phrase that encapsulates the most important information or value propositions that you want to convey to the target segment. Never accept values of empty string (\"\") or \"null\". If unsure, you must ask the user."
+                    label: "Key Message"
+                    is_required: True
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "personality": string
+                    description: "The distinctive voice, style, personality, and manner of communication that the LLM uses to generate the content. For example, the tone can be casual, professional, inquisitive, or urgent."
+                    label: "Tone"
+                    is_required: True
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "identity": string
+                    description: "The essence of a brand that distinguishes it from competitors and resonates with customers."
+                    label: "Brand Identity"
+                    is_required: False
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "currentSelection": string
+                    description: "The component that’s currently selected on the canvas. The user most likely wants to modify this component."
+                    label: "Selected Component"
+                    is_required: False
+                    is_user_input: False
+                    complex_data_type_name: "lightning__textType"
+            outputs:
+                "path": string
+                    description: "The JSON Pointer to apply this new value to on a given JSON document. The path points to which specific property on which particular component is being changed."
+                    label: "Path"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "value": string
+                    description: "The complete raw text of the generated draft content. Includes the entire contents of a property. For example, includes HTML tags if they’re present in the content."
+                    label: "Value"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "type": string
+                    description: "The underlying data type of the generated text. For example, lightning__richTextType, lightning__textType."
+                    label: "Data Type"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "op": string
+                    description: "The operation is “add” if the value is new, or “replace” if an existing value is being updated."
+                    label: "Operation"
+                    is_displayable: False
+                    is_used_by_planner: False
+                    complex_data_type_name: "lightning__textType"
+        CreateOrRefineSectionWithContent:
+            description: "Handles requests for generation and refinement of components with text and blocks with text in the application where users create emails, landing pages, and other types of content. No other action, such as IdentifyObjectByName, should precede this action. This action returns a JSON Patch object"
+            label: "Marketing Cloud: Create Section with Content"
+            require_user_confirmation: True
+            include_in_progress_indicator: True
+            source: "sfdc_cms__CreateOrRefineSectionWithContent"
+            target: "standardInvocableAction://createOrRefineSectionWithContent"
+            inputs:
+                "contentKey": string
+                    description: "The unique identifier for a piece of saved or unsaved content. The content key is visible in Salesforce CMS on the content detail page of the associated piece of content."
+                    label: "Content Key"
+                    is_required: True
+                    is_user_input: False
+                    complex_data_type_name: "lightning__textType"
+                "contentTypeFqn": string
+                    description: "The content type that the user is actively creating or editing. For example: email, sms, landingPage."
+                    label: "Content Type"
+                    is_required: False
+                    is_user_input: False
+                    complex_data_type_name: "lightning__textType"
+                "userInput": string
+                    description: "The complete original input received from the user. Don’t omit the input or remove words from it. For example, if the user input is \"Generate a new subject line for my promotional email,\" the input for the action must be \"Generate a new subject line for my promotional email.\""
+                    label: "User Input"
+                    is_required: True
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "targetAudience": string
+                    description: "The specific audience that the generated text is intended for. It can encompass a particular group of individuals or demographic segment."
+                    label: "Target Audience"
+                    is_required: False
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "keyMessage": string
+                    description: "A concise statement or phrase that encapsulates the most important information or value propositions that you want to convey to the target segment. Never accept values of empty string (\"\") or \"null\". If unsure, you must ask the user."
+                    label: "Key Message"
+                    is_required: False
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "personality": string
+                    description: "The distinctive voice, style, personality, and manner of communication that the LLM uses to generate the content. For example, the tone can be casual, professional, inquisitive, or urgent."
+                    label: "Tone"
+                    is_required: False
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "identity": string
+                    description: "The essence of a brand that distinguishes it from competitors and resonates with customers."
+                    label: "Brand Identity"
+                    is_required: False
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "generatedSectionId": string
+                    description: "Section Id to be used for replacing section. Don't assume its value unless explicitly passed in the current request."
+                    label: "Generated Section Id"
+                    is_required: False
+                    is_user_input: False
+                    complex_data_type_name: "lightning__textType"
+            outputs:
+                "type": string
+                    description: "The underlying data type of the generated text. For example, lightning__richTextType, lightning__textType."
+                    label: "Data Type"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "operation": string
+                    description: "The operation is “add” if the value is new, or “replace” if an existing value is being updated."
+                    label: "Operation"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "parentPath": string
+                    description: "The id of the component that is the parent component of the currently selected component."
+                    label: "Parent Path"
+                    is_displayable: False
+                    is_used_by_planner: False
+                    complex_data_type_name: "lightning__textType"
+                "precedingSiblingPath": string
+                    description: "The id of the component that is to the immediate left of the currently selected component."
+                    label: "Preceding Sibling Path"
+                    is_displayable: False
+                    is_used_by_planner: False
+                    complex_data_type_name: "lightning__textType"
+                "blockValue": string
+                    description: "The JSON structure for the most recently generated section or section with content."
+                    label: "Section with Content Value"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "textValues": string
+                    description: "The list of component ids including the generated text in all the components in the most recently generated section."
+                    label: "Text Values"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "statusMessage": string
+                    description: "Confirmation message from Einstein to the user to communicate that the generated changes were applied successfully or failed to be applied."
+                    label: "Status Message"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "replaceSectionId": string
+                    description: "The id of an existing section that will be replaced with a newly generated section."
+                    label: "Replace Section Id"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "currentUserInput": string
+                    description: "The complete original input received from the user."
+                    label: "Current User Input"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+        CreateOrRefineSection:
+            description: "Handles requests for the generation and refinement of a section and components within the section in the application where users create emails, landing pages, and other types of content. These requests can include a specified number of columns in the section, and specified components to be included in the section, such as heading, paragraph, image or button components. This action should not be used when text generation is requested as part of user request. No other action, such as IdentifyObjectByName, should precede this action. This action returns a JSON Patch object."
+            label: "Marketing Cloud: Create Section"
+            require_user_confirmation: True
+            include_in_progress_indicator: True
+            source: "sfdc_cms__CreateOrRefineSection"
+            target: "standardInvocableAction://createOrRefineSectionWithContent"
+            inputs:
+                "contentKey": string
+                    description: "The unique identifier for a piece of saved or unsaved content. The content key is visible in Salesforce CMS on the content detail page of the associated piece of content."
+                    label: "Content Key"
+                    is_required: True
+                    is_user_input: False
+                    complex_data_type_name: "lightning__textType"
+                "contentTypeFqn": string
+                    description: "The content type that the user is actively creating or editing. For example: email, sms, landingPage."
+                    label: "Content Type"
+                    is_required: False
+                    is_user_input: False
+                    complex_data_type_name: "lightning__textType"
+                "userInput": string
+                    description: "The complete original input received from the user. Don’t omit the input or remove words from it. For example, if the user input is \"Generate a new subject line for my promotional email,\" the input for the action must be \"Generate a new subject line for my promotional email.\""
+                    label: "User Input"
+                    is_required: True
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "targetAudience": string
+                    description: "The specific audience that the generated text is intended for. It can encompass a particular group of individuals or demographic segment."
+                    label: "Target Audience"
+                    is_required: False
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "keyMessage": string
+                    description: "A concise statement or phrase that encapsulates the most important information or value propositions that you want to convey to the target segment. Never accept values of empty string (\"\") or \"null\". If unsure, you must ask the user."
+                    label: "Key Message"
+                    is_required: False
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "personality": string
+                    description: "The distinctive voice, style, personality, and manner of communication that the LLM uses to generate the content. For example, the tone can be casual, professional, inquisitive, or urgent."
+                    label: "Tone"
+                    is_required: False
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "identity": string
+                    description: "The essence of a brand that distinguishes it from competitors and resonates with customers."
+                    label: "Brand Identity"
+                    is_required: False
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "generatedSectionId": string
+                    description: "Section Id to be used for replacing section. Don't assume its value unless explicitly passed in the current request."
+                    label: "Generated Section Id"
+                    is_required: False
+                    is_user_input: False
+                    complex_data_type_name: "lightning__textType"
+            outputs:
+                "type": string
+                    description: "The underlying data type of the generated text. For example, lightning__richTextType, lightning__textType."
+                    label: "Data Type"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "operation": string
+                    description: "The operation is “add” if the value is new, or “replace” if an existing value is being updated."
+                    label: "Operation"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "parentPath": string
+                    description: "The id of the component that is the parent component of the currently selected component."
+                    label: "Parent Path"
+                    is_displayable: False
+                    is_used_by_planner: False
+                    complex_data_type_name: "lightning__textType"
+                "precedingSiblingPath": string
+                    description: "The id of the component that is to the immediate left of the currently selected component."
+                    label: "Preceding Sibling Path"
+                    is_displayable: False
+                    is_used_by_planner: False
+                    complex_data_type_name: "lightning__textType"
+                "blockValue": string
+                    description: "The JSON structure for the most recently generated section or section with content."
+                    label: "Section with Content Value"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "textValues": string
+                    description: "The list of component ids including the generated text in all the components in the most recently generated section."
+                    label: "Text Values"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "statusMessage": string
+                    description: "Confirmation message from Einstein to the user to communicate that the generated changes were applied successfully or failed to be applied."
+                    label: "Status Message"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "replaceSectionId": string
+                    description: "The id of an existing section that will be replaced with a newly generated section."
+                    label: "Replace Section Id"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+                "currentUserInput": string
+                    description: "The complete original input received from the user."
+                    label: "Current User Input"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"

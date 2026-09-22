@@ -1,0 +1,48 @@
+{
+  "generatedAt": "2026-09-20T00:07:50.021Z",
+  "status": "passed",
+  "fixedDefaults": {
+    "workspaceId": "northstar-demo",
+    "orchestratorModel": "@cf/openai/gpt-oss-20b",
+    "imageModel": "@cf/black-forest-labs/flux-2-klein-4b",
+    "imageSize": 1024,
+    "imageCap": 100,
+    "spendCapUsd": 25,
+    "transcriptRetentionDays": 14,
+    "imageRetentionDays": 7,
+    "roles": [
+      "evaluator",
+      "demo-admin"
+    ],
+    "browsers": [
+      "chrome",
+      "edge"
+    ],
+    "allowedWrites": [
+      "save-draft-campaign",
+      "create-review-task",
+      "attach-generated-image"
+    ]
+  },
+  "toolCatalog": {
+    "version": 1,
+    "tools": [
+      {
+        "name": "get-campaign-summary",
+        "riskClass": "read",
+        "source": "mock"
+      },
+      {
+        "name": "check-campaign-readiness",
+        "riskClass": "read",
+        "source": "mock"
+      },
+      {
+        "name": "draft-campaign-brief",
+        "riskClass": "draft",
+        "source": "mock"
+      }
+    ]
+  },
+  "failures": []
+}

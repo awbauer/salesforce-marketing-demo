@@ -1,0 +1,17 @@
+{
+  "workspace": "Northstar Demo",
+  "required": {
+    "apiVersion": "67.0",
+    "sandbox": true,
+    "businessUnit": "Northstar Demo",
+    "dataSpace": "Northstar Demo",
+    "features": ["Marketing Cloud Next", "Data 360", "Agentforce", "Salesforce Hosted MCP Servers"],
+    "agents": [
+      "Campaign Creation",
+      "Content Builder",
+      "Account Discovery",
+      "Campaign Readiness and Governance"
+    ],
+    "sampleRecords": ["Account", "Campaign"]
+  }
+}

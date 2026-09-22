@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Bot xmlns="http://soap.sforce.com/2006/04/metadata">
+    <agentDSLEnabled>true</agentDSLEnabled>
+    <agentTemplate>MktCloud__CampaignCreationAgent</agentTemplate>
+    <agentType>AgentforceEmployeeAgent</agentType>
+    <botMlDomain>
+        <label>Northstar Campaign Creation</label>
+        <name>Northstar_Campaign_Creation</name>
+    </botMlDomain>
+    <botSource>None</botSource>
+    <description>Plan and create multi-series marketing campaigns from a written objective or marketing brief.</description>
+    <label>Northstar Campaign Creation</label>
+    <logPrivateConversationData>false</logPrivateConversationData>
+    <richContentEnabled>true</richContentEnabled>
+    <sessionTimeout>0</sessionTimeout>
+    <type>InternalCopilot</type>
+</Bot>
+

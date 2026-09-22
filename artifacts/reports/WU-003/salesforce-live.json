@@ -1,0 +1,180 @@
+{
+  "generatedAt": "2026-09-21T22:24:00Z",
+  "targetAlias": "northstar-pot",
+  "classification": {
+    "salesforceIsSandbox": false,
+    "repositoryTreatment": "user-approved dedicated proof org",
+    "exactOrgIdRequiredAtRuntime": true,
+    "decision": "docs/decisions/ADR-003-northstar-proof-org-classification.md"
+  },
+  "existingOrgArtifacts": {
+    "policy": "read-only",
+    "excluded": ["Fizi", "Agent Two", "existing MCP servers", "existing External Client Applications"],
+    "implementation": "Create separately named Northstar artifacts only; do not repurpose or modify pre-existing org state without explicit permission."
+  },
+  "smokeValidation": {
+    "status": "blocked-missing-consent-samples",
+    "checksPassed": 17,
+    "checksFailed": 1
+  },
+  "metadataDeployment": {
+    "status": "succeeded",
+    "deploymentId": "0AfjV000002VVj9SAG",
+    "components": 9,
+    "apexClassesReadBack": 6,
+    "permissionSetReadBack": "Northstar_Marketing_Workbench_Evaluator"
+  },
+  "apexTests": {
+    "status": "passed",
+    "testsRan": 9,
+    "passing": 9,
+    "failing": 0,
+    "coverage": [
+      "success",
+      "empty-input",
+      "permission-denied",
+      "validation",
+      "confirmation-evidence",
+      "idempotent-replay",
+      "authoritative-read-back",
+      "forged-signature-rejected-with-zero-write",
+      "five-minute-signed-scope"
+    ]
+  },
+  "agentScript": {
+    "apiName": "Campaign_Readiness_Governance",
+    "sourceValidation": "passed",
+    "publish": "active",
+    "publishAttempts": 5,
+    "builderReadBack": "Agentforce Builder reports Campaign Readiness and Governance Version 1 (Active), 0 errors, and no detected problems. Metadata retrieval 09SjV000006g7rFUAQ returned Bot, BotVersion, and AiAuthoringBundle source.",
+    "botId": "0XxjV000000YDVtSAO",
+    "bundleId": "1bZjV000000GAjNUAW",
+    "agentUser": "campaign_readiness_governance@00djv000001wjxl732432280.ext",
+    "cliRetest": "The same timeout reproduced after updating Salesforce CLI from 2.132.14 to 2.150.6; the approved Setup UI path created the draft instead."
+  },
+  "standardAgents": {
+    "status": "active-retrieved-validated",
+    "required": ["Campaign Creation", "Content Builder", "Account Discovery"],
+    "observedBotMetadata": ["Campaign_Readiness_Governance", "Northstar_Campaign_Creation", "Northstar_Content_Builder", "Northstar_Account_Discovery"],
+    "observedAuthoringBundles": ["Campaign_Readiness_Governance_1", "Northstar_Campaign_Creation_1", "Northstar_Content_Builder_1", "Northstar_Account_Discovery_1"],
+    "retrievalIds": ["09SjV000006g8IfUAI", "09SjV000006g8VZUAY"],
+    "validation": "sf agent validate authoring-bundle passed for Northstar_Campaign_Creation, Northstar_Content_Builder, and Northstar_Account_Discovery.",
+    "setupReadBack": "Marketing Cloud, Data Cloud, data streams, Agentforce, and generative AI are active. Agentforce Builder shows dedicated Northstar agents instantiated from the Campaign Creation, Content Builder Agent, and Account Discovery Agent templates. All three are committed, active, retrieved, and validated. The pre-existing Fizi agent remains outside the proof and unchanged."
+  },
+  "hostedMcp": {
+    "apiName": "NorthstarMarketingWorkbench",
+    "status": "active-authenticated-13-tools-direct-proof-passed",
+    "agentBackedTools": 11,
+    "apexBackedTools": 2,
+    "totalTools": 13,
+    "referencedAgents": ["Campaign_Readiness_Governance", "Northstar_Campaign_Creation", "Northstar_Content_Builder", "Northstar_Account_Discovery"],
+    "failedCheckOnlyDeploymentId": "0AfjV000002XAInSAO",
+    "successfulCheckOnlyDeploymentId": "0AfjV000002XAM1SAO",
+    "deploymentId": "0AfjV000002Y3f4SAC",
+    "apexCompositionFailedCheckOnlyDeploymentId": "0AfjV000002YQerSAG",
+    "apexCompositionSuccessfulCheckOnlyDeploymentId": "0AfjV000002YP66SAG",
+    "apexCompositionDeploymentId": "0AfjV000002YQyDSAW",
+    "apexCompositionRetrievalId": "09SjV000006iMpOUAU",
+    "apexTestRunId": "707jV000003vP0F",
+    "apexTestMethodsPassed": 9,
+    "serverId": "1g1jV0000000rIrQAI",
+    "serverAccessId": "1fzjV000000i4zBQAQ",
+    "active": true,
+    "retrievalId": "09SjV000006izE1UAI",
+    "endpoint": "https://api.salesforce.com/platform/mcp/v1/custom/NorthstarMarketingWorkbench",
+    "preAuthProbe": "HTTP 401 with JWT Token is required, proving the deployed route exists before OAuth configuration",
+    "toolingReadBack": "Exactly 13 McpServerToolDefinition records and 13 McpServerToolApiDefinition records; both Apex writes are non-read-only, non-destructive, idempotent, and bound through aa:apex identifiers. Retrieval 09SjV000006iMpOUAU matched the checked-in server XML exactly. McpServerAccess 1fzjV000000i4zBQAQ was created for this net-new server and read back Active=true.",
+    "existingArtifactsModified": false
+  },
+  "directMcpProtocol": {
+    "status": "passed",
+    "oauth": "per-user PKCE evaluator grant",
+    "protocolVersion": "2025-06-18",
+    "initialized": true,
+    "initializedNotificationSent": true,
+    "toolsListed": 13,
+    "exactCatalogMatch": true,
+    "readinessVerified": true,
+    "missingConfirmationFieldsRejected": true,
+    "note": "The original direct negative proof omitted required fields. It did not prove that fabricated non-empty fields were cryptographically authentic; the later portal test exposed that gap.",
+    "campaignId": "701jV000004GglIQAS",
+    "tokenPersistedInRepository": false,
+    "evidence": "artifacts/reports/WU-003/salesforce-mcp-protocol.json"
+  },
+  "externalClientApplication": {
+    "apiName": "Northstar_Marketing_Workbench_MCP",
+    "status": "deployed-read-back",
+    "applicationId": "0xIjV000000D6VpUAK",
+    "deploymentId": "0AfjV000002YPcLSAW",
+    "policyDeploymentId": "0AfjV000002YQIHSA4",
+    "policyRetrievalId": "09SjV000006izVlUAI",
+    "scopes": ["mcp_api", "refresh_token"],
+    "pkceRequired": true,
+    "namedUserJwt": true,
+    "clientCredentialsFlow": false,
+    "permittedUsers": "AdminApprovedPreAuthorized",
+    "permissionSet": "Northstar_Marketing_Workbench_Evaluator",
+    "refreshTokenInactivityDays": 30,
+    "refreshTokenRotation": true,
+    "existingCloudflareMcpModified": false
+  },
+  "evaluatorPermissionAssignment": {
+    "status": "assigned",
+    "assignee": "andrew.bauer@marketing.demo.aug31",
+    "permissionSet": "Northstar_Marketing_Workbench_Evaluator",
+    "readBack": "PermissionSetAssignment query returned exactly one matching assignment."
+  },
+  "agentUserAssignment": {
+    "status": "created-and-assigned",
+    "userId": "005jV000002ABc9QAG",
+    "username": "campaign_readiness_governance@00djv000001wjxl732432280.ext",
+    "profile": "Einstein Agent User",
+    "active": true,
+    "fiziUserReused": false
+  },
+  "representativeData": {
+    "status": "blocked-missing-consent-samples",
+    "activeBusinessUnits": 1,
+    "activeDataSpaces": 1,
+    "campaigns": 30,
+    "accounts": 83,
+    "coreIndividuals": 12,
+    "data360Individuals": 506,
+    "identityLinks": 506,
+    "consentRecords": 0,
+    "note": "Consent objects and the Data 360 consent DMO are queryable, but aggregate-only read-back found no sample consent records. No out-of-scope consent write was attempted."
+  },
+  "confirmationSecurity": {
+    "status": "remediated-compatible-contract-live",
+    "incidentTaskId": "00TjV000000pyVBUAY",
+    "incidentCampaignId": "701jV000004GglIQAS",
+    "incidentRecordReadBack": true,
+    "incidentRecordDeleted": false,
+    "failedBroadValidationId": "0AfjV000002ZnWASA0",
+    "successfulTargetedValidationId": "0AfjV000002ZvYXSA0",
+    "deploymentId": "0AfjV000002ZvezSAC",
+    "testRunId": "707jV000003vP0F",
+    "testsPassed": 9,
+    "compatibilityValidationId": "0AfjV000002aQXVSA2",
+    "compatibilityDeploymentId": "0AfjV000002aQajSAE",
+    "compatibilityTestRunId": "707jV000003xCcvQAE",
+    "compatibilityTestsPassed": 9,
+    "configurationRecordId": "a4ojV000000AvjNQAS",
+    "secretInSourceControl": false,
+    "verification": "Apex parses a versioned confirmation token and verifies its HMAC-SHA256 over action, campaign, confirmation ID, request hash, idempotency key, Unix expiry, and Cloudflare principal; expiry is bounded to five minutes. The transport retains Cloudflare's immutable five-field manual-OAuth schema. A fully populated forged token sent through the live Hosted MCP action was rejected, and authoritative SOQL read-back returned zero Tasks for idempotency key forged-5357c62d-2fd9-4928-83d2-11fdc9a0b0c9."
+  },
+  "externalWrites": [
+    "Deployed six API 67.0 Northstar Apex classes, two idempotency fields, and one evaluator permission set.",
+    "Updated only the deployed Northstar test class while resolving org-specific test isolation behavior.",
+    "Assigned Northstar_Marketing_Workbench_Evaluator to the approved evaluator user and read back the exact assignment.",
+    "Created and assigned a dedicated active Einstein Agent User to Campaign Readiness and Governance; no Fizi identity was reused.",
+    "Committed and activated Campaign Readiness and Governance Version 1, then retrieved its Bot, BotVersion, and AiAuthoringBundle metadata.",
+    "Instantiated, committed, and activated Northstar Campaign Creation, Northstar Content Builder, and Northstar Account Discovery from Salesforce standard templates, then retrieved and validated their generated metadata.",
+    "Created and read back net-new NorthstarMarketingWorkbench Hosted MCP server and Northstar_Marketing_Workbench_MCP External Client Application; existing MCP and ECA artifacts were not modified.",
+    "Updated only the two Northstar write classes to global Hosted MCP visibility and expanded only NorthstarMarketingWorkbench to the complete 13-tool catalog; read back all 13 live bindings.",
+    "Activated only the net-new NorthstarMarketingWorkbench server by creating McpServerAccess 1fzjV000000i4zBQAQ and read back Active=true.",
+    "The fabricated-confirmation portal negative test unexpectedly created proof Task 00TjV000000pyVBUAY; it was read back and not deleted.",
+    "Deployed NorthstarConfirmationVerifier plus the net-new Northstar confirmation hierarchy setting and provisioned org-default configuration record a4ojV000000AvjNQAS without committing its signing key."
+    ,"Deployed the five-field signed-token compatibility contract as 0AfjV000002aQajSAE; Apex run 707jV000003xCcvQAE passed 9/9."
+  ]
+}

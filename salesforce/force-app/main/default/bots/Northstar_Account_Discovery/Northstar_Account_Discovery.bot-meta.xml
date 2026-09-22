@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Bot xmlns="http://soap.sforce.com/2006/04/metadata">
+    <agentDSLEnabled>true</agentDSLEnabled>
+    <agentType>AgentforceEmployeeAgent</agentType>
+    <botMlDomain>
+        <label>Northstar Account Discovery</label>
+        <name>Northstar_Account_Discovery</name>
+    </botMlDomain>
+    <botSource>None</botSource>
+    <description>Helps marketers identify buying opportunities on existing accounts by summarizing engagement and suggesting key stakeholders.</description>
+    <label>Northstar Account Discovery</label>
+    <logPrivateConversationData>false</logPrivateConversationData>
+    <richContentEnabled>true</richContentEnabled>
+    <sessionTimeout>0</sessionTimeout>
+    <type>InternalCopilot</type>
+</Bot>
+

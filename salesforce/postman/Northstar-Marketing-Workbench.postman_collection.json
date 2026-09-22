@@ -1,0 +1,132 @@
+{
+  "info": {
+    "name": "Northstar Marketing Workbench - direct Salesforce MCP gate",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "oauth2",
+    "oauth2": [
+      { "key": "grant_type", "value": "authorization_code", "type": "string" },
+      { "key": "useBrowser", "value": true, "type": "boolean" },
+      { "key": "addTokenTo", "value": "header", "type": "string" },
+      { "key": "scope", "value": "mcp_api refresh_token", "type": "string" },
+      { "key": "authUrl", "value": "{{salesforce_authorization_url}}", "type": "string" },
+      { "key": "accessTokenUrl", "value": "{{salesforce_token_url}}", "type": "string" },
+      { "key": "clientId", "value": "{{external_client_id}}", "type": "string" },
+      { "key": "redirect_uri", "value": "https://oauth.pstmn.io/v1/callback", "type": "string" },
+      { "key": "challengeAlgorithm", "value": "S256", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "salesforce_mcp_url", "value": "" },
+    {
+      "key": "salesforce_authorization_url",
+      "value": "https://login.salesforce.com/services/oauth2/authorize"
+    },
+    {
+      "key": "salesforce_token_url",
+      "value": "https://login.salesforce.com/services/oauth2/token"
+    },
+    { "key": "external_client_id", "value": "" },
+    { "key": "campaign_id", "value": "" },
+    { "key": "mcp_session_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1 - Initialize",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json, text/event-stream" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"northstar-postman-gate\",\"version\":\"1.0.0\"}}}"
+        },
+        "url": "{{salesforce_mcp_url}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('initialize succeeds', () => pm.response.to.have.status(200));",
+              "const session = pm.response.headers.get('mcp-session-id');",
+              "if (session) pm.collectionVariables.set('mcp_session_id', session);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 - List curated tools",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json, text/event-stream" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Mcp-Session-Id", "value": "{{mcp_session_id}}", "disabled": false }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}"
+        },
+        "url": "{{salesforce_mcp_url}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('tools/list succeeds', () => pm.response.to.have.status(200));",
+              "pm.test('forbidden tools are absent', () => { const text = pm.response.text(); ['publish','send','activate','delete','suppress'].forEach(name => pm.expect(text.toLowerCase()).not.to.include('\\\"name\\\":\\\"' + name)); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 - Read campaign readiness",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json, text/event-stream" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Mcp-Session-Id", "value": "{{mcp_session_id}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"check_campaign_readiness\",\"arguments\":{\"campaignId\":\"{{campaign_id}}\"}}}"
+        },
+        "url": "{{salesforce_mcp_url}}"
+      }
+    },
+    {
+      "name": "4 - Negative unconfirmed write",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json, text/event-stream" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Mcp-Session-Id", "value": "{{mcp_session_id}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"create_campaign_review_request\",\"arguments\":{\"campaignId\":\"{{campaign_id}}\"}}}"
+        },
+        "url": "{{salesforce_mcp_url}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('missing confirmation fields fail closed', () => pm.expect(pm.response.text()).to.match(/validation|required|invalid/i));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

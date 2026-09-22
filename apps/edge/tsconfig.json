@@ -1,0 +1,9 @@
+{
+  "extends": "agents/tsconfig",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": { "@northstar/contracts": ["../../packages/contracts/src/index.ts"] }
+  },
+  "include": ["src/**/*.ts", "../../packages/contracts/src/**/*.ts"],
+  "exclude": ["src/**/*.worker.test.ts"]
+}

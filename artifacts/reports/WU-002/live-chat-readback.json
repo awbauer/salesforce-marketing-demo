@@ -1,0 +1,19 @@
+{
+  "generatedAt": "2026-09-20T00:05:14Z",
+  "status": "passed",
+  "source": "cloudflare_worker_tail_and_human_email_otp_session",
+  "liveModelWorkerVersion": "b35dcbcf-3a89-4f23-967b-dc3dda68fca5",
+  "finalFormattingWorkerVersion": "929f6957-53aa-4f22-9fcf-e2630eb8ffa0",
+  "checks": {
+    "authenticatedWebSocketConnected": true,
+    "aiGatewayModelTurnCompleted": true,
+    "assistantTokenEstimate": 304,
+    "streamClosedCleanly": true,
+    "assistantMessagePersisted": true,
+    "historyReadBackHttpStatus": 200,
+    "persistedMarkdownNormalizedByUnitTest": true,
+    "plainTextOutputConstraintVerifiedByBuild": true,
+    "credentialsRecorded": false,
+    "customerPiiRecorded": false
+  }
+}

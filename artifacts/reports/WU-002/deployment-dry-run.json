@@ -1,0 +1,14 @@
+{
+  "generatedAt": "2026-09-19T18:31:51Z",
+  "status": "passed",
+  "assetsRead": 5,
+  "bindings": [
+    "MarketingOrchestrator",
+    "APP_DB",
+    "CAMPAIGN_ASSETS",
+    "AI",
+    "ASSETS"
+  ],
+  "mutation": false,
+  "command": "pnpm exec wrangler deploy --dry-run"
+}

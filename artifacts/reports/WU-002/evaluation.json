@@ -1,0 +1,149 @@
+{
+  "generatedAt": "2026-09-20T00:07:49.792Z",
+  "status": "passed",
+  "score": 1,
+  "threshold": 0.9,
+  "total": 20,
+  "results": [
+    {
+      "id": "routing-01",
+      "prompt": "Review the sample campaign readiness",
+      "expected": "campaign-readiness",
+      "actual": "campaign-readiness",
+      "passed": true
+    },
+    {
+      "id": "routing-02",
+      "prompt": "Explain recent sample campaign performance",
+      "expected": "campaign-performance",
+      "actual": "campaign-performance",
+      "passed": true
+    },
+    {
+      "id": "routing-03",
+      "prompt": "Review the sample campaign readiness",
+      "expected": "campaign-readiness",
+      "actual": "campaign-readiness",
+      "passed": true
+    },
+    {
+      "id": "routing-04",
+      "prompt": "Explain recent sample campaign performance",
+      "expected": "campaign-performance",
+      "actual": "campaign-performance",
+      "passed": true
+    },
+    {
+      "id": "routing-05",
+      "prompt": "Review the sample campaign readiness",
+      "expected": "campaign-readiness",
+      "actual": "campaign-readiness",
+      "passed": true
+    },
+    {
+      "id": "routing-06",
+      "prompt": "Explain recent sample campaign performance",
+      "expected": "campaign-performance",
+      "actual": "campaign-performance",
+      "passed": true
+    },
+    {
+      "id": "routing-07",
+      "prompt": "Review the sample campaign readiness",
+      "expected": "campaign-readiness",
+      "actual": "campaign-readiness",
+      "passed": true
+    },
+    {
+      "id": "routing-08",
+      "prompt": "Explain recent sample campaign performance",
+      "expected": "campaign-performance",
+      "actual": "campaign-performance",
+      "passed": true
+    },
+    {
+      "id": "routing-09",
+      "prompt": "Review the sample campaign readiness",
+      "expected": "campaign-readiness",
+      "actual": "campaign-readiness",
+      "passed": true
+    },
+    {
+      "id": "routing-10",
+      "prompt": "Explain recent sample campaign performance",
+      "expected": "campaign-performance",
+      "actual": "campaign-performance",
+      "passed": true
+    },
+    {
+      "id": "routing-11",
+      "prompt": "Review the sample campaign readiness",
+      "expected": "campaign-readiness",
+      "actual": "campaign-readiness",
+      "passed": true
+    },
+    {
+      "id": "routing-12",
+      "prompt": "Explain recent sample campaign performance",
+      "expected": "campaign-performance",
+      "actual": "campaign-performance",
+      "passed": true
+    },
+    {
+      "id": "routing-13",
+      "prompt": "Review the sample campaign readiness",
+      "expected": "campaign-readiness",
+      "actual": "campaign-readiness",
+      "passed": true
+    },
+    {
+      "id": "routing-14",
+      "prompt": "Explain recent sample campaign performance",
+      "expected": "campaign-performance",
+      "actual": "campaign-performance",
+      "passed": true
+    },
+    {
+      "id": "routing-15",
+      "prompt": "Review the sample campaign readiness",
+      "expected": "campaign-readiness",
+      "actual": "campaign-readiness",
+      "passed": true
+    },
+    {
+      "id": "routing-16",
+      "prompt": "Explain recent sample campaign performance",
+      "expected": "campaign-performance",
+      "actual": "campaign-performance",
+      "passed": true
+    },
+    {
+      "id": "routing-17",
+      "prompt": "Review the sample campaign readiness",
+      "expected": "campaign-readiness",
+      "actual": "campaign-readiness",
+      "passed": true
+    },
+    {
+      "id": "routing-18",
+      "prompt": "Explain recent sample campaign performance",
+      "expected": "campaign-performance",
+      "actual": "campaign-performance",
+      "passed": true
+    },
+    {
+      "id": "routing-19",
+      "prompt": "Review the sample campaign readiness",
+      "expected": "campaign-readiness",
+      "actual": "campaign-readiness",
+      "passed": true
+    },
+    {
+      "id": "routing-20",
+      "prompt": "Explain recent sample campaign performance",
+      "expected": "campaign-performance",
+      "actual": "campaign-performance",
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "generatedAt": "2026-09-21T09:45:00.780Z",
+  "status": "blocked",
+  "targetProvided": true,
+  "exactProofOrgApprovalProvided": true,
+  "sandboxRequired": true,
+  "apiVersionRequired": "67.0",
+  "observations": {
+    "campaigns": 1,
+    "accounts": 1,
+    "activeBusinessUnits": 1,
+    "activeDataSpaces": 1,
+    "consentRecords": 0,
+    "identityLinks": 506
+  },
+  "checks": [
+    {
+      "label": "authorized org",
+      "passed": true
+    },
+    {
+      "label": "organization classification query",
+      "passed": true
+    },
+    {
+      "label": "sandbox or exact approved proof-org classification",
+      "passed": true
+    },
+    {
+      "label": "representative Campaign record",
+      "passed": true
+    },
+    {
+      "label": "representative Account record",
+      "passed": true
+    },
+    {
+      "label": "Marketing Cloud business unit access",
+      "passed": true
+    },
+    {
+      "label": "Data 360 data space access",
+      "passed": true
+    },
+    {
+      "label": "ContactPointTypeConsent aggregate access",
+      "passed": true
+    },
+    {
+      "label": "ContactPointConsent aggregate access",
+      "passed": true
+    },
+    {
+      "label": "CommSubscriptionConsent aggregate access",
+      "passed": true
+    },
+    {
+      "label": "PartyConsent aggregate access",
+      "passed": true
+    },
+    {
+      "label": "ssot__CommunicationSubscriptionConsent__dlm aggregate access",
+      "passed": true
+    },
+    {
+      "label": "Data 360 identity-link aggregate access",
+      "passed": true
+    },
+    {
+      "label": "Agent Script metadata availability",
+      "passed": true
+    },
+    {
+      "label": "active Marketing Cloud business unit",
+      "passed": true
+    },
+    {
+      "label": "active Data 360 data space",
+      "passed": true
+    },
+    {
+      "label": "representative consent data",
+      "passed": false
+    },
+    {
+      "label": "representative identity-link data",
+      "passed": true
+    }
+  ],
+  "failures": [
+    "Consent capability is accessible, but the checked consent stores contain no representative records."
+  ]
+}

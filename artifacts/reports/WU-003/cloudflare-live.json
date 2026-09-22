@@ -1,0 +1,122 @@
+{
+  "generatedAt": "2026-09-21T22:45:00Z",
+  "status": "portal-compatible-signed-writes-enabled-worker-proof-pending",
+  "account": "Andrew Bauer",
+  "worker": {
+    "name": "northstar-marketing-workbench-pot",
+    "url": "https://northstar-marketing-workbench-pot.andrew-bauer.workers.dev",
+    "versionId": "5f362c58-5294-4f4a-949d-cd6d3e1b8b65",
+    "versionNumber": 11,
+    "bindingsReadBack": [
+      "ACCESS_AUD",
+      "ACCESS_TEAM_DOMAIN",
+      "AI",
+      "AI_GATEWAY_ID",
+      "APP_DB",
+      "ASSETS",
+      "AUTH_MODE",
+      "CAMPAIGN_ASSETS",
+      "CAMPAIGN_IMAGE_MODEL",
+      "CONFIRMATION_SIGNING_KEY",
+      "ENVIRONMENT",
+      "MarketingOrchestrator",
+      "ORCHESTRATOR_MODEL",
+      "PROOF_WORKSPACE_ID",
+      "SALESFORCE_MCP_URL"
+    ],
+    "salesforceMcpConfigured": true,
+    "unauthenticatedProbe": "HTTP 302 Access redirect for health, readiness, and session paths; the AWB policy remains enforced and unchanged."
+  },
+  "d1": {
+    "name": "northstar-marketing-workbench-pot",
+    "migration": "migrations/0001_phase2_confirmation_audit.sql",
+    "status": "applied-read-back",
+    "bookmark": "00000004-00000006-000050ed-5ea8f122aae6107af15ea575f909b7a5",
+    "schema": [
+      "confirmation_audit table",
+      "confirmation_audit_updated_at index"
+    ]
+  },
+  "mcpPortal": {
+    "status": "ready-compatible-signed-write-tools-enabled",
+    "server": {
+      "id": "northstar-marketing-salesforce",
+      "name": "Northstar Marketing Salesforce",
+      "hostname": "https://api.salesforce.com/platform/mcp/v1/custom/NorthstarMarketingWorkbench",
+      "authType": "oauth",
+      "authMode": "manual",
+      "tokenEndpointAuthMethod": "none",
+      "sharedOauthCallback": true,
+      "secureWebGateway": false,
+      "status": "ready",
+      "note": "Evaluator PKCE authorization completed and Cloudflare synchronized all 13 upstream tools. The live create validator required a non-empty client_secret even for token_endpoint_auth_method=none; the successful public-client OAuth flow proved the non-secret sentinel is not used for token authentication."
+    },
+    "portal": {
+      "id": "northstar-marketing-workbench",
+      "name": "Northstar Marketing Workbench",
+      "hostname": "northstar-mcp.becurious.one",
+      "codeMode": "off",
+      "secureWebGateway": false,
+      "serverId": "northstar-marketing-salesforce",
+      "onBehalf": true,
+      "defaultDisabled": true,
+      "toolsSynchronized": 13,
+      "toolsEnabled": 13,
+      "writeToolsEnabled": 2
+    },
+    "routing": {
+      "dnsRecordId": "f21945815a4a9ba1c814311a7a463029",
+      "type": "CNAME",
+      "name": "northstar-mcp.becurious.one",
+      "target": "gateway.agents.cloudflare.com",
+      "proxied": true
+    },
+    "accessApplication": {
+      "id": "0a614dc6-71b3-46f2-ab92-a6f554dd6fc5",
+      "name": "Northstar Marketing Workbench MCP",
+      "type": "mcp_portal",
+      "domain": "northstar-mcp.becurious.one",
+      "sessionDuration": "24h",
+      "policy": {
+        "id": "4720ef80-6867-4007-a97d-728af4363443",
+        "name": "AWB",
+        "decision": "allow",
+        "precedence": 1,
+        "criterion": "email allow rule read back; address omitted from this committed report"
+      }
+    },
+    "serverAccessApplication": {
+      "id": "620d9e7b-7d75-482b-83cb-34c7d628a76b",
+      "name": "Northstar Marketing Salesforce MCP",
+      "type": "mcp",
+      "destination": {
+        "type": "via_mcp_server_portal",
+        "mcpServerId": "northstar-marketing-salesforce"
+      },
+      "policy": {
+        "id": "4720ef80-6867-4007-a97d-728af4363443",
+        "name": "AWB",
+        "decision": "allow",
+        "precedence": 1,
+        "criterion": "email allow rule read back; address omitted from this committed report"
+      }
+    },
+    "unauthenticatedProbe": "HTTP 403 text/plain from the MCP portal hostname, confirming that Access denies an unauthenticated command-line request without redirecting it into an HTML login flow.",
+    "observedApiResult": "Evaluator PKCE OAuth, MCP initialize/initialized, server discovery, exact 13-tool synchronization, and a read-only campaign-readiness call passed through the portal. A fabricated-confirmation negative test exposed that the original Apex actions only checked for non-empty fields and created Task 00TjV000000pyVBUAY. The write tools were disabled during remediation. Salesforce now verifies a versioned token carrying the HMAC, five-minute expiry, exact scope, and principal while retaining Cloudflare's immutable five-field manual-OAuth schema. Deployment 0AfjV000002aQajSAE and Apex run 707jV000003xCcvQAE passed; the direct MCP gate again proves exact 13-tool discovery and unconfirmed-write rejection. Both writes are re-enabled in the portal but remain excluded from autonomous model execution; Worker evaluator OAuth and a confirmed-write read-back remain.",
+    "existingPortalOrServerModified": false
+  },
+  "externalMutations": [
+    "Applied the checked-in idempotent confirmation audit migration to the existing Northstar proof D1 database.",
+    "Deployed the compatible signed-confirmation build as Worker version 5f362c58-5294-4f4a-949d-cd6d3e1b8b65 (v11).",
+    "Created net-new Cloudflare MCP server northstar-marketing-salesforce with manual per-user OAuth, shared callback, no Secure Web Gateway, and the source-controlled 13-tool names staged as server overrides.",
+    "Created net-new portal northstar-marketing-workbench at northstar-mcp.becurious.one with Code Mode off, on_behalf=true, and default_disabled=true; it remains fail-closed with zero synchronized tools.",
+    "Created proxied CNAME f21945815a4a9ba1c814311a7a463029 from northstar-mcp.becurious.one to gateway.agents.cloudflare.com.",
+    "Created portal-specific Access application 0a614dc6-71b3-46f2-ab92-a6f554dd6fc5 and attached the existing reusable AWB allow policy unchanged.",
+    "Created server-specific Access application 620d9e7b-7d75-482b-83cb-34c7d628a76b for only northstar-marketing-salesforce and attached the existing reusable AWB allow policy unchanged.",
+    "Completed evaluator PKCE OAuth and synchronized the 13-tool Salesforce catalog through the portal.",
+    "Disabled both portal write tools after fabricated confirmation created Task 00TjV000000pyVBUAY; the Task was read back and not deleted.",
+    "Re-enabled the two curated portal write tools only after the live Apex contract matched the cached five-field schema and 9/9 Apex tests passed.",
+    "Deployed HMAC confirmation verification and provisioned matching proof secrets in Salesforce and the Worker without committing either value.",
+    "Did not change the shared AWB Access policy, either existing portal, or any existing MCP server."
+  ]
+}

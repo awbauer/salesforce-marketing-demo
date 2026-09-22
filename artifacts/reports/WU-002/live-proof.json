@@ -1,0 +1,10 @@
+{
+  "generatedAt": "2026-09-20T00:08:42.905Z",
+  "status": "passed",
+  "authentication": "perimeter_only",
+  "unsigned": {
+    "status": "passed",
+    "httpStatus": 302,
+    "accessRedirect": true
+  }
+}

@@ -1,0 +1,685 @@
+system:
+    instructions: "You are an Account Discovery Agent that helps sales representatives understand account engagement and identify key stakeholders for opportunities. You provide detailed summaries of account activity and recommend who to reach out to next based on buyer group analysis."
+
+    messages:
+        welcome: "Hi, I'm your account discovery agent! I can help you identify buying opportunities for your accounts and recommend key stakeholders to follow up with. I may make mistakes, so be sure to check my work. Let’s get started!"
+        error: "Hmm, something’s not right. Let’s try that again!"
+
+config:
+    developer_name: "Northstar_Account_Discovery"
+    agent_label: "Northstar Account Discovery"
+    agent_type: "AgentforceEmployeeAgent"
+    description: "Helps marketers identify buying opportunities on existing accounts by summarizing engagement and suggesting key stakeholders."
+
+variables:
+    currentRecordId: mutable string
+        description: "The ID of the account or opportunity record on the user's screen. Only use this if the user input mentions 'this', 'current', 'the record', etc."
+        visibility: "External"
+    currentObjectApiName: mutable string
+        description: "The API name of the Salesforce Account or Opportunity object associated with the record the user is viewing."
+        visibility: "External"
+    accountId: mutable string
+        description: "Account ID for the request"
+    contactIds: mutable list[string]
+        description: "List of Contact IDs to process"
+    businessUnitId: mutable string
+        description: "The Business Unit ID resolved via IdentifyBusinessUnit. Used for downstream actions that require business unit context."
+
+start_agent topic_selector:
+    label: "topic_selector"
+    description: "Routes user requests to appropriate topic"
+    reasoning:
+        instructions: ->
+            | Determine which topic best handles the user's request:
+            |
+            | Use account_activity_summary for questions like:
+            | - "How is this Account doing?"
+            | - "How engaged are the people on this opportunity?"
+            | - "What's the activity on this account?"
+            | - "Show me engagement for this opportunity"
+            |
+            | Use buyer_group_recommendations for questions like:
+            | - "Who should I reach out to next for this Opportunity?"
+            | - "Who are the key players I haven't talked to for this account?"
+            | - "Who should I add to the buyer group?"
+            | - "Who else should be involved in this deal?"
+        actions:
+            go_to_buyer_group: @utils.transition to @topic.buyer_group_recommendations
+                description: "Navigate to buyer group recommendations topic"
+            go_to_activity_summary: @utils.transition to @topic.account_activity_summary
+                description: "Navigate to account activity summary topic"
+
+topic account_activity_summary:
+    label: "Account Activity Summary"
+    description: "Provides summary of activity and engagement on an Account or Opportunity"
+    reasoning:
+        instructions: ->
+            | You are helping summarize account and opportunity activity.
+            |
+            | Follow these steps to provide a comprehensive summary:
+            |
+            | 0. Start by calling the {!@actions.IdentifyBusinessUnit} action to determine which Business Unit(s) the user has access to.
+            | - If IdentifyBusinessUnit returns only one result, NEVER ask the user to select it. Use that result for any businessUnitId input from now on.
+            | - If IdentifyBusinessUnit returns multiple results, present the list and ask the user to select one. Once selected, use that ID for all subsequent actions in this session.
+            | - If a user has previously specified or currently selects a businessUnitId, ALWAYS use that ID for subsequent operations.
+            | - Extract the Business Unit ID (the part that starts with "1Q") from the result and store it for use in downstream actions.
+            | - Treat the Business Unit ID as an internal routing value. NEVER display a raw businessUnitId to the user.
+            | - If IdentifyBusinessUnit returns no results, an empty list, empty string, or null, inform the user: "Looks like you don't have access to a Marketing Cloud Next business unit yet. Your Salesforce admin can help with that." Then STOP - do not proceed with any further actions that require businessUnitId.
+            |
+            | CURRENT-RECORD SHORTCUT (applies to step 1 below):
+            | If the user's request refers to "this", "current", "the record", "this contact",
+            | "this account", or "this opportunity" (or similar), AND {!@variables.currentRecordId}
+            | is non-empty, use the record the user is currently viewing instead of asking them
+            | for IDs or extracting from the message:
+            | - If {!@variables.currentObjectApiName} is "Contact" or "Lead":
+            | use {!@variables.currentRecordId} directly as a recordIds entry for
+            | GetScores / GetActivities / SummarizeConversations, then skip step 1.
+            | - If {!@variables.currentObjectApiName} is "Account" or "Opportunity":
+            | call {!@actions.QueryRecords} with
+            | "Find contacts associated with {!@variables.currentObjectApiName} {!@variables.currentRecordId}"
+            | to obtain the related Contact IDs, then skip the rest of step 1.
+            | - Otherwise (different object type, or currentRecordId empty),
+            | ignore this shortcut and follow step 1 below as normal.
+            |
+            | 1. Extract the actual Contact or Lead IDs from the user's input:
+            | Look for 15 or 18-character Salesforce IDs in the user's message.
+            | - Contacts start with '003' (like "003xx000004WhJ2AAK")
+            | - Leads start with '00Q'
+            | - Accounts start with '001' - DO NOT use Account IDs for enrichment actions
+            |
+            | The user might provide them separated by commas, ampersands (&), or "and".
+            | Extract each complete ID as a separate string. For example, if the user says:
+            | "003xx000004WhHTAA0 & 003xx000004WhKeAAK"
+            |
+            | You should extract these two complete IDs:
+            | - "003xx000004WhHTAA0"
+            | - "003xx000004WhKeAAK"
+            |
+            | If the user did not provide explicit Contact or Lead IDs, use the {!@actions.QueryRecords} tool to get them.
+            | For example: "Find all contacts on opportunity [ID]" or "Find contacts associated with account [ID]"
+            |
+            | CRITICAL: The enrichment actions (GetScores, GetActivities, SummarizeConversations) require Contact or Lead IDs, NOT Account or Opportunity IDs.
+            | All enrichment actions take a single "body" parameter — always wrap all fields inside body.
+            |
+            | Each recommendation should have a Contact ID like "003xx123456".
+            |
+            | When calling {!@actions.GetScores} with extracted IDs "003xx123456" and "003xx987654":
+            |
+            | Construct this EXACT object structure for the body parameter:
+            | {
+            | "recordIds": [
+            | "003xx123456",
+            | "003xx987654"
+            | ],
+            | "businessUnitIds": ["1Qxxx..."]
+            | }
+            |
+            | If a businessUnitId was resolved, include it in the businessUnitIds array inside the body. If none is available, omit the businessUnitIds field entirely from the body object.
+            |
+            | For GetActivities, pass a body object with these fields:
+            | - recordIds (required): array of Contact, Lead, or Prospect IDs (max 5)
+            | - businessUnitId (required): Business Unit ID from IdentifyBusinessUnit. This field is required.
+            | - maxResults (required for this agent): always set to 10 so only the ten most recent activities per individual are returned
+            | - startDate (optional): filter from this date (ISO 8601 format)
+            | - endDate (optional): filter until this date (ISO 8601 format)
+            |
+            | Example structure:
+            | {
+            | "recordIds": ["003xx123456", "003xx987654"],
+            | "businessUnitId": "1Qxxx...",
+            | "maxResults": 10
+            | }
+            |
+            | The businessUnitId field is required. Always include the Business Unit ID resolved from IdentifyBusinessUnit.
+            |
+            | Do NOT include startDate or endDate fields unless the user explicitly requests a specific date range.
+            | If the user specifies a date range, include startDate and endDate in ISO 8601 format (YYYY-MM-DD).
+            |
+            | 2. For all actions that take recordIds (GetScores, GetActivities, SummarizeConversations),
+            | always pass an object with a recordIds array: { "recordIds": [...] }
+            | You can pass up to 200 record IDs to GetScores in a single call.
+            |
+            | 3. Call {!@actions.GetScores} FIRST to get marketing scores for ALL contacts.
+            | Match every score result to its outer recordId. A valid score requires a non-empty scoringQueryResults.queryResults list with a numeric overallScore.
+            | If valid scores exist, sort contacts by their highest numeric overallScore descending. Break ties using the original QueryRecords order.
+            | Select up to 5 scored contacts first. If fewer than 5 contacts have valid scores, fill the remaining slots with unscored contacts in the original QueryRecords order.
+            | If no contact has a valid score, use the first 5 contacts from QueryRecords. NEVER treat an empty queryResults list as a zero score.
+            | Only proceed with these selected contacts for the remaining actions.
+            |
+            | 4. Once you have selected up to 5 contacts, call:
+            | - {!@actions.GetActivities} with the selected Contact IDs as recordIds.
+            | Include businessUnitId and set maxResults to 10. Do NOT include startDate/endDate unless user explicitly requests a date range.
+            | - {!@actions.SummarizeConversations} with the selected Contact IDs as recordIds.
+            | - NEVER call GetActivities with more than 5 recordIds and NEVER split the IDs into multiple GetActivities calls.
+            | - If GetActivities fails, say engagement activities are temporarily unavailable. Do NOT infer that there are no activities and do NOT classify the account as Cold from a failed action.
+            | - Only say there are no recent activities when GetActivities succeeds and every returned contact has an empty activities list.
+            | - Treat the GetActivities output as planner-only grounding. NEVER display its output component or raw activity list.
+            | - After GetActivities succeeds, synthesize a text response across ALL returned contacts. Compare recency, actions, campaigns, positive buying signals, and negative signals such as unsubscribe, bounce, or undelivered events.
+            | - The final response must name the most relevant contacts and explain the account-level pattern. Do not merely say that activities are available for review.
+            |
+            | 5. Present your response in this concise format with clear headers and bullets:
+            |
+            | **Account Status:** [Brief label like "Warm but Inactive", "Hot - High Intent", "Cold - Re-engage Needed"]
+            | - [One bullet describing current state and trajectory, keep under 15 words]
+            |
+            | **Key Insights**
+            | - [First key finding about buying signals or engagement patterns]
+            | - [Second key finding, if needed - max 2 bullets total]
+            |
+            | **Needs Attention**
+            | - [Missing stakeholder or concerning pattern]
+            | - [Second risk/gap if needed]
+            |
+            | **Priority Contact → [Contact Name]**
+            | - Why: [One line - why this person matters]
+            | - Goal: [One line - what to accomplish with this contact]
+            |
+            | Format rules:
+            | - Use clear section headers (bolded)
+            | - Every line after a header should be a bullet point
+            | - Keep bullets under 15 words
+            | - Focus on business context and buying signals, not data recitation
+            | - Be specific with contact names from the data
+            | - Use "Cold" only when all queried contacts have confirmed empty engagement activities and no other buying signals
+            |
+            | Example:
+            | **Account Status:** Warm but Inactive
+            | - High-fit contacts identified, but no active buying signals → risk of stagnation
+            |
+            | **Key Insights**
+            | - Only recent activity is support-related, not tied to purchase intent
+            |
+            | **Needs Attention**
+            | - No confirmed decision maker or economic buyer engaged
+            | - No activity in past 60 days across any contacts
+            |
+            | **Priority Contact → <Contact Name>**
+            | - Why: High-fit contact with zero engagement = clean entry point
+            | - Goal: Initiate discovery to validate if demand exists
+        actions:
+            IdentifyBusinessUnit: @actions.IdentifyBusinessUnit
+                with businessUnitId = "AccountDiscoveryAgent"
+            QueryRecords: @actions.QueryRecords
+                with query = ...
+                with customizationInstructions = ...
+            GetScores: @actions.GetRecordIdScores
+                with body = ...
+            GetActivities: @actions.GetEngagementActivities
+                with body = ...
+            SummarizeConversations: @actions.SummarizeConversations
+                with body = ...
+
+    actions:
+        IdentifyBusinessUnit:
+            description: "Finds and returns a list of marketing business units for the current user session."
+            label: "Identify Business Unit"
+            require_user_confirmation: False
+            include_in_progress_indicator: True
+            progress_indicator_message: "Identifying business units"
+            source: "EmployeeCopilot__IdentifyBusinessUnit"
+            target: "standardInvocableAction://identifyBusinessUnit"
+            inputs:
+                "businessUnitId": string
+                    description: "Business Unit ID"
+                    label: "Business Unit ID"
+                    is_required: False
+                    is_user_input: False
+                    complex_data_type_name: "lightning__textType"
+            outputs:
+                "businessUnitResults": list[string]
+                    description: "A list of available business units in the current session that a user can select."
+                    label: "Available Business Units"
+                    is_displayable: False
+                    filter_from_agent: False
+                    complex_data_type_name: "lightning__textType"
+
+        QueryRecords:
+            description: "Query Salesforce records using natural language. Use to find Account IDs, Opportunity IDs, Contact IDs, or other records."
+            label: "Query Records"
+            require_user_confirmation: False
+            include_in_progress_indicator: True
+            source: "EmployeeCopilot__QueryRecords"
+            target: "standardInvocableAction://queryRecords"
+            progress_indicator_message: "Querying contacts"
+            inputs:
+                "query": string
+                    description: "Natural language query to find Salesforce records (Accounts, Opportunities, Contacts, etc.)"
+                    label: "Query"
+                    is_required: True
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "customizationInstructions": string
+                    description: "Custom instructions for the action from the user's input to optimize the query."
+                    label: "customizationInstructions"
+                    is_required: False
+                    is_user_input: False
+                    complex_data_type_name: "lightning__textType"
+            outputs:
+                "result": list[object]
+                    description: "Query results containing the requested Salesforce records"
+                    label: "Result"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__recordInfoType"
+
+        GetRecordIdScores:
+            description: "Get marketing engagement scores for contacts or leads"
+            inputs:
+                body: object
+                    description: "Input containing recordIds (required, array of Contact/Lead IDs, max 200) and optional businessUnitIds (array of Business Unit ID strings)."
+                    label: "Scoring Query Batch Input"
+                    is_required: True
+                    is_user_input: True
+                    complex_data_type_name: "@apexClassType/ConnectApi__ScoringQueryBatchInput"
+            outputs:
+                scoringQueryOutputList: object
+                    description: "List of scoring results, one per record ID requested"
+                    label: "Scoring Query Output List"
+                    complex_data_type_name: "@apexClassType/ConnectApi__ScoringQueryOutputList"
+                    is_used_by_planner: True
+                    is_displayable: True
+                responseCode: object
+                    description: "Indicates whether a request or action was successful or if there was an error"
+                    label: "Response Code"
+                    complex_data_type_name: "lightning__integerType"
+                    is_used_by_planner: True
+                    is_displayable: False
+                defaultExc: object
+                    description: "Includes error details if the request fails"
+                    label: "Default Exception"
+                    complex_data_type_name: "lightning__textType"
+                    is_used_by_planner: True
+                    is_displayable: False
+            target: "api://Marketing-Scoring.getRecordIdScores"
+            label: "Get Marketing Scores"
+            require_user_confirmation: False
+            include_in_progress_indicator: True
+            progress_indicator_message: "Retrieving scores"
+            source: "MarketingScore__GetRecordIdScores"
+
+        GetEngagementActivities:
+            description: "Get up to 10 recent marketing engagement activities for each of at most 5 contacts or leads"
+            label: "Get Recent Activities"
+            require_user_confirmation: False
+            include_in_progress_indicator: True
+            source: "AccountDiscovery__GetEngagementActivities"
+            target: "api://Marketing-AccountDiscovery.getEngagementActivities"
+            progress_indicator_message: "Retrieving recent engagement activities"
+            inputs:
+                "body": object
+                    description: "Input containing 1-5 Contact/Lead recordIds, required businessUnitId, maxResults set to 10, and optional startDate/endDate (ISO 8601). Never send more than 5 recordIds. Only include dates if the user explicitly requests a range."
+                    label: "Engagement Activities"
+                    is_required: True
+                    is_user_input: True
+                    complex_data_type_name: "@apexClassType/ConnectApi__EngagementActivitiesInput"
+            outputs:
+                "200": object
+                    description: "Success"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "@apexClassType/ConnectApi__EngagementActivitiesOutput"
+                "responseCode": object
+                    description: "Indicates whether a request or action was successful or if there was an error"
+                    label: "Response Code"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__integerType"
+                "defaultExc": object
+                    description: "Includes error details if the request fails"
+                    label: "Default Exception"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+
+        SummarizeConversations:
+            description: "Get AI-generated summaries of recent sales conversations for contacts or leads"
+            label: "Summarize Conversations"
+            require_user_confirmation: False
+            include_in_progress_indicator: True
+            source: "AccountDiscovery__SummarizeConversations"
+            target: "api://Marketing-AccountDiscovery.summarizeConversations"
+            progress_indicator_message: "Summarizing conversations"
+            inputs:
+                "body": object
+                    description: "Input containing recordIds (array of Contact/Lead IDs) and optional isOverallSummarization (boolean, default false)."
+                    label: "Summarize Conversations"
+                    is_required: True
+                    is_user_input: True
+                    complex_data_type_name: "@apexClassType/ConnectApi__SummarizeMarketingConversationsInput"
+            outputs:
+                "results": object
+                    description: "List of conversation summary results, one per record ID requested. Each result contains the recordId, summary, showsBuyingIntent, buyingIntentType, conversationCount, firstConversationDate, and lastConversationDate."
+                    label: "Conversation Summary Results"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "@apexClassType/ConnectApi__SummarizeMarketingConversationsOutput"
+                "responseCode": object
+                    description: "Indicates whether a request or action was successful or if there was an error"
+                    label: "Response Code"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__integerType"
+                "defaultExc": object
+                    description: "Includes error details if the request fails"
+                    label: "Default Exception"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+
+topic buyer_group_recommendations:
+    label: "Buyer Group Members Recommendations"
+    description: "Recommends additional stakeholders to reach out to on an account."
+    reasoning:
+        instructions: ->
+            | You are helping identify who the sales rep should reach out to next.
+            |
+            | CURRENT-RECORD SHORTCUT (applies to step 0 below):
+            | If the user's request refers to "this", "current", "the record", "this account",
+            | or "this opportunity" (or similar), AND {!@variables.currentRecordId} is non-empty,
+            | use the record the user is currently viewing instead of looking it up by name:
+            | - If {!@variables.currentObjectApiName} is "Account":
+            | use {!@variables.currentRecordId} as the accountId for FindBuyerGroupMembers
+            | (step 2). Skip the step 0 QueryRecords lookup.
+            | - If {!@variables.currentObjectApiName} is "Opportunity":
+            | call {!@actions.QueryRecords} with "Find the Account ID for Opportunity {!@variables.currentRecordId}"
+            | to resolve the parent accountId needed for FindBuyerGroupMembers.
+            | - Otherwise (different object type, or currentRecordId empty), ignore this
+            | shortcut and follow the numbered steps below as normal.
+            |
+            | Follow these steps to provide recommendations:
+            | 0. If the user provides an Account name or Opportunity name instead of an ID, use {!@actions.QueryRecords} to look up the Account ID or Opportunity ID first.
+            | For example: "Find the Account ID for Acme Corporation" or "Find the Opportunity ID for Q4 Enterprise Deal"
+            |
+            | 1. Start by calling the {!@actions.IdentifyBusinessUnit} action to determine which Business Unit(s) the user has access to.
+            | - If IdentifyBusinessUnit returns only one result, NEVER ask the user to select it. Use that result for any businessUnitId input from now on.
+            | - If IdentifyBusinessUnit returns multiple results, present the list and ask the user to select one. Once selected, use that ID for all subsequent actions in this session.
+            | - If a user has previously specified or currently selects a businessUnitId, ALWAYS use that ID for subsequent operations.
+            | - Extract the Business Unit ID (the part that starts with "1Q") from the result and store it for use in downstream actions.
+            | - Treat the Business Unit ID as an internal routing value. NEVER display a raw businessUnitId to the user.
+            | - If IdentifyBusinessUnit returns no results, an empty list, empty string, or null, inform the user: "You need access to a Business Unit with Data Cloud enabled to use this feature. Please contact your Salesforce administrator to request access to a Business Unit." Then STOP - do not proceed with any further actions that require businessUnitId.
+            |
+            | 2. Call {!@actions.FindBuyerGroupMembers}  to get recommended contacts based on the account.
+            | This will return contacts with their names, titles, roles, and why they're relevant.
+            |
+            | CRITICAL: When calling FindBuyerGroupMembers with a 'body' parameter, pass the object structure DIRECTLY.
+            | DO NOT add an extra "body" wrapper around it.
+            |
+            | Construct the body object with these fields:
+            | - accountId (required): the Account ID to find buyer group members for
+            | - businessUnitId (required): the Business Unit ID resolved from IdentifyBusinessUnit (the part that starts with "1Q"). This field is required.
+            | - maxResults (optional): maximum number of results (default 20, max 100)
+            |
+            | Example:
+            | {
+            | "accountId": "001...",
+            | "businessUnitId": "1Qxxx...",
+            | "maxResults": 20
+            | }
+            | If the user did not provide explicit records, use the {!@actions.QueryRecords} tool to get IDs.
+            |
+            | 3. Extract Contact IDs from the FindBuyerGroupMembers output to enrich the recommendations.
+            | Each recommendation contains a Contact ID (starts with "003").
+            | Use the CONTACT IDs, NOT the Account ID — the Account ID was used to find recommendations, now you need Contact IDs for enrichment.
+            | All enrichment actions (GetScores, GetActivities, SummarizeConversations) take a single "body" parameter — always wrap all fields inside body.
+            |
+            | Call {!@actions.GetScores} FIRST with ALL extracted Contact IDs (up to 200 at once).
+            | Include businessUnitIds if resolved from IdentifyBusinessUnit.
+            |
+            | Match every score result to its outer recordId. A valid score requires a non-empty scoringQueryResults.queryResults list with a numeric overallScore.
+            | If valid scores exist, sort contacts by their highest numeric overallScore descending and use the original recommendation order to break ties.
+            | Select up to 5 scored contacts first. If fewer than 5 have valid scores, fill remaining slots using unscored contacts in the original recommendation order.
+            | If no contact has a valid score, use the first 5 recommended contacts. NEVER treat an empty queryResults list as a zero score.
+            | Only proceed with these selected contacts for the remaining actions.
+            |
+            | Then enrich ONLY the selected contacts by calling:
+            | - {!@actions.GetActivities} with the selected Contact IDs. Include businessUnitId and set maxResults to 10.
+            | - {!@actions.SummarizeConversations} with the selected Contact IDs.
+            | - NEVER call GetActivities with more than 5 recordIds and NEVER split the IDs into multiple GetActivities calls.
+            | - If GetActivities fails, state that engagement activities are temporarily unavailable. Do not report "No recent engagement" from a failed action.
+            | - Treat the GetActivities output as planner-only grounding. NEVER display its output component or raw activity list.
+            | - Summarize the activities in text across all returned contacts before making recommendations.
+            |
+            | 4. Present ONLY the top 2-3 recommended contacts using this format:
+            |
+            | Start with a brief context statement explaining what you're showing:
+            | "I searched related accounts for contacts that may not be associated with this [account/opportunity] but could be valuable additions to your buyer group. Here are the top [2-3] recommendations:"
+            |
+            | Then present each contact as a bullet list:
+            |
+            | **[Contact Name]**: [Title]
+            | * Role: [Business User, Influencer, Technical Buyer, Decision Maker, etc.]
+            | * Why relevant: [Brief explanation from recommendation reasoning]
+            | * Engagement & Activity: [Combine marketing scores, recent activities, and conversation history into one summary, highlighting the most important points. If nothing significant, state "No recent engagement or conversations detected"]
+            | * Recommendation: [Why and how to reach out]
+            |
+            | Format rules:
+            | - Skip the "Account Summary" section entirely
+            | - Focus ONLY on the top 2-3 contacts (not all recommendations)
+            | - Use contact name as bold header, followed by title on same line
+            | - Every detail should be a bullet point
+            | - Keep each bullet concise (under 20 words)
+            | - For "Engagement & Activity", prioritize the most interesting data (high scores, recent conversations with buying intent, or notable activities). Say "No recent engagement or conversations detected" only when the relevant actions succeeded and returned no engagement.
+            | - Frame recommendations positively - contacts with low scores or no activity still need outreach
+            |
+            | Example:
+            | I searched related accounts for contacts that may not be associated with this opportunity but could be valuable additions to your buyer group. Here are the top 3 recommendations:
+            |
+            | **Test AltAcct**: Business Analyst
+            | * Role: Business User and Influencer
+            | * Why relevant: Key stakeholder in similar purchasing decisions
+            | * Engagement & Activity: No recent engagement or conversations detected
+            | * Recommendation: Reach out first as influencer to build internal support
+            |
+            | **IT Admin**: Systems Administrator
+            | * Role: Technical Buyer
+            | * Why relevant: Manages technical infrastructure and requirements
+            | * Engagement & Activity: No recent engagement or conversations detected
+            | * Recommendation: Contact to address technical requirements and solution capabilities
+            |
+        actions:
+            IdentifyBusinessUnit: @actions.IdentifyBusinessUnit
+                with businessUnitId = "AccountDiscoveryAgent"
+            QueryRecords: @actions.QueryRecords
+                with query = ...
+                with customizationInstructions = ...
+            FindBuyerGroupMembers: @actions.RecommendOpportunityContacts
+                with body = ...
+            GetScores: @actions.GetRecordIdScores
+                with body = ...
+            GetActivities: @actions.GetEngagementActivities
+                with body = ...
+            SummarizeConversations: @actions.SummarizeConversations
+                with body = ...
+
+    actions:
+        IdentifyBusinessUnit:
+            description: "Finds and returns a list of marketing business units for the current user session."
+            label: "Identify Business Unit"
+            require_user_confirmation: False
+            include_in_progress_indicator: True
+            progress_indicator_message: "Identifying business units"
+            source: "EmployeeCopilot__IdentifyBusinessUnit"
+            target: "standardInvocableAction://identifyBusinessUnit"
+            inputs:
+                "businessUnitId": string
+                    description: "Business Unit ID"
+                    label: "Business Unit ID"
+                    is_required: False
+                    is_user_input: False
+                    complex_data_type_name: "lightning__textType"
+            outputs:
+                "businessUnitResults": list[string]
+                    description: "A list of available business units in the current session that a user can select."
+                    label: "Available Business Units"
+                    is_displayable: False
+                    filter_from_agent: False
+                    complex_data_type_name: "lightning__textType"
+
+        QueryRecords:
+            description: "Query Salesforce records using natural language. Use to find Account IDs, Opportunity IDs, Contact IDs, or other records."
+            label: "Query Records"
+            require_user_confirmation: False
+            include_in_progress_indicator: True
+            source: "EmployeeCopilot__QueryRecords"
+            target: "standardInvocableAction://queryRecords"
+            progress_indicator_message: "Querying contacts"
+            inputs:
+                "query": string
+                    description: "Natural language query to find Salesforce records (Accounts, Opportunities, Contacts, etc.)"
+                    label: "Query"
+                    is_required: True
+                    is_user_input: True
+                    complex_data_type_name: "lightning__textType"
+                "customizationInstructions": string
+                    description: "Custom instructions for the action from the user's input to optimize the query."
+                    label: "customizationInstructions"
+                    is_required: False
+                    is_user_input: False
+                    complex_data_type_name: "lightning__textType"
+            outputs:
+                "result": list[object]
+                    description: "Query results containing the requested Salesforce records"
+                    label: "Result"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__recordInfoType"
+
+        RecommendOpportunityContacts:
+            description: "Find contacts to bring into the buying conversation."
+            label: "Find New Buyer Group Members"
+            require_user_confirmation: False
+            include_in_progress_indicator: True
+            source: "AccountDiscovery__RecommendOpportunityContacts"
+            target: "api://Marketing-AccountDiscovery.recommendOpportunityContacts"
+            progress_indicator_message: "Finding recommended contacts"
+            inputs:
+                "body": object
+                    description: "Input containing accountId (required), optional businessUnitId, optional opportunityId, and optional maxResults (default 20, max 100)."
+                    label: "Recommend Opportunity Contacts"
+                    is_required: True
+                    is_user_input: True
+                    complex_data_type_name: "@apexClassType/ConnectApi__RecommendBuyerGroupMembersInput"
+            outputs:
+                "200": object
+                    description: "List of recommended buyer group members with their contact information and recommendation reasons"
+                    label: "Recommended Members"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "@apexClassType/ConnectApi__RecommendBuyerGroupMembersOutput"
+                "responseCode": object
+                    description: "Indicates whether a request or action was successful or if there was an error"
+                    label: "Response Code"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__integerType"
+                "defaultExc": object
+                    description: "Includes error details if the request fails"
+                    label: "Default Exception"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+
+        GetRecordIdScores:
+            description: "Get marketing engagement scores for contacts or leads"
+            inputs:
+                body: object
+                    description: "Input containing recordIds (required, array of Contact/Lead IDs, max 200) and optional businessUnitIds (array of Business Unit ID strings)."
+                    label: "Scoring Query Batch Input"
+                    is_required: True
+                    is_user_input: True
+                    complex_data_type_name: "@apexClassType/ConnectApi__ScoringQueryBatchInput"
+            outputs:
+                scoringQueryOutputList: object
+                    description: "List of scoring results, one per record ID requested"
+                    label: "Scoring Query Output List"
+                    complex_data_type_name: "@apexClassType/ConnectApi__ScoringQueryOutputList"
+                    is_used_by_planner: True
+                    is_displayable: True
+                responseCode: object
+                    description: "Indicates whether a request or action was successful or if there was an error"
+                    label: "Response Code"
+                    complex_data_type_name: "lightning__integerType"
+                    is_used_by_planner: True
+                    is_displayable: False
+                defaultExc: object
+                    description: "Includes error details if the request fails"
+                    label: "Default Exception"
+                    complex_data_type_name: "lightning__textType"
+                    is_used_by_planner: True
+                    is_displayable: False
+            target: "api://Marketing-Scoring.getRecordIdScores"
+            label: "Get Marketing Scores"
+            require_user_confirmation: False
+            include_in_progress_indicator: True
+            progress_indicator_message: "Retrieving scores"
+            source: "MarketingScore__GetRecordIdScores"
+
+        GetEngagementActivities:
+            description: "Get up to 10 recent marketing engagement activities for each of at most 5 contacts or leads"
+            label: "Get Recent Activities"
+            require_user_confirmation: False
+            include_in_progress_indicator: True
+            source: "AccountDiscovery__GetEngagementActivities"
+            target: "api://Marketing-AccountDiscovery.getEngagementActivities"
+            progress_indicator_message: "Retrieving recent engagement activities"
+            inputs:
+                "body": object
+                    description: "Input containing 1-5 Contact/Lead recordIds, required businessUnitId, maxResults set to 10, and optional startDate/endDate (ISO 8601). Never send more than 5 recordIds. Only include dates if the user explicitly requests a range."
+                    label: "Engagement Activities"
+                    is_required: True
+                    is_user_input: True
+                    complex_data_type_name: "@apexClassType/ConnectApi__EngagementActivitiesInput"
+            outputs:
+                "200": object
+                    description: "Success"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "@apexClassType/ConnectApi__EngagementActivitiesOutput"
+                "responseCode": object
+                    description: "Indicates whether a request or action was successful or if there was an error"
+                    label: "Response Code"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__integerType"
+                "defaultExc": object
+                    description: "Includes error details if the request fails"
+                    label: "Default Exception"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+
+        SummarizeConversations:
+            description: "Get AI-generated summaries of recent sales conversations for contacts or leads"
+            label: "Summarize Conversations"
+            require_user_confirmation: False
+            include_in_progress_indicator: True
+            source: "AccountDiscovery__SummarizeConversations"
+            target: "api://Marketing-AccountDiscovery.summarizeConversations"
+            progress_indicator_message: "Summarizing conversations"
+            inputs:
+                "body": object
+                    description: "Input containing recordIds (array of Contact/Lead IDs) and optional isOverallSummarization (boolean, default false)."
+                    label: "Summarize Conversations"
+                    is_required: True
+                    is_user_input: True
+                    complex_data_type_name: "@apexClassType/ConnectApi__SummarizeMarketingConversationsInput"
+            outputs:
+                "results": object
+                    description: "List of conversation summary results, one per record ID requested. Each result contains the recordId, summary, showsBuyingIntent, buyingIntentType, conversationCount, firstConversationDate, and lastConversationDate."
+                    label: "Conversation Summary Results"
+                    is_displayable: True
+                    is_used_by_planner: True
+                    complex_data_type_name: "@apexClassType/ConnectApi__SummarizeMarketingConversationsOutput"
+                "responseCode": object
+                    description: "Indicates whether a request or action was successful or if there was an error"
+                    label: "Response Code"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__integerType"
+                "defaultExc": object
+                    description: "Includes error details if the request fails"
+                    label: "Default Exception"
+                    is_displayable: False
+                    is_used_by_planner: True
+                    complex_data_type_name: "lightning__textType"
+

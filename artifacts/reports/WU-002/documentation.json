@@ -1,0 +1,13 @@
+{
+  "generatedAt": "2026-09-20T00:08:56.716Z",
+  "status": "passed",
+  "required": [
+    "AGENTS.md",
+    "docs/agent-delivery-contract.md",
+    "docs/agentic-marketing-workbench-plan.md",
+    "docs/work-units/WU-002-phase-1-foundation.md",
+    "docs/security/phase-1-threat-model.md",
+    "infra/cloudflare/pot/README.md"
+  ],
+  "failures": []
+}

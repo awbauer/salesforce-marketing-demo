@@ -1,0 +1,37 @@
+{
+  "generatedAt": "2026-09-21T15:05:17Z",
+  "status": "passed",
+  "targetAlias": "northstar-pot",
+  "serverApiName": "NorthstarMarketingWorkbench",
+  "serverId": "1g1jV0000000rIrQAI",
+  "serverAccessId": "1fzjV000000i4zBQAQ",
+  "serverAccessReadBack": {
+    "active": true,
+    "developerName": "NorthstarMarketingWorkbench",
+    "mcpServerId": "1g1jV0000000rIrQAI"
+  },
+  "authentication": {
+    "grant": "authorization_code_pkce",
+    "principal": "approved evaluator",
+    "tokenStorage": "mode-0600 temporary file outside the repository",
+    "tokenCaptured": false
+  },
+  "protocol": {
+    "version": "2025-06-18",
+    "initialize": "passed",
+    "initializedNotification": "sent",
+    "toolsList": "passed",
+    "toolsListed": 13,
+    "exactCatalogMatch": true
+  },
+  "fixedCalls": {
+    "campaignId": "701jV000004GglIQAS",
+    "checkCampaignReadiness": "passed",
+    "unconfirmedCreateCampaignReviewRequest": "rejected"
+  },
+  "mutations": {
+    "businessRecordsChanged": false,
+    "existingOrgArtifactsChanged": false,
+    "netNewServerActivated": true
+  }
+}

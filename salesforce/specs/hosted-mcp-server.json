@@ -1,0 +1,26 @@
+{
+  "apiVersion": "67.0",
+  "name": "NorthstarMarketingWorkbench",
+  "label": "Northstar Marketing Workbench",
+  "transport": "streamable-http",
+  "onBehalfOfUser": true,
+  "externalClientAppScopes": ["mcp_api", "refresh_token"],
+  "externalClientApplication": {
+    "apiName": "Northstar_Marketing_Workbench_MCP",
+    "callbacks": [
+      "https://oauth-callbacks.cloudflareaccess.com/cdn-cgi/access/outbound-oauth-callback",
+      "https://oauth.pstmn.io/v1/callback"
+    ],
+    "pkceRequired": true,
+    "namedUserJwt": true,
+    "clientCredentialsFlow": false,
+    "permittedUsers": "admin-preauthorized",
+    "permissionSet": "Northstar_Marketing_Workbench_Evaluator",
+    "refreshTokenInactivityDays": 30,
+    "refreshTokenRotation": true
+  },
+  "standardServers": ["SObject Reads", "Data 360"],
+  "excludedServers": ["SObject All", "SObject Writes", "SObject Deletes", "Headless 360"],
+  "toolCatalog": "../../packages/contracts/src/tool-catalog.json",
+  "notes": "Deploy the source-controlled custom server, activate it in Integration > Salesforce MCP Servers, then compare authenticated tools/list with the checked-in 13-tool catalog. Agent-backed tools require published Agent Script agents; confirmation-bound writes use global Apex Invocable Actions registered as aa:apex catalog entries."
+}

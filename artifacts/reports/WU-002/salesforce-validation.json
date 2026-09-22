@@ -1,0 +1,5 @@
+{
+  "generatedAt": "2026-09-19T21:43:01.125Z",
+  "status": "not_applicable",
+  "reason": "Phase 1 contains no Salesforce metadata or calls. Sandbox capability validation is the Phase 2 pre-deployment gate."
+}

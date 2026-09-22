@@ -1,0 +1,63 @@
+{
+  "name": "react-salesforce-marketing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=26.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "contracts:check": "node scripts/check-invariants.mjs",
+    "dev": "vite",
+    "docs:check": "node scripts/check-docs.mjs",
+    "eval": "node scripts/run-evals.mjs",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "preview": "vite preview",
+    "sf:validate": "node scripts/validate-salesforce.mjs",
+    "sf:metadata:check": "node scripts/check-salesforce-metadata.mjs",
+    "sf:mcp:oauth": "node scripts/prove-salesforce-mcp.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:live": "node scripts/run-live-proof.mjs",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:worker": "vitest run --config vitest.worker.config.ts",
+    "typecheck": "tsc -p apps/web && tsc -p apps/edge && tsc -p packages/evals",
+    "types:worker": "wrangler types --config wrangler.jsonc --env-interface CloudflareBindings apps/edge/src/worker-configuration.d.ts",
+    "verify": "node scripts/verify.mjs full",
+    "verify:fast": "node scripts/verify.mjs fast"
+  },
+  "dependencies": {
+    "@ai-sdk/react": "4.0.110",
+    "@cloudflare/ai-chat": "0.12.0",
+    "ai": "7.0.107",
+    "agents": "0.24.0",
+    "jose": "6.2.12",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "workers-ai-provider": "4.0.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@cloudflare/vite-plugin": "1.56.0",
+    "@cloudflare/vitest-plugin": "1.1.13",
+    "@cloudflare/workers-types": "5.20260919.1",
+    "@playwright/test": "1.63.0",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.7",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/node": "24.10.1",
+    "@vitejs/plugin-react": "6.1.1",
+    "jsdom": "30.1.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.0",
+    "vitest": "4.1.11",
+    "wrangler": "4.135.0"
+  }
+}

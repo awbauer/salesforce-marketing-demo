@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<McpServerDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Focused Northstar marketing tools for campaign drafting, content drafting, account discovery, and readiness review.</description>
+    <masterLabel>Northstar Marketing Workbench</masterLabel>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>ag:Northstar_Campaign_Creation</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>invoke</operation>
+        </apiDefinition>
+        <descriptionOverride>Draft a campaign brief from an objective without saving or publishing it.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>false</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>false</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>draft_campaign_brief</toolName>
+        <toolTitle>Draft Campaign Brief</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>ag:Northstar_Campaign_Creation</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>invoke</operation>
+        </apiDefinition>
+        <descriptionOverride>Refine an existing draft campaign preview; do not save, publish, send, or activate it.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>false</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>false</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>refine_campaign_preview</toolName>
+        <toolTitle>Refine Campaign Preview</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>ag:Northstar_Campaign_Creation</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>invoke</operation>
+        </apiDefinition>
+        <descriptionOverride>Summarize campaign context and draft details without changing Salesforce records.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>false</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>false</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>summarize_campaign</toolName>
+        <toolTitle>Summarize Campaign</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>ag:Campaign_Readiness_Governance</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>invoke</operation>
+        </apiDefinition>
+        <descriptionOverride>Analyze campaign context and return evidence-backed marketing insights without changing records.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>false</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>true</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>generate_campaign_insights</toolName>
+        <toolTitle>Generate Campaign Insights</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>ag:Northstar_Content_Builder</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>invoke</operation>
+        </apiDefinition>
+        <descriptionOverride>Draft or refine campaign copy for an approved brief without publishing or sending it.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>false</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>false</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>draft_campaign_content</toolName>
+        <toolTitle>Draft Campaign Content</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>ag:Northstar_Content_Builder</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>invoke</operation>
+        </apiDefinition>
+        <descriptionOverride>Create a draft content section for review without publishing or sending it.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>false</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>false</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>create_content_section</toolName>
+        <toolTitle>Create Content Section Draft</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>ag:Campaign_Readiness_Governance</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>invoke</operation>
+        </apiDefinition>
+        <descriptionOverride>Review draft campaign content for brand, accessibility, and policy issues without changing records.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>false</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>true</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>validate_content_against_brand</toolName>
+        <toolTitle>Validate Content Against Brand</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>ag:Northstar_Account_Discovery</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>invoke</operation>
+        </apiDefinition>
+        <descriptionOverride>Retrieve and summarize marketing engagement signals for an account without changing records.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>false</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>true</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>get_account_marketing_signals</toolName>
+        <toolTitle>Get Account Marketing Signals</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>ag:Northstar_Account_Discovery</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>invoke</operation>
+        </apiDefinition>
+        <descriptionOverride>Recommend possible buyer group members without adding or modifying any buyer group.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>false</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>true</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>recommend_buyer_group_members</toolName>
+        <toolTitle>Recommend Buyer Group Members</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>ag:Northstar_Account_Discovery</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>invoke</operation>
+        </apiDefinition>
+        <descriptionOverride>Summarize account engagement and recent activities without changing records.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>false</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>true</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>summarize_account_engagement</toolName>
+        <toolTitle>Summarize Account Engagement</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>ag:Campaign_Readiness_Governance</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>invoke</operation>
+        </apiDefinition>
+        <descriptionOverride>Evaluate campaign readiness, consent, content, and review blockers without changing records.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>false</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>true</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>check_campaign_readiness</toolName>
+        <toolTitle>Check Campaign Readiness</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>aa:apex-NorthstarSaveCampaignBrief</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>NorthstarSaveCampaignBrief</operation>
+        </apiDefinition>
+        <descriptionOverride>Save a confirmed draft brief to one Salesforce Campaign using a host-issued confirmation, request hash, and idempotency key; returns authoritative read-back.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>true</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>false</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>save_campaign_brief</toolName>
+        <toolTitle>Save Confirmed Campaign Brief</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>aa:apex-NorthstarCreateCampaignReviewRequest</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>NorthstarCreateCampaignReviewRequest</operation>
+        </apiDefinition>
+        <descriptionOverride>Create one confirmed Salesforce campaign-review Task using a host-issued confirmation, request hash, and idempotency key; returns authoritative read-back.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>true</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>false</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>create_campaign_review_request</toolName>
+        <toolTitle>Create Confirmed Campaign Review Request</toolTitle>
+    </tools>
+</McpServerDefinition>

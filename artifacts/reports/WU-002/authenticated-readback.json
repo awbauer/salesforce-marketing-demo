@@ -1,0 +1,18 @@
+{
+  "generatedAt": "2026-09-19T21:40:22Z",
+  "status": "passed",
+  "source": "human_email_otp_readback",
+  "endpoint": "/api/ready",
+  "response": {
+    "status": "ok",
+    "checks": {
+      "durableObject": true,
+      "staticAssets": true,
+      "workersAi": true,
+      "d1": true,
+      "r2": true
+    },
+    "correlationId": "a3dbbe026e52cf54"
+  },
+  "credentialsRecorded": false
+}

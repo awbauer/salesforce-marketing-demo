@@ -1,0 +1,46 @@
+{
+  "generatedAt": "2026-09-20T00:07:51.152Z",
+  "status": "passed",
+  "results": [
+    {
+      "command": "pnpm types:worker",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm format:check",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm lint",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm test:unit",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm test:worker",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm eval",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm contracts:check",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm docs:check",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm build",
+      "exitCode": 0
+    }
+  ]
+}

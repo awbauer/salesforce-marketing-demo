@@ -1,0 +1,79 @@
+{
+  "generatedAt": "2026-09-21T22:54:00Z",
+  "status": "compatible-signed-write-contract-live-worker-proof-pending",
+  "portal": {
+    "url": "https://northstar-mcp.becurious.one/mcp",
+    "oauth": {
+      "authorizationCodePkce": "passed",
+      "tokenStoredInRepository": false,
+      "tokenStorage": "mode-0600 temporary file"
+    },
+    "initialize": {
+      "httpStatus": 200,
+      "protocolVersion": "2025-06-18",
+      "serverName": "cloudflare-mcp-portal",
+      "initializedNotificationStatus": 202
+    },
+    "server": {
+      "id": "northstar-marketing-salesforce",
+      "status": "ready",
+      "enabledForEvaluator": true,
+      "onBehalf": true
+    },
+    "toolCatalog": {
+      "initialSalesforceTools": 13,
+      "portalManagementTools": 3,
+      "currentSalesforceTools": 13,
+      "currentWriteTools": [
+        "save_campaign_brief",
+        "create_campaign_review_request"
+      ],
+      "defaultDisabled": true
+    }
+  },
+  "readProof": {
+    "tool": "northstar-marketing-salesforce_check_campaign_readiness",
+    "campaignId": "701jV000004GglIQAS",
+    "result": "passed",
+    "evidence": [
+      "Campaign VERO Phase 1 Launch was read through the portal.",
+      "No eligible sample consent records were available.",
+      "Missing campaign brief and incomplete campaign dates were returned as blockers."
+    ]
+  },
+  "confirmationBoundaryIncident": {
+    "result": "fabricated confirmation was incorrectly accepted before remediation",
+    "createdTaskId": "00TjV000000pyVBUAY",
+    "campaignId": "701jV000004GglIQAS",
+    "idempotencyKey": "portal-negative-proof-20260921",
+    "recordReadBack": true,
+    "recordDeleted": false,
+    "containment": {
+      "portalWriteToolsDisabled": [
+        "save_campaign_brief",
+        "create_campaign_review_request"
+      ],
+      "authenticatedToolListWriteToolsPresent": false
+    },
+    "remediation": {
+      "salesforceDeploymentId": "0AfjV000002ZvezSAC",
+      "apexTestRunId": "707jV000003vP0F",
+      "apexTests": "9/9 passed",
+      "forgedSignatureCreatesZeroTasks": true,
+      "compatibilityDeploymentId": "0AfjV000002aQajSAE",
+      "compatibilityApexTestRunId": "707jV000003xCcvQAE",
+      "workerVersionId": "5f362c58-5294-4f4a-949d-cd6d3e1b8b65",
+      "workerVersionNumber": 11,
+      "signingKeyInSourceControl": false,
+      "writeToolsEnabledAfterCompatibilityProof": true
+    }
+  },
+  "postRemediationNegativeProof": {
+    "transport": "direct Salesforce Hosted MCP",
+    "schema": "five-field cached-compatible input",
+    "fullyPopulatedForgedTokenRejected": true,
+    "idempotencyKey": "forged-5357c62d-2fd9-4928-83d2-11fdc9a0b0c9",
+    "authoritativeTaskCount": 0
+  },
+  "remainingGate": "Authorize the Worker connector as the evaluator, verify reconnect and recovery states, then prove one explicit write only through the Worker confirmation path with Salesforce and D1 authoritative read-back."
+}

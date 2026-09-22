@@ -1,0 +1,85 @@
+{
+  "version": 2,
+  "tools": [
+    {
+      "name": "draft_campaign_brief",
+      "riskClass": "draft",
+      "source": "salesforce-agentforce",
+      "autonomous": true
+    },
+    {
+      "name": "refine_campaign_preview",
+      "riskClass": "draft",
+      "source": "salesforce-agentforce",
+      "autonomous": true
+    },
+    {
+      "name": "summarize_campaign",
+      "riskClass": "read",
+      "source": "salesforce-agentforce",
+      "autonomous": true
+    },
+    {
+      "name": "generate_campaign_insights",
+      "riskClass": "read",
+      "source": "salesforce-agentforce",
+      "autonomous": true
+    },
+    {
+      "name": "save_campaign_brief",
+      "riskClass": "write",
+      "source": "salesforce-apex",
+      "autonomous": false,
+      "allowedWrite": "save-draft-campaign"
+    },
+    {
+      "name": "draft_campaign_content",
+      "riskClass": "draft",
+      "source": "salesforce-agentforce",
+      "autonomous": true
+    },
+    {
+      "name": "create_content_section",
+      "riskClass": "draft",
+      "source": "salesforce-agentforce",
+      "autonomous": true
+    },
+    {
+      "name": "validate_content_against_brand",
+      "riskClass": "read",
+      "source": "salesforce-agentforce",
+      "autonomous": true
+    },
+    {
+      "name": "get_account_marketing_signals",
+      "riskClass": "read",
+      "source": "salesforce-agentforce",
+      "autonomous": true
+    },
+    {
+      "name": "recommend_buyer_group_members",
+      "riskClass": "read",
+      "source": "salesforce-agentforce",
+      "autonomous": true
+    },
+    {
+      "name": "summarize_account_engagement",
+      "riskClass": "read",
+      "source": "salesforce-agentforce",
+      "autonomous": true
+    },
+    {
+      "name": "check_campaign_readiness",
+      "riskClass": "read",
+      "source": "salesforce-agentforce",
+      "autonomous": true
+    },
+    {
+      "name": "create_campaign_review_request",
+      "riskClass": "write",
+      "source": "salesforce-apex",
+      "autonomous": false,
+      "allowedWrite": "create-review-task"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "name": "@northstar/web",
+  "private": true,
+  "type": "module"
+}
