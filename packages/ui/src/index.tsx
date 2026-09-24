@@ -25,12 +25,42 @@ const labels = {
   ready: "Current",
 } as const;
 
-export function InsightCard({ tile }: { tile: InsightTile }) {
+export function resolveTileRenderMode(
+  tile: InsightTile,
+  availableResources: readonly string[] = [],
+) {
+  if (
+    tile.presentation?.kind === "hxl" &&
+    tile.presentation.sourceStatus === "deployed" &&
+    availableResources.includes(tile.presentation.resourceUri)
+  )
+    return "hxl" as const;
+  return "native" as const;
+}
+
+export function InsightCard({
+  tile,
+  availableResources = [],
+}: {
+  tile: InsightTile;
+  availableResources?: readonly string[];
+}) {
+  const renderMode = resolveTileRenderMode(tile, availableResources);
   return (
-    <article className={`insight-card state-${tile.state}`} data-testid={`tile-${tile.kind}`}>
+    <article
+      className={`insight-card state-${tile.state}`}
+      data-hxl-resource={tile.presentation?.resourceUri}
+      data-render-mode={renderMode}
+      data-testid={`tile-${tile.kind}`}
+    >
       <div className="card-topline">
         <span>{tile.eyebrow}</span>
-        <span className="state-chip">{labels[tile.state]}</span>
+        <span>
+          {tile.presentation && (
+            <span className="render-mode">{renderMode === "hxl" ? "HXL" : "Native fallback"}</span>
+          )}
+          <span className="state-chip">{labels[tile.state]}</span>
+        </span>
       </div>
       <h3>{tile.title}</h3>
       {tile.metric && (
@@ -53,7 +83,13 @@ export function InsightCard({ tile }: { tile: InsightTile }) {
   );
 }
 
-export function InsightBoard({ tiles }: { tiles: InsightTile[] }) {
+export function InsightBoard({
+  tiles,
+  availableResources = [],
+}: {
+  tiles: InsightTile[];
+  availableResources?: readonly string[];
+}) {
   if (tiles.length === 0)
     return (
       <div className="empty-state">
@@ -64,7 +100,7 @@ export function InsightBoard({ tiles }: { tiles: InsightTile[] }) {
   return (
     <div className="insight-grid">
       {tiles.map((tile) => (
-        <InsightCard key={tile.id} tile={tile} />
+        <InsightCard key={tile.id} tile={tile} availableResources={availableResources} />
       ))}
     </div>
   );

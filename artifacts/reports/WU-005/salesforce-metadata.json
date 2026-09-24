@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-09-25T00:08:05.124Z",
+  "status": "passed",
+  "requiredFiles": [
+    "aiAuthoringBundles/Campaign_Readiness_Governance/Campaign_Readiness_Governance.agent",
+    "aiAuthoringBundles/Campaign_Readiness_Governance/Campaign_Readiness_Governance.bundle-meta.xml",
+    "classes/NorthstarGetCampaignContext.cls",
+    "classes/NorthstarGetConsentSummary.cls",
+    "classes/NorthstarValidateCampaignContent.cls",
+    "classes/NorthstarCreateCampaignReviewRequest.cls",
+    "classes/NorthstarSaveCampaignBrief.cls",
+    "classes/NorthstarConfirmationVerifier.cls",
+    "classes/NorthstarCampaignActionsTest.cls",
+    "objects/Activity/fields/Northstar_Idempotency_Key__c.field-meta.xml",
+    "objects/Campaign/fields/Northstar_Idempotency_Key__c.field-meta.xml",
+    "objects/Northstar_Confirmation_Config__c/Northstar_Confirmation_Config__c.object-meta.xml",
+    "objects/Northstar_Confirmation_Config__c/fields/Signing_Key__c.field-meta.xml",
+    "mcpServerDefinitions/NorthstarMarketingWorkbench.mcpServerDefinition-meta.xml",
+    "permissionsets/Northstar_Marketing_Workbench_Evaluator.permissionset-meta.xml"
+  ],
+  "supportingFiles": [
+    "salesforce/specs/hosted-mcp-server.json",
+    "salesforce/specs/phase-2-smoke.json",
+    "salesforce/postman/Northstar-Marketing-Workbench.postman_collection.json",
+    "migrations/0001_phase2_confirmation_audit.sql"
+  ],
+  "agentActionTargets": 3,
+  "toolCount": 13,
+  "hostedMcpToolCount": 13,
+  "writeTools": [
+    "save_campaign_brief",
+    "create_campaign_review_request"
+  ],
+  "failures": []
+}

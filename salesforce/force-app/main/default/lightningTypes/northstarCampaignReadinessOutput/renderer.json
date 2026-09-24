@@ -1,0 +1,13 @@
+{
+  "renderer": {
+    "componentOverrides": {
+      "$": {
+        "definition": "@widget/c/northstarCampaignReadiness",
+        "attributes": {
+          "passed": "{!$attrs.passed}",
+          "blockers": "{!$attrs.blockersJson}"
+        }
+      }
+    }
+  }
+}

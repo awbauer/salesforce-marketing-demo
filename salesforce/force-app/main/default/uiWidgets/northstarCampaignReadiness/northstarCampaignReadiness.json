@@ -1,0 +1,58 @@
+{
+  "type": "lightning__agentforceWidget",
+  "contentBody": {
+    "widgetBody": {
+      "definition": "tile/widget",
+      "children": [
+        {
+          "definition": "tile/column",
+          "attributes": {
+            "gap": "md"
+          },
+          "children": [
+            {
+              "definition": "tile/container",
+              "children": [
+                {
+                  "definition": "tile/text",
+                  "attributes": {
+                    "text": "Campaign readiness",
+                    "variant": "h2"
+                  }
+                },
+                {
+                  "definition": "tile/text",
+                  "attributes": {
+                    "text": "Bounded Salesforce evidence",
+                    "variant": "caption",
+                    "color": "muted"
+                  }
+                }
+              ]
+            },
+            {
+              "definition": "tile/container",
+              "children": [
+                {
+                  "definition": "tile/text",
+                  "attributes": {
+                    "text": "Readiness blockers",
+                    "variant": "body",
+                    "weight": "semibold"
+                  }
+                },
+                {
+                  "definition": "tile/text",
+                  "attributes": {
+                    "text": "{!$attrs.blockers}",
+                    "variant": "body"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

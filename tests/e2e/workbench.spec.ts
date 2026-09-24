@@ -25,7 +25,7 @@ test("opens the workspace, renders evidence tiles, and completes a durable turn"
     page.locator(".confirmation-card").getByText("701jV000004GglIQAS", { exact: true }),
   ).toBeVisible();
   await page.screenshot({
-    path: `artifacts/evidence/WU-003/confirmation-${testInfo.project.name}.png`,
+    path: `artifacts/evidence/WU-005/confirmation-${testInfo.project.name}.png`,
     fullPage: true,
   });
   const completedReviews = page.getByText("Review request created");
@@ -38,7 +38,7 @@ test("opens the workspace, renders evidence tiles, and completes a durable turn"
     timeout: 15_000,
   });
   await page.screenshot({
-    path: `artifacts/evidence/WU-003/workbench-${testInfo.project.name}.png`,
+    path: `artifacts/evidence/WU-005/workbench-${testInfo.project.name}.png`,
     fullPage: true,
   });
 });
@@ -64,7 +64,26 @@ test("shows an actionable recovery state when Salesforce authorization expires",
   await expect(page.getByText("expired", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Reconnect" })).toBeVisible();
   await page.screenshot({
-    path: `artifacts/evidence/WU-003/oauth-recovery-${testInfo.project.name}.png`,
+    path: `artifacts/evidence/WU-005/oauth-recovery-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+});
+
+test("renders the accessible native fallback when the HXL resource is unavailable", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  const readiness = page.getByTestId("tile-readiness");
+  await expect(readiness).toBeVisible();
+  await expect(readiness).toHaveAttribute("data-render-mode", "native");
+  await expect(readiness).toHaveAttribute(
+    "data-hxl-resource",
+    "ui://widget/lightningType/c__northstarCampaignReadinessOutput",
+  );
+  await expect(readiness.getByText("Native fallback")).toBeVisible();
+  await expect(readiness.getByRole("heading", { name: "2 blockers before review" })).toBeVisible();
+  await page.screenshot({
+    path: `artifacts/evidence/WU-005/native-fallback-${testInfo.project.name}.png`,
     fullPage: true,
   });
 });

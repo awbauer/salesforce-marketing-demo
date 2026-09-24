@@ -454,6 +454,15 @@ textarea {
   border-radius: 10px;
   padding: 4px 6px;
 }
+
+.render-mode {
+  margin-right: 0.4rem;
+  color: var(--ink-muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
 .insight-card h3 {
   font-family: Georgia, serif;
   font-weight: 500;

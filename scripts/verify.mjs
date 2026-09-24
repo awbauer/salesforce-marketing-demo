@@ -9,6 +9,7 @@ const commands =
         ["pnpm", "typecheck"],
         ["pnpm", "test:unit"],
         ["pnpm", "sf:metadata:check"],
+        ["pnpm", "hxl:check"],
         ["pnpm", "contracts:check"],
         ["pnpm", "docs:check"],
       ]
@@ -20,6 +21,7 @@ const commands =
         ["pnpm", "test:unit"],
         ["pnpm", "test:worker"],
         ["pnpm", "sf:metadata:check"],
+        ["pnpm", "hxl:check"],
         ["pnpm", "eval"],
         ["pnpm", "contracts:check"],
         ["pnpm", "docs:check"],

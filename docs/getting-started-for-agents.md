@@ -8,7 +8,7 @@ Read, in order:
 
 1. [`AGENTS.md`](../AGENTS.md).
 2. The implementation status and chosen defaults in Sections 15–17 of [`agentic-marketing-workbench-plan.md`](agentic-marketing-workbench-plan.md).
-3. The work unit whose front matter says `status: active` in [`work-units/`](work-units/). At present that is [`WU-003`](work-units/WU-003-phase-2-salesforce-core.md).
+3. The active or blocked work unit in [`work-units/`](work-units/). [`WU-005`](work-units/WU-005-phase-3-readiness-hxl.md) delivered the first readiness HXL bundle; Phase 3 still needs two standard-agent HXL results and compatible-host evidence. WU-003 is blocked only on absent representative consent data that agents cannot manufacture inside the allowed write boundary.
 4. The contracts and tests in the paths named by that work unit.
 
 Do not substitute chat history, a pull-request description, or an old report for these sources. Treat unchecked acceptance criteria and stated limitations as unfinished work.

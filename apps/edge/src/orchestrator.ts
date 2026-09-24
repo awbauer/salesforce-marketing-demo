@@ -179,10 +179,16 @@ export class MarketingOrchestrator extends AIChatAgent<
     const defaultTiles = new Map(initialOrchestratorState.tiles.map((tile) => [tile.id, tile]));
     const tiles = this.state.tiles.map((tile) => {
       const defaultTile = defaultTiles.get(tile.id);
-      if (!defaultTile?.recordRef) return tile;
-      return tile.recordRef?.recordId === defaultTile.recordRef.recordId
-        ? tile
-        : { ...tile, recordRef: defaultTile.recordRef };
+      if (!defaultTile) return tile;
+      const recordRef = defaultTile.recordRef ?? tile.recordRef;
+      const presentation = defaultTile.presentation ?? tile.presentation;
+      if (
+        tile.recordRef?.recordId === recordRef?.recordId &&
+        tile.presentation?.resourceUri === presentation?.resourceUri &&
+        tile.presentation?.sourceStatus === presentation?.sourceStatus
+      )
+        return tile;
+      return { ...tile, recordRef, presentation };
     });
     const liveCampaignId = initialOrchestratorState.tiles.find((tile) => tile.kind === "readiness")
       ?.recordRef?.recordId;

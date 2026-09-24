@@ -1,0 +1,22 @@
+{
+  "title": "Northstar Campaign Readiness Widget",
+  "description": "Displays the bounded readiness result returned by Northstar campaign content validation.",
+  "type": "object",
+  "properties": {
+    "attributes": {
+      "lightning:type": "lightning__objectType",
+      "properties": {
+        "passed": {
+          "title": "Content Passed",
+          "description": "Whether the bounded content validation passed.",
+          "lightning:type": "lightning__booleanType"
+        },
+        "blockers": {
+          "title": "Readiness Blockers",
+          "description": "JSON-encoded readiness blockers returned by the bounded validator.",
+          "lightning:type": "lightning__textType"
+        }
+      }
+    }
+  }
+}
