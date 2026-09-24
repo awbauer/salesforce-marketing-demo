@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-21T22:56:34.995Z",
+  "generatedAt": "2026-09-24T23:00:04.395Z",
   "status": "passed",
   "required": [
     "AGENTS.md",
@@ -8,7 +8,9 @@
     "docs/agentic-marketing-workbench-plan.md",
     "docs/work-units/WU-002-phase-1-foundation.md",
     "docs/work-units/WU-003-phase-2-salesforce-core.md",
+    "docs/work-units/WU-004-blocked-word-delivery-gate.md",
     "docs/security/phase-1-threat-model.md",
+    "docs/demo/phase-2-evaluator-guide.md",
     "infra/cloudflare/pot/README.md"
   ],
   "failures": []

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+
 test("opens the workspace, renders evidence tiles, and completes a durable turn", async ({
   page,
 }, testInfo) => {
@@ -21,7 +22,7 @@ test("opens the workspace, renders evidence tiles, and completes a durable turn"
   await page.getByRole("button", { name: "Create review request" }).click();
   await expect(page.getByRole("heading", { name: "Create Salesforce review task?" })).toBeVisible();
   await expect(
-    page.locator(".confirmation-card").getByText("701000000000001", { exact: true }),
+    page.locator(".confirmation-card").getByText("701jV000004GglIQAS", { exact: true }),
   ).toBeVisible();
   await page.screenshot({
     path: `artifacts/evidence/WU-003/confirmation-${testInfo.project.name}.png`,
@@ -38,6 +39,32 @@ test("opens the workspace, renders evidence tiles, and completes a durable turn"
   });
   await page.screenshot({
     path: `artifacts/evidence/WU-003/workbench-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+});
+
+test("shows an actionable recovery state when Salesforce authorization expires", async ({
+  page,
+}, testInfo) => {
+  await page.route("**/agent/salesforce/status", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: "salesforce",
+        label: "Salesforce agents",
+        state: "expired",
+        toolCount: 0,
+        message: "Your Salesforce authorization expired. Reconnect to continue.",
+        errorCode: "AUTH_REQUIRED",
+      }),
+    });
+  });
+  await page.goto("/");
+  await expect(page.getByText("Your Salesforce authorization expired.")).toBeVisible();
+  await expect(page.getByText("expired", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reconnect" })).toBeVisible();
+  await page.screenshot({
+    path: `artifacts/evidence/WU-003/oauth-recovery-${testInfo.project.name}.png`,
     fullPage: true,
   });
 });

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-21T22:56:34.569Z",
+  "generatedAt": "2026-09-24T23:00:03.957Z",
   "status": "passed",
   "score": 1,
   "threshold": 0.9,
@@ -22,7 +22,7 @@
     },
     {
       "id": "routing-03",
-      "prompt": "Summarize campaign 701000000000001",
+      "prompt": "Summarize campaign 701jV000004GglIQAS",
       "expected": "summarize_campaign",
       "actual": "summarize_campaign",
       "passed": true
