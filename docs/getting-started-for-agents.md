@@ -39,6 +39,8 @@ pnpm install --frozen-lockfile
 pnpm verify:fast
 ```
 
+Create `.config/blocked-words.local` with one sensitive or forbidden literal value per line if the checkout does not already have it. The file is intentionally ignored and must never be committed. `pnpm install` configures the tracked pre-push hook for the checkout. Run `pnpm security:blocked-words` immediately before PR creation and every push; a missing or empty list fails closed.
+
 Use `pnpm verify` before committing a coherent work unit. Miniflare-based Worker tests need permission to bind a loopback port; if a sandbox reports `listen EPERM`, rerun the same command with the required execution permission instead of weakening or skipping the test.
 
 Stable commands and their scope are listed in the root [`README.md`](../README.md) and [`agent-delivery-contract.md`](agent-delivery-contract.md).
@@ -87,8 +89,9 @@ Before reporting completion or pausing at a human boundary:
 2. Inspect `git diff --check`, the complete diff, and `git status`.
 3. Scan for secrets, unsupported claims, stale identifiers, and unintended external changes.
 4. Update the plan, active work unit, generated reports, and rollback notes with demonstrated results only.
-5. Commit one coherent change, push the feature branch, and open or update its PR.
-6. Read back the PR head/body/checks and any deployed Salesforce or Cloudflare state.
-7. State the one precise human action required, if any. Do not hand routine agent work back to the user.
+5. Run `pnpm security:blocked-words`; stop on missing configuration or any match.
+6. Commit one coherent change, run the blocked-word gate again, push the feature branch, rerun the gate immediately before opening or updating its PR, and never bypass the pre-push hook.
+7. Read back the PR head/body/checks and any deployed Salesforce or Cloudflare state.
+8. State the one precise human action required, if any. Do not hand routine agent work back to the user.
 
 The completion report format in `AGENTS.md` is mandatory. A green local test run alone does not complete a work unit.

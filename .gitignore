@@ -1,0 +1,6 @@
+# The blocked-word list may contain secrets and must remain local-only.
+/.config/blocked-words.local
+/.pnpm-store/
+node_modules/
+dist/
+.wrangler/

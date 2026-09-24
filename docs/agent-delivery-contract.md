@@ -40,8 +40,12 @@ Phase 1 creates and keeps these root commands stable:
 | `pnpm test:e2e:live` | Opt-in Salesforce sandbox and Cloudflare proof smoke/read-back tests |
 | `pnpm sf:validate` | Salesforce metadata, Apex, Flow, Agent Script, CLT, and HXL validation |
 | `pnpm docs:check` | Links, fenced blocks, generated references, terminology, and decision/work-unit schema checks |
+| `pnpm security:blocked-words` | Fail-closed scan of local repository content, the index, and outgoing commits against the ignored local blocked-word list |
+| `pnpm pr:check` | Blocked-word gate followed by the complete local verification required before PR creation |
 
 Commands must exit nonzero on failure and emit machine-readable reports under `artifacts/reports/`. Live commands must fail clearly when credentials are absent; they must not silently substitute mocks.
+
+The blocked-word list is the sole exception to report generation because its contents are local confidential inputs. It lives at `.config/blocked-words.local`, is never committed, contains one literal value per line, and must be non-empty. The gate never prints those values. It is mandatory immediately before PR creation and every push; the tracked pre-push hook is defense in depth and must not be bypassed.
 
 ## Gate order
 

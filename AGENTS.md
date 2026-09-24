@@ -21,8 +21,9 @@ Do not reopen a decision recorded in Section 17 unless current evidence proves i
 4. Run the narrow checks while iterating, then `pnpm verify` before declaring the work unit complete. Phase 1 must create that command before feature work begins. Until then, only planning/governance changes are allowed and they use the explicit documentation checks in their work unit.
 5. Capture commands, results, deployed identifiers, screenshots, and read-back evidence in the work unit. Evidence must point to an artifact or include a concise reproducible result.
 6. Re-read the diff for scope drift, secrets, unsupported claims, placeholder logic, and missing failure states.
-7. Commit one coherent work unit. Do not mix unrelated cleanup into it.
-8. Deliver feature work through a pull request and read back the merged state from the remote.
+7. Run `pnpm security:blocked-words` immediately before creating a pull request and again immediately before every push. This is a hard, fail-closed gate: never bypass the tracked pre-push hook with `--no-verify`, and do not proceed if the local blocked-word configuration is missing, empty, unignored, tracked, or reports a match.
+8. Commit one coherent work unit. Do not mix unrelated cleanup into it.
+9. Deliver feature work through a pull request and read back the merged state from the remote.
 
 Passing tests is necessary but not sufficient. A task is complete only when its acceptance criteria and evidence requirements are satisfied.
 
@@ -68,6 +69,7 @@ Do not escalate for routine ambiguity. Choose the simplest reversible implementa
 - Keep the orchestrator and image model IDs, retention periods, generation cap, browser matrix, and proof region fixed to Section 17.
 - Never weaken a test, schema, evaluation threshold, permission, or policy merely to make a gate pass.
 - Never commit secrets, access tokens, org identifiers that are not explicitly safe, generated credentials, or local environment files.
+- Keep `.config/blocked-words.local` local and non-empty. Store one literal blocked value per line; never quote, copy, log, commit, or include those values in reports. The repository gate may identify matching files and match counts, but must never print the configured values or value-derived identifiers.
 - Do not hand-edit generated artifacts. Change their source and regenerate them with the checked-in command.
 
 ## Design and documentation quality
