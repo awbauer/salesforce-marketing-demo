@@ -10,6 +10,7 @@ const required = [
   "docs/work-units/WU-003-phase-2-salesforce-core.md",
   "docs/work-units/WU-004-blocked-word-delivery-gate.md",
   "docs/security/phase-1-threat-model.md",
+  "docs/demo/phase-2-evaluator-guide.md",
   "infra/cloudflare/pot/README.md",
 ];
 const failures = [];

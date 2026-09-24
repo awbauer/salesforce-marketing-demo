@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState } from "react";
-import { useAgent } from "agents/react";
 import { useAgentChat } from "@cloudflare/ai-chat/react";
-import type { UIMessage } from "ai";
 import {
   type Confirmation,
   initialOrchestratorState,
-  OrchestratorStateSchema,
   type OrchestratorState,
+  OrchestratorStateSchema,
 } from "@northstar/contracts";
 import { InsightBoard, normalizeAssistantText } from "@northstar/ui";
+import { useAgent } from "agents/react";
+import type { UIMessage } from "ai";
+import { useEffect, useRef, useState } from "react";
 
 function messageText(message: UIMessage) {
   const text = message.parts
@@ -28,13 +28,17 @@ export function App() {
   const [actionError, setActionError] = useState("");
   const [pendingConfirmation, setPendingConfirmation] = useState<Confirmation | null>(null);
   const confirmationRef = useRef<HTMLElement>(null);
+  const connectorStatusLoaded = useRef(false);
   const agent = useAgent<OrchestratorState>({
     agent: "MarketingOrchestrator",
     basePath: "agent",
     onStateUpdate(next) {
       const parsed = OrchestratorStateSchema.safeParse(next);
       if (parsed.success) {
-        setState(parsed.data);
+        setState((current) => ({
+          ...parsed.data,
+          connector: connectorStatusLoaded.current ? current.connector : parsed.data.connector,
+        }));
         if (parsed.data.pendingConfirmation) {
           setPendingConfirmation(parsed.data.pendingConfirmation);
         }
@@ -55,25 +59,28 @@ export function App() {
       })
       .then(() => setSessionState("ready"))
       .catch(() => setSessionState("error"));
-    fetch("/agent/salesforce/status")
-      .then(async (response) => {
-        if (!response.ok) throw new Error("connector");
-        const connector = OrchestratorStateSchema.shape.connector.parse(await response.json());
-        setState((current) => ({ ...current, connector }));
-      })
-      .catch(() => {
-        setState((current) => ({
-          ...current,
-          connector: {
-            ...current.connector,
-            state: "error",
-            message: "Salesforce connection status is unavailable. Retry the page to recover.",
-          },
-        }));
-      });
+    loadConnector().catch(() => {
+      connectorStatusLoaded.current = true;
+      setState((current) => ({
+        ...current,
+        connector: {
+          ...current.connector,
+          state: "error",
+          message: "Salesforce connection status is unavailable. Retry the page to recover.",
+        },
+      }));
+    });
   }, []);
   const busy = status === "submitted" || status === "streaming" || isRecovering;
   const salesforceReady = state.connector.state === "ready";
+
+  useEffect(() => {
+    if (state.connector.state !== "authenticating") return;
+    const timer = window.setInterval(() => {
+      void loadConnector().catch(() => undefined);
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [state.connector.state]);
 
   useEffect(() => {
     if (pendingConfirmation) confirmationRef.current?.scrollIntoView({ block: "nearest" });
@@ -86,19 +93,50 @@ export function App() {
       headers: { "content-type": "application/json" },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-    const result = (await response.json()) as T & { error?: { message?: string } };
+    let result: T & { error?: { message?: string } };
+    try {
+      result = (await response.json()) as T & { error?: { message?: string } };
+    } catch {
+      throw new Error(
+        response.ok
+          ? "The server returned an unreadable response. Try again."
+          : "The server could not complete the request. Try again or reconnect Salesforce.",
+      );
+    }
     if (!response.ok)
       throw new Error(result.error?.message ?? "The action could not be completed.");
     return result;
   }
 
+  async function loadConnector() {
+    const response = await fetch("/agent/salesforce/status");
+    if (!response.ok) throw new Error("Salesforce connection status is unavailable.");
+    const connector = OrchestratorStateSchema.shape.connector.parse(await response.json());
+    connectorStatusLoaded.current = true;
+    setState((current) => ({ ...current, connector }));
+    return connector;
+  }
+
   async function connectSalesforce() {
     setConnectorBusy(true);
     try {
-      const result = await agentAction<{ authUrl?: string }>("salesforce/connect");
+      const result = await agentAction<OrchestratorState["connector"]>("salesforce/connect");
+      setState((current) => ({ ...current, connector: result }));
       if (result.authUrl) window.location.assign(result.authUrl);
     } catch (actionError) {
       setActionError(actionError instanceof Error ? actionError.message : "Connection failed.");
+    } finally {
+      setConnectorBusy(false);
+    }
+  }
+
+  async function disconnectSalesforce() {
+    setConnectorBusy(true);
+    try {
+      const connector = await agentAction<OrchestratorState["connector"]>("salesforce/disconnect");
+      setState((current) => ({ ...current, connector }));
+    } catch (actionError) {
+      setActionError(actionError instanceof Error ? actionError.message : "Disconnect failed.");
     } finally {
       setConnectorBusy(false);
     }
@@ -188,16 +226,48 @@ export function App() {
           </div>
           <section className="connector-panel" aria-labelledby="salesforce-connector-title">
             <strong id="salesforce-connector-title">{state.connector.label}</strong>
-            <span>{state.connector.message}</span>
-            {state.connector.state !== "ready" && state.connector.state !== "not-configured" && (
+            <span role={state.connector.state === "error" ? "alert" : undefined}>
+              {state.connector.message}
+            </span>
+            <small className={`connector-state state-${state.connector.state}`}>
+              {state.connector.state.replace("-", " ")}
+            </small>
+            {state.connector.state === "authenticating" && state.connector.authUrl && (
+              <a href={state.connector.authUrl}>Resume authorization</a>
+            )}
+            {state.connector.state === "ready" ? (
               <button
                 type="button"
-                onClick={() => void connectSalesforce()}
+                className="secondary-button"
+                onClick={() => void disconnectSalesforce()}
                 disabled={connectorBusy}
               >
-                {connectorBusy ? "Connecting…" : "Connect"}
+                {connectorBusy ? "Disconnecting…" : "Disconnect"}
               </button>
-            )}
+            ) : state.connector.state !== "not-configured" ? (
+              <div className="connector-actions">
+                <button
+                  type="button"
+                  onClick={() => void connectSalesforce()}
+                  disabled={connectorBusy}
+                >
+                  {connectorBusy
+                    ? "Connecting…"
+                    : state.connector.state === "disconnected"
+                      ? "Connect"
+                      : "Reconnect"}
+                </button>
+                {state.connector.state === "authenticating" && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => void loadConnector()}
+                  >
+                    Check status
+                  </button>
+                )}
+              </div>
+            ) : null}
           </section>
           <div className="rail-footer">
             <span>Proof environment</span>

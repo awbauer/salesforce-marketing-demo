@@ -11,7 +11,7 @@ export const routingCases = [
   },
   {
     id: "routing-03",
-    prompt: "Summarize campaign 701000000000001",
+    prompt: "Summarize campaign 701jV000004GglIQAS",
     expected: "summarize_campaign",
   },
   {

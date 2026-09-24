@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-09-21T22:45:00Z",
-  "status": "portal-compatible-signed-writes-enabled-worker-proof-pending",
+  "generatedAt": "2026-09-24T22:58:12Z",
+  "status": "evaluator-oauth-and-confirmed-write-proved-consent-sample-pending",
   "account": "Andrew Bauer",
   "worker": {
     "name": "northstar-marketing-workbench-pot",
     "url": "https://northstar-marketing-workbench-pot.andrew-bauer.workers.dev",
-    "versionId": "5f362c58-5294-4f4a-949d-cd6d3e1b8b65",
-    "versionNumber": 11,
+    "versionId": "d162cbcc-4c5d-40d9-b550-0d671834d357",
+    "versionNumber": 19,
     "bindingsReadBack": [
       "ACCESS_AUD",
       "ACCESS_TEAM_DOMAIN",
@@ -25,7 +25,7 @@
       "SALESFORCE_MCP_URL"
     ],
     "salesforceMcpConfigured": true,
-    "unauthenticatedProbe": "HTTP 302 Access redirect for health, readiness, and session paths; the AWB policy remains enforced and unchanged."
+    "unauthenticatedProbe": "HTTP 302 Access redirect read back from /api/session after the recovery build deployment; the AWB policy remains enforced and unchanged."
   },
   "d1": {
     "name": "northstar-marketing-workbench-pot",
@@ -102,7 +102,7 @@
       }
     },
     "unauthenticatedProbe": "HTTP 403 text/plain from the MCP portal hostname, confirming that Access denies an unauthenticated command-line request without redirecting it into an HTML login flow.",
-    "observedApiResult": "Evaluator PKCE OAuth, MCP initialize/initialized, server discovery, exact 13-tool synchronization, and a read-only campaign-readiness call passed through the portal. A fabricated-confirmation negative test exposed that the original Apex actions only checked for non-empty fields and created Task 00TjV000000pyVBUAY. The write tools were disabled during remediation. Salesforce now verifies a versioned token carrying the HMAC, five-minute expiry, exact scope, and principal while retaining Cloudflare's immutable five-field manual-OAuth schema. Deployment 0AfjV000002aQajSAE and Apex run 707jV000003xCcvQAE passed; the direct MCP gate again proves exact 13-tool discovery and unconfirmed-write rejection. Both writes are re-enabled in the portal but remain excluded from autonomous model execution; Worker evaluator OAuth and a confirmed-write read-back remain.",
+    "observedApiResult": "Evaluator PKCE OAuth, MCP initialize/initialized, server discovery, exact 13-tool synchronization, and a read-only campaign-readiness call passed through the portal. A fabricated-confirmation negative test exposed that the original Apex actions only checked for non-empty fields and created Task 00TjV000000pyVBUAY. The write tools were disabled during remediation. Salesforce now verifies a versioned token carrying the HMAC, five-minute expiry, exact scope, and principal while retaining Cloudflare's immutable five-field manual-OAuth schema. Deployment 0AfjV000002aQajSAE and Apex run 707jV000003xCcvQAE passed; the direct MCP gate again proves exact 13-tool discovery and unconfirmed-write rejection. Both writes are re-enabled in the portal but remain excluded from autonomous model execution. Worker evaluator OAuth and a confirmed write completed: Task 00TjV000000uDyfUAE read back against Campaign 701jV000004GglIQAS with the same D1/Salesforce idempotency key.",
     "existingPortalOrServerModified": false
   },
   "externalMutations": [
@@ -117,6 +117,9 @@
     "Disabled both portal write tools after fabricated confirmation created Task 00TjV000000pyVBUAY; the Task was read back and not deleted.",
     "Re-enabled the two curated portal write tools only after the live Apex contract matched the cached five-field schema and 9/9 Apex tests passed.",
     "Deployed HMAC confirmation verification and provisioned matching proof secrets in Salesforce and the Worker without committing either value.",
+    "Rotated the proof-only confirmation signing configuration in Salesforce and the Worker without exposing or committing its value.",
+    "Created one explicitly confirmed review Task 00TjV000000uDyfUAE for Campaign 701jV000004GglIQAS and authoritatively read back its matching D1/Salesforce idempotency key.",
+    "Deployed Worker version d162cbcc-4c5d-40d9-b550-0d671834d357 (v19) with explicit OAuth recovery states, structured write failures, durable-session Campaign migration, exact governed-tool counting, and all existing bindings preserved.",
     "Did not change the shared AWB Access policy, either existing portal, or any existing MCP server."
   ]
 }

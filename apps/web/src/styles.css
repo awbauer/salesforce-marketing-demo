@@ -168,6 +168,38 @@ textarea {
   font-size: 11px;
   line-height: 1.4;
 }
+.connector-panel a {
+  color: var(--forest);
+  font-size: 11px;
+  font-weight: 700;
+}
+.connector-state {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: #edf1e8;
+  color: #536057;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.connector-state.state-expired,
+.connector-state.state-error {
+  background: #ffe8e3;
+  color: #7b2d23;
+}
+.connector-state.state-authenticating {
+  background: #fff4d9;
+  color: #77541e;
+}
+.connector-actions {
+  display: flex;
+  gap: 6px;
+}
+.connector-actions button {
+  flex: 1;
+}
 .connector-panel button,
 .insight-action button,
 .confirm-button {
@@ -178,6 +210,11 @@ textarea {
   padding: 8px 10px;
   font-weight: 700;
   font-size: 11px;
+}
+.connector-panel .secondary-button {
+  border: 1px solid #9eaba2;
+  background: #fff;
+  color: var(--forest);
 }
 .rail-footer span {
   font-size: 12px;

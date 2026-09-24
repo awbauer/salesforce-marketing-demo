@@ -1,6 +1,7 @@
 import { env, SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { type AuthError, deriveAgentKey, resolvePrincipal } from "./auth";
+import { classifyMcpFailure } from "./orchestrator";
 
 describe("edge runtime", () => {
   it("returns structured health", async () => {
@@ -66,6 +67,20 @@ describe("edge runtime", () => {
       toolCount: 0,
     });
   });
+  it("classifies expired and permission-denied MCP recovery states", () => {
+    expect(classifyMcpFailure("OAuth token expired")).toMatchObject({
+      state: "expired",
+      errorCode: "AUTH_REQUIRED",
+    });
+    expect(classifyMcpFailure("403 permission denied")).toMatchObject({
+      state: "error",
+      errorCode: "PERMISSION_DENIED",
+    });
+    expect(classifyMcpFailure("connection reset")).toMatchObject({
+      state: "error",
+      errorCode: "UPSTREAM_UNAVAILABLE",
+    });
+  });
   it("requires a bounded server-side confirmation before the local review fixture", async () => {
     const missing = await SELF.fetch("https://example.test/agent/confirmations/execute", {
       method: "POST",
@@ -77,7 +92,7 @@ describe("edge runtime", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         action: "create-review-task",
-        recordId: "701000000000001",
+        recordId: "701jV000004GglIQAS",
         summary: "Create a review task for the current blockers.",
       }),
     });
@@ -100,7 +115,7 @@ describe("edge runtime", () => {
     await expect(execute.json()).resolves.toMatchObject({
       result: {
         source: "local-fixture",
-        campaignId: "701000000000001",
+        campaignId: "701jV000004GglIQAS",
         readBack: true,
         idempotencyKey: confirmation.idempotencyKey,
       },
@@ -134,7 +149,7 @@ describe("edge runtime", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         action: "save-draft-campaign",
-        recordId: "701000000000001",
+        recordId: "701jV000004GglIQAS",
         summary: "A bounded fictional Northstar draft brief.",
       }),
     });
@@ -147,8 +162,8 @@ describe("edge runtime", () => {
     await expect(execute.json()).resolves.toMatchObject({
       result: {
         source: "local-fixture",
-        recordId: "701000000000001",
-        campaignId: "701000000000001",
+        recordId: "701jV000004GglIQAS",
+        campaignId: "701jV000004GglIQAS",
         idempotencyKey: confirmation.idempotencyKey,
         readBack: true,
       },

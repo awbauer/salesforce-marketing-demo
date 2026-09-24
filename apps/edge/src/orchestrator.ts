@@ -1,20 +1,21 @@
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import {
+  ConfirmationSchema,
+  type ConnectorState,
+  initialOrchestratorState,
+  type OrchestratorState,
+  PHASE_2_AUTONOMOUS_TOOLS,
+  PHASE_2_CURATED_TOOLS,
+} from "@northstar/contracts";
+import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
-  streamText,
   type GenerateTextOnFinishCallback,
+  streamText,
   type ToolSet,
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
-import {
-  ConfirmationSchema,
-  initialOrchestratorState,
-  PHASE_2_AUTONOMOUS_TOOLS,
-  type ConnectorState,
-  type OrchestratorState,
-} from "@northstar/contracts";
 
 export type AgentProps = { principalSubject: string; workspaceId: string };
 type OrchestratorBindings = CloudflareBindings & {
@@ -50,7 +51,11 @@ function connectorFromMcp(
       toolCount: 0,
       message: "Connect Salesforce to use the curated marketing agent catalog.",
     };
-  const toolCount = mcp.tools.filter((tool) => tool.serverId === "salesforce").length;
+  const toolCount = mcp.tools.filter(
+    (tool) =>
+      tool.serverId === "salesforce" &&
+      PHASE_2_CURATED_TOOLS.some((name) => tool.name === name || tool.name.endsWith(`_${name}`)),
+  ).length;
   if (server.state === "ready")
     return {
       id: "salesforce",
@@ -59,24 +64,65 @@ function connectorFromMcp(
       toolCount,
       message: `${toolCount} curated Salesforce tools are available for this user.`,
     };
-  if (server.state === "authenticating")
+  if (
+    server.state === "authenticating" ||
+    server.state === "connecting" ||
+    server.state === "connected" ||
+    server.state === "discovering"
+  )
     return {
       id: "salesforce",
       label: "Salesforce agents",
       state: "authenticating",
       toolCount,
-      message: "Finish Salesforce authorization in the opened window.",
+      message:
+        server.state === "authenticating"
+          ? "Finish Salesforce authorization in the opened window."
+          : "Salesforce is connected. Discovering the curated tool catalog…",
       ...(server.auth_url ? { authUrl: server.auth_url } : {}),
     };
+  const failure = classifyMcpFailure(server.error);
   return {
     id: "salesforce",
     label: "Salesforce agents",
-    state: server.state === "failed" ? "error" : "disconnected",
+    state: server.state === "failed" ? failure.state : "disconnected",
     toolCount,
     message:
       server.state === "failed"
-        ? "Salesforce authorization or tool discovery failed. Reconnect to recover."
-        : "Salesforce is reconnecting for this user.",
+        ? failure.message
+        : "Connect Salesforce to use the curated marketing agent catalog.",
+    ...(server.state === "failed" ? { errorCode: failure.errorCode } : {}),
+  };
+}
+
+export function classifyMcpFailure(
+  error: string | null | undefined,
+): Pick<ConnectorState, "state" | "message" | "errorCode"> {
+  const normalized = error?.toLowerCase() ?? "";
+  if (
+    normalized.includes("expired") ||
+    normalized.includes("invalid_grant") ||
+    normalized.includes("token")
+  )
+    return {
+      state: "expired",
+      errorCode: "AUTH_REQUIRED",
+      message: "Your Salesforce authorization expired. Reconnect to continue.",
+    };
+  if (
+    normalized.includes("permission") ||
+    normalized.includes("forbidden") ||
+    normalized.includes("403")
+  )
+    return {
+      state: "error",
+      errorCode: "PERMISSION_DENIED",
+      message: "Salesforce denied this user. Verify evaluator permissions, then reconnect.",
+    };
+  return {
+    state: "error",
+    errorCode: "UPSTREAM_UNAVAILABLE",
+    message: "Salesforce authorization or tool discovery failed. Reconnect to recover.",
   };
 }
 
@@ -133,12 +179,22 @@ export class MarketingOrchestrator extends AIChatAgent<
     const defaultTiles = new Map(initialOrchestratorState.tiles.map((tile) => [tile.id, tile]));
     const tiles = this.state.tiles.map((tile) => {
       const defaultTile = defaultTiles.get(tile.id);
-      return tile.recordRef || !defaultTile?.recordRef
+      if (!defaultTile?.recordRef) return tile;
+      return tile.recordRef?.recordId === defaultTile.recordRef.recordId
         ? tile
         : { ...tile, recordRef: defaultTile.recordRef };
     });
-    if (tiles.some((tile, index) => tile !== this.state.tiles[index])) {
-      this.setState({ ...this.state, tiles });
+    const liveCampaignId = initialOrchestratorState.tiles.find((tile) => tile.kind === "readiness")
+      ?.recordRef?.recordId;
+    const pendingConfirmation =
+      this.state.pendingConfirmation?.recordId === liveCampaignId
+        ? this.state.pendingConfirmation
+        : null;
+    if (
+      tiles.some((tile, index) => tile !== this.state.tiles[index]) ||
+      pendingConfirmation !== this.state.pendingConfirmation
+    ) {
+      this.setState({ ...this.state, tiles, pendingConfirmation });
     }
   }
 
@@ -349,22 +405,36 @@ export class MarketingOrchestrator extends AIChatAgent<
           principalHex,
           confirmationSignature,
         ].join(".");
-        const upstream = await resolveToolResult(
-          tool.execute(
+        let upstream: unknown;
+        try {
+          upstream = await resolveToolResult(
+            tool.execute(
+              {
+                inputs: [
+                  {
+                    campaignId: current.recordId,
+                    ...(current.action === "save-draft-campaign" ? { brief: current.summary } : {}),
+                    confirmationId: signedConfirmation,
+                    requestHash: current.requestHash,
+                    idempotencyKey: current.idempotencyKey,
+                  },
+                ],
+              },
+              { toolCallId: current.id, messages: [], context: undefined },
+            ),
+          );
+        } catch {
+          return json(
             {
-              inputs: [
-                {
-                  campaignId: current.recordId,
-                  ...(current.action === "save-draft-campaign" ? { brief: current.summary } : {}),
-                  confirmationId: signedConfirmation,
-                  requestHash: current.requestHash,
-                  idempotencyKey: current.idempotencyKey,
-                },
-              ],
+              error: {
+                code: "UPSTREAM_UNAVAILABLE",
+                message:
+                  "Salesforce rejected the confirmed write. The request was not recorded as executed; reconnect or ask an administrator to verify the confirmation configuration, then retry.",
+              },
             },
-            { toolCallId: current.id, messages: [], context: undefined },
-          ),
-        );
+            { status: 502 },
+          );
+        }
         const campaignId = findToolField(upstream, "campaignId");
         const readBack = findToolField(upstream, "readBack");
         const sourceRecordId =

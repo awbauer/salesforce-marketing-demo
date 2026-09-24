@@ -47,6 +47,7 @@ export const ConnectorStateSchema = z.object({
   toolCount: z.number().int().nonnegative(),
   message: z.string().max(240),
   authUrl: z.url().optional(),
+  errorCode: SalesforceErrorCodeSchema.optional(),
 });
 export type ConnectorState = z.infer<typeof ConnectorStateSchema>;
 
@@ -75,6 +76,12 @@ export const PHASE_2_AUTONOMOUS_TOOLS = Object.freeze([
   "recommend_buyer_group_members",
   "summarize_account_engagement",
   "check_campaign_readiness",
+] as const);
+
+export const PHASE_2_CURATED_TOOLS = Object.freeze([
+  ...PHASE_2_AUTONOMOUS_TOOLS,
+  "save_campaign_brief",
+  "create_campaign_review_request",
 ] as const);
 
 export const InsightTileSchema = z.object({
@@ -160,7 +167,11 @@ export const initialOrchestratorState: OrchestratorState = {
         "Channel: email",
         "Objective: repeat purchase",
       ],
-      recordRef: { system: "salesforce", objectApiName: "Campaign", recordId: "701000000000001" },
+      recordRef: {
+        system: "salesforce",
+        objectApiName: "Campaign",
+        recordId: "701jV000004GglIQAS",
+      },
     },
     {
       id: "readiness",
@@ -178,7 +189,11 @@ export const initialOrchestratorState: OrchestratorState = {
         status: "stale",
       },
       details: ["Add image alt-text", "Confirm commercial consent scope"],
-      recordRef: { system: "salesforce", objectApiName: "Campaign", recordId: "701000000000001" },
+      recordRef: {
+        system: "salesforce",
+        objectApiName: "Campaign",
+        recordId: "701jV000004GglIQAS",
+      },
     },
     {
       id: "performance",
