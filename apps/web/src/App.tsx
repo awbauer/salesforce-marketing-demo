@@ -87,19 +87,30 @@ export function executionTrace(message: UIMessage): TraceStep[] {
     const input = "input" in part ? part.input : undefined;
     const output = "output" in part ? part.output : undefined;
     const unavailable = complete && semanticToolFailure(output);
+    const readableName = readableToolName(name);
+    const callStep = {
+      label: `Salesforce agent call · ${readableName}`,
+      detail:
+        complete || failed
+          ? "Call completed through the governed MCP catalog"
+          : "Calling through the governed MCP catalog",
+      state: complete || failed ? ("complete" as const) : ("active" as const),
+      payload: JSON.stringify(sanitizedPayload({ input }), null, 2),
+    } satisfies TraceStep;
+    if (!complete && !failed) return [callStep];
+    const errorText = "errorText" in part ? part.errorText : undefined;
     return [
+      callStep,
       {
-        label: `Salesforce agent · ${readableToolName(name)}`,
+        label: `Salesforce agent response · ${readableName}`,
         detail: failed
           ? "Tool call failed safely"
           : unavailable
             ? "Salesforce returned no usable business result"
-            : complete
-              ? "Result returned to the orchestrator"
-              : "Calling through the governed MCP catalog",
-        state: failed || unavailable ? "error" : complete ? "complete" : "active",
+            : "Result returned to the orchestrator",
+        state: failed || unavailable ? "error" : "complete",
         payload: JSON.stringify(
-          sanitizedPayload({ input, ...(complete ? { output } : {}) }),
+          sanitizedPayload(failed ? { error: errorText } : { output }),
           null,
           2,
         ),
@@ -201,10 +212,15 @@ export function App() {
   }, []);
   const busy = status === "submitted" || status === "streaming" || isRecovering;
   const salesforceReady = state.connector.state === "ready";
-  const latestMessage = messages.at(-1);
   const showChatError = shouldShowChatError(
-    Boolean(error),
-    latestMessage ? { role: latestMessage.role, text: messageText(latestMessage) } : undefined,
+    status === "error" && Boolean(error) && !isRecovering,
+    messages.map((message) => ({
+      role: message.role,
+      text: messageText(message),
+      hasCompletedToolOutput: message.parts.some(
+        (part) => "state" in part && part.state === "output-available",
+      ),
+    })),
   );
 
   useEffect(() => {

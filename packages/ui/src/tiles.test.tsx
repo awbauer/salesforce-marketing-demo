@@ -31,13 +31,28 @@ describe("InsightBoard", () => {
 
   it("does not pair a completed answer with a contradictory interruption error", () => {
     expect(
-      shouldShowChatError(true, {
-        role: "assistant",
-        text: JSON.stringify({ message: "A complete Salesforce-grounded response." }),
-      }),
+      shouldShowChatError(true, [
+        { role: "user", text: "Summarize the campaign" },
+        {
+          role: "assistant",
+          text: JSON.stringify({ message: "A complete Salesforce-grounded response." }),
+        },
+      ]),
     ).toBe(false);
-    expect(shouldShowChatError(true, { role: "assistant", text: "" })).toBe(true);
-    expect(shouldShowChatError(false, { role: "assistant", text: "Complete" })).toBe(false);
+    expect(
+      shouldShowChatError(true, [
+        { role: "user", text: "Create a brief" },
+        { role: "assistant", text: "", hasCompletedToolOutput: true },
+        { role: "assistant", text: "" },
+      ]),
+    ).toBe(false);
+    expect(
+      shouldShowChatError(true, [
+        { role: "user", text: "Create a brief" },
+        { role: "assistant", text: "" },
+      ]),
+    ).toBe(true);
+    expect(shouldShowChatError(false, [{ role: "assistant", text: "Complete" }])).toBe(false);
   });
 
   it("does not describe a missing Salesforce catalog as an intentional tool-free answer", () => {
