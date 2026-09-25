@@ -1229,3 +1229,69 @@ a {
     padding: 16px 16px 24px;
   }
 }
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.history-turn.has-issue {
+  border-left: 3px solid #c86454;
+}
+.history-turn > details > summary {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.history-utterance {
+  font-weight: 650;
+  color: var(--ink);
+}
+.history-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.history-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #f4f7f1;
+  color: var(--forest);
+  font-size: 11px;
+}
+.history-badge.tool-error,
+.history-badge.outcome-issue {
+  background: #fbe9e5;
+  border-color: #efc4ba;
+  color: #8f3525;
+}
+.history-badge.outcome-ok,
+.history-badge.tool-ok {
+  background: #e4f3e7;
+  border-color: #b9d5bf;
+  color: #204d30;
+}
+.history-details {
+  margin-top: 12px;
+}
+.history-tools {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+}
+.history-error {
+  margin: 4px 0 0;
+  color: #8f3525;
+}
+.history-answer {
+  white-space: pre-wrap;
+}

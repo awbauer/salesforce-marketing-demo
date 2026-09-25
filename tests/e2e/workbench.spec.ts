@@ -264,7 +264,10 @@ test("attaches a selected image draft only after an explicit confirmation", asyn
 });
 
 test("shows an honest empty state before any evaluation run is published", async ({ page }) => {
-  await page.route("**/evals/latest.json", (route) => route.fulfill({ status: 404, body: "" }));
+  // Production serves the app shell for unknown paths, so a missing report arrives as HTML.
+  await page.route("**/evals/latest.json", (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><html></html>" }),
+  );
   await page.goto("/");
   await page.getByRole("button", { name: "Evaluations" }).first().click();
   await expect(page.getByRole("heading", { name: "Evaluations" })).toBeVisible();
@@ -375,6 +378,45 @@ test("renders model comparison, checks, scenarios, failures, and methodology", a
   );
   await page.screenshot({
     path: `artifacts/evidence/WU-021/evaluations-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+});
+
+test("records each turn with its interpretation, reasoning, and outcome in history", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "New chat" }).click();
+  const composer = page.getByLabel("Message the orchestrator");
+  await composer.fill("Review the sample campaign readiness");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByText(/strongest signal is stable engagement/i).last()).toBeVisible();
+  await composer.fill("Publish and send the campaign");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.locator(".message.assistant").last()).toContainText("I didn't take it");
+
+  await page.getByRole("button", { name: "History" }).first().click();
+  await expect(page.getByRole("heading", { name: "Turn history" })).toBeVisible();
+  // History is per user and survives New chat, so earlier tests' turns may also be listed.
+  const blocked = page
+    .locator(".history-turn", { hasText: "Publish and send the campaign" })
+    .first();
+  await expect(blocked.getByText("Blocked action", { exact: true })).toBeVisible();
+  const reviewed = page
+    .locator(".history-turn", { hasText: "Review the sample campaign readiness" })
+    .first();
+  await expect(reviewed.getByText("Local fixture", { exact: true })).toBeVisible();
+  await reviewed.locator("summary").first().click();
+  await expect(reviewed.getByText(/answered from the fictional fixture/i)).toBeVisible();
+  await reviewed.getByText("Show reasoning").click();
+  await expect(reviewed.getByText(/needs no Salesforce tool/i)).toBeVisible();
+  await expect(reviewed.locator(".history-answer")).toContainText("strongest signal");
+
+  await page.getByRole("button", { name: "Policy routed" }).click();
+  await expect(page.locator(".history-turn", { hasText: "Review the sample" })).toHaveCount(0);
+  await expect(blocked).toBeVisible();
+  await page.screenshot({
+    path: `artifacts/evidence/WU-022/turn-history-${testInfo.project.name}.png`,
     fullPage: true,
   });
 });

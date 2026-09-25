@@ -278,6 +278,45 @@ export const TurnTraceSchema = z.object({
 });
 export type TurnTrace = z.infer<typeof TurnTraceSchema>;
 
+export const TURN_HISTORY_RETENTION_DAYS = PROOF_DEFAULTS.transcriptRetentionDays;
+
+export const TurnRecordSchema = z.object({
+  id: z.string(),
+  startedAt: z.string().datetime(),
+  durationMs: z.number().nonnegative(),
+  utterance: z.string(),
+  model: z.string(),
+  route: z.enum([
+    "model",
+    "confirmation-required",
+    "unsupported",
+    "catalog-unavailable",
+    "local-fixture",
+  ]),
+  requiredTool: z.string().optional(),
+  interpretation: z.string(),
+  reasoning: z.string(),
+  outcome: z.enum(["completed", "aborted", "timed-out", "failed"]),
+  fallback: z.boolean(),
+  failure: z.string().optional(),
+  answer: z.string(),
+  steps: z.number().int().nonnegative(),
+  inputTokens: z.number().nonnegative(),
+  outputTokens: z.number().nonnegative(),
+  tools: z.array(
+    z.object({
+      toolCallId: z.string(),
+      toolName: z.string(),
+      status: z.enum(["pending", "ok", "error"]),
+      durationMs: z.number().nonnegative().optional(),
+      input: z.unknown(),
+      output: z.unknown(),
+      error: z.string().optional(),
+    }),
+  ),
+});
+export type TurnRecord = z.infer<typeof TurnRecordSchema>;
+
 export const SessionSchema = z.object({
   workspaceId: z.string(),
   principal: PrincipalSchema,

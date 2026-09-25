@@ -27,6 +27,19 @@ function isTimeout(reason: string) {
   return /timeout|timed out/i.test(reason);
 }
 
+const HISTORY_TEXT_LIMIT = 4000;
+
+export type TurnToolCall = {
+  toolCallId: string;
+  toolName: string;
+  status: "pending" | "ok" | "error";
+  input?: unknown;
+  output?: unknown;
+  error?: string;
+  startedAt: number;
+  endedAt?: number;
+};
+
 export type TurnRoute = NonNullable<Extract<TurnTraceEvent, { kind: "turn-start" }>["route"]>;
 
 export type TurnTraceOptions = {
@@ -104,6 +117,22 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
       const toolNames = new Map<string, string>();
       // The SDK reports an invalid tool call as both an input error and an output error.
       const inputErrors = new Set<string>();
+      // Captured for the turn history record; bounded so a runaway turn cannot bloat storage.
+      let reasoningText = "";
+      let answerText = "";
+      const toolCalls = new Map<string, TurnToolCall>();
+      const toolCall = (toolCallId: string, toolName?: string) => {
+        const existing = toolCalls.get(toolCallId);
+        if (existing) return existing;
+        const created: TurnToolCall = {
+          toolCallId,
+          toolName: toolName ?? "unknown",
+          status: "pending",
+          startedAt: now(),
+        };
+        toolCalls.set(toolCallId, created);
+        return created;
+      };
       let heldFinish: UIMessageChunk | undefined;
       let failure: { kind: "error" | "abort"; message: string } | undefined;
 
@@ -140,6 +169,7 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
               break;
             case "reasoning-delta":
               reasoningChars += chunk.delta.length;
+              if (reasoningText.length < HISTORY_TEXT_LIMIT) reasoningText += chunk.delta;
               writer.write(chunk);
               break;
             case "reasoning-end":
@@ -157,6 +187,7 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
             case "text-delta":
               textChars += chunk.delta.length;
               visibleChars += chunk.delta.trim().length;
+              if (answerText.length < HISTORY_TEXT_LIMIT) answerText += chunk.delta;
               writer.write(chunk);
               break;
             case "text-end":
@@ -166,6 +197,7 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
               break;
             case "tool-input-start":
               toolNames.set(chunk.toolCallId, chunk.toolName);
+              toolCall(chunk.toolCallId, chunk.toolName);
               writer.write(chunk);
               record({
                 kind: "tool-input-start",
@@ -173,8 +205,11 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
                 toolName: chunk.toolName,
               });
               break;
-            case "tool-input-available":
+            case "tool-input-available": {
               toolNames.set(chunk.toolCallId, chunk.toolName);
+              const call = toolCall(chunk.toolCallId, chunk.toolName);
+              call.toolName = chunk.toolName;
+              call.input = chunk.input;
               writer.write(chunk);
               record({
                 kind: "tool-input-available",
@@ -182,8 +217,14 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
                 toolName: chunk.toolName,
               });
               break;
-            case "tool-input-error":
+            }
+            case "tool-input-error": {
               inputErrors.add(chunk.toolCallId);
+              const call = toolCall(chunk.toolCallId, chunk.toolName);
+              call.input = chunk.input;
+              call.status = "error";
+              call.error = describeTurnError(chunk.errorText);
+              call.endedAt = now();
               writer.write(chunk);
               record({
                 kind: "tool-input-error",
@@ -192,13 +233,24 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
                 message: describeTurnError(chunk.errorText),
               });
               break;
+            }
             case "tool-output-available":
-              if (!chunk.preliminary) completedTools += 1;
+              if (!chunk.preliminary) {
+                completedTools += 1;
+                const call = toolCall(chunk.toolCallId, toolNames.get(chunk.toolCallId));
+                call.output = chunk.output;
+                call.status = "ok";
+                call.endedAt = now();
+              }
               writer.write(chunk);
               if (!chunk.preliminary)
                 record({ kind: "tool-output-available", toolCallId: chunk.toolCallId });
               break;
-            case "tool-output-error":
+            case "tool-output-error": {
+              const call = toolCall(chunk.toolCallId, toolNames.get(chunk.toolCallId));
+              call.status = "error";
+              call.error ??= describeTurnError(chunk.errorText);
+              call.endedAt ??= now();
               writer.write(chunk);
               if (!inputErrors.has(chunk.toolCallId))
                 record({
@@ -207,6 +259,7 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
                   message: describeTurnError(chunk.errorText),
                 });
               break;
+            }
             case "finish":
               heldFinish = chunk;
               break;
@@ -237,7 +290,7 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
       }
       const userStopped = Boolean(options.userAbortSignal?.aborted);
       const timedOut = failure?.kind === "abort" && !userStopped && isTimeout(failure.message);
-      const outcome = userStopped
+      const outcome: "completed" | "aborted" | "timed-out" | "failed" = userStopped
         ? "aborted"
         : timedOut
           ? "timed-out"
@@ -258,12 +311,20 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
           const id = crypto.randomUUID();
           writer.write({ type: "text-start", id });
           writer.write({ type: "text-delta", id, delta: notice });
+          answerText += notice;
           writer.write({ type: "text-end", id });
         }
       }
       record({ kind: "turn-finish", outcome });
       writer.write(heldFinish ?? { type: "finish" });
-      return { outcome, trace };
+      return {
+        outcome,
+        trace,
+        reasoning: reasoningText.slice(0, HISTORY_TEXT_LIMIT),
+        answer: answerText.slice(0, HISTORY_TEXT_LIMIT),
+        failure: failure ? describeTurnError(failure.message) : undefined,
+        toolCalls: [...toolCalls.values()],
+      };
     },
   };
 }
