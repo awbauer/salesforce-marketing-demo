@@ -33,6 +33,8 @@ type OrchestratorBindings = CloudflareBindings & {
 const MAX_TURN_STEPS = 4;
 // Salesforce agent calls can take tens of seconds, so the budget covers model steps plus tool time.
 const TURN_TIMEOUT = { totalMs: 150_000, chunkMs: 60_000, toolMs: 120_000 } as const;
+// Workers AI defaults to 256 output tokens, which gpt-oss reasoning can exhaust before any text.
+const MAX_OUTPUT_TOKENS = 4096;
 
 const IMAGE_PROMPT_VERSION = "campaign-image-v1";
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
@@ -88,16 +90,22 @@ export function requiredToolChoice(requiredTool: string | undefined, stepNumber:
     : { toolChoice: "none" as const };
 }
 
-/** Forces the last allowed step to write text so a tool loop cannot end without an answer. */
+/**
+ * Per-step tool settings. A forced step only sees its required tool, and text-only steps receive
+ * no tools at all: Workers AI does not enforce `toolChoice: "none"`, so gpt-oss otherwise emits
+ * malformed tool calls instead of the summary. The last allowed step is always text-only.
+ */
 export function stepToolChoice(
   requiredTool: string | undefined,
   stepNumber: number,
   maxSteps = MAX_TURN_STEPS,
 ) {
-  return (
-    requiredToolChoice(requiredTool, stepNumber) ??
-    (stepNumber >= maxSteps - 1 ? { toolChoice: "none" as const } : undefined)
-  );
+  const forced = requiredToolChoice(requiredTool, stepNumber);
+  if (forced && forced.toolChoice !== "none")
+    return { ...forced, activeTools: [requiredTool as string] };
+  if (forced || stepNumber >= maxSteps - 1)
+    return { toolChoice: "none" as const, activeTools: [] as string[] };
+  return undefined;
 }
 
 function latestUserText(messages: Array<{ role: string; parts?: Array<unknown> }>) {
@@ -443,6 +451,7 @@ export class MarketingOrchestrator extends AIChatAgent<
             prepareStep: ({ stepNumber }: { stepNumber: number }) =>
               stepToolChoice(requiredTool, stepNumber),
             stopWhen: stepCountIs(MAX_TURN_STEPS),
+            maxOutputTokens: MAX_OUTPUT_TOKENS,
             timeout: TURN_TIMEOUT,
             abortSignal,
             onStepFinish: (step) => tracer.recordStepFinish(step),

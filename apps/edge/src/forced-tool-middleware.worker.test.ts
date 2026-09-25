@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   FORCED_TOOL_MAX_OUTPUT_TOKENS,
   forcedToolCallMiddleware,
+  normalizeToolName,
   repairForcedToolStep,
   salvageToolInput,
 } from "./forced-tool-middleware";
@@ -100,14 +101,21 @@ describe("forced tool call middleware", () => {
   });
 
   it("leaves structured tool calls untouched", () => {
-    expect(repairForcedToolStep(structured, "salesforce_summarize_campaign", ["message"])).toBe(
+    expect(repairForcedToolStep(structured, "", "salesforce_summarize_campaign", ["message"])).toBe(
       structured,
     );
   });
 
-  it("turns a tool call leaked into reasoning into a structured call", async () => {
+  it("streams reasoning live and turns a leaked tool call into a structured call", async () => {
     const { parts, calls } = await run([leaked]);
     expect(calls()).toBe(1);
+    expect(parts.slice(0, 5).map((part) => part.type)).toEqual([
+      "stream-start",
+      "reasoning-start",
+      "reasoning-delta",
+      "reasoning-delta",
+      "reasoning-end",
+    ]);
     const call = parts.find((part) => part.type === "tool-call");
     expect(call).toMatchObject({
       toolName: "salesforce_summarize_campaign",
@@ -116,16 +124,17 @@ describe("forced tool call middleware", () => {
     expect(parts.at(-1)).toMatchObject({ type: "finish", finishReason: { unified: "tool-calls" } });
   });
 
-  it("retries once when no tool call can be recovered", async () => {
+  it("retries once when no tool call can be recovered, keeping the first reasoning visible", async () => {
     const { parts, calls } = await run([empty, structured]);
     expect(calls()).toBe(2);
-    expect(parts).toEqual(structured);
+    expect(parts).toEqual([...empty.slice(0, 3), ...structured]);
   });
 
   it("returns the last attempt when every attempt fails", async () => {
     const { parts, calls } = await run([empty, empty, structured]);
     expect(calls()).toBe(2);
-    expect(parts).toEqual(empty);
+    expect(parts.filter((part) => part.type === "finish")).toHaveLength(1);
+    expect(parts.some((part) => part.type === "tool-call")).toBe(false);
   });
 
   it("does not buffer or cap steps without a forced tool", async () => {
@@ -146,5 +155,42 @@ describe("forced tool call middleware", () => {
         model: {} as WrapOptions["model"],
       }),
     ).resolves.toMatchObject({ maxOutputTokens: FORCED_TOOL_MAX_OUTPUT_TOKENS });
+  });
+
+  it("repairs tool names that contain leaked channel markup", async () => {
+    const offered = new Set(["salesforce_summarize_campaign"]);
+    expect(normalizeToolName("salesforce_summarize_campaign<|channel|>analysis", offered)).toBe(
+      "salesforce_summarize_campaign",
+    );
+    expect(normalizeToolName("other_tool<|channel|>analysis", offered)).toBe(
+      "other_tool<|channel|>analysis",
+    );
+    const garbled = "salesforce_summarize_campaign<|channel|>analysis";
+    const { parts } = await run([
+      [
+        { type: "tool-input-start", id: "c", toolName: garbled },
+        { type: "tool-input-end", id: "c" },
+        { type: "tool-call", toolCallId: "c", toolName: garbled, input: '{"message":"x"}' },
+        { type: "finish", finishReason: { unified: "tool-calls", raw: "tool_calls" }, usage },
+      ],
+    ]);
+    expect(
+      parts.flatMap((part) =>
+        part.type === "tool-call" || part.type === "tool-input-start" ? [part.toolName] : [],
+      ),
+    ).toEqual(["salesforce_summarize_campaign", "salesforce_summarize_campaign"]);
+  });
+
+  it("retries a forced step that only called some other tool", async () => {
+    const { parts, calls } = await run([
+      [
+        { type: "tool-input-start", id: "x", toolName: "other_tool" },
+        { type: "tool-call", toolCallId: "x", toolName: "other_tool", input: "{}" },
+        { type: "finish", finishReason: { unified: "tool-calls", raw: "tool_calls" }, usage },
+      ],
+      structured,
+    ]);
+    expect(calls()).toBe(2);
+    expect(parts).toEqual(structured);
   });
 });
