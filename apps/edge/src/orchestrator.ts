@@ -7,6 +7,7 @@ import {
   type OrchestratorState,
   PHASE_2_AUTONOMOUS_TOOLS,
   PHASE_2_CURATED_TOOLS,
+  PROOF_DEFAULTS,
 } from "@northstar/contracts";
 import {
   convertToModelMessages,
@@ -425,7 +426,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         const tracer = createTurnTracer(writer, {
-          model: this.env.ORCHESTRATOR_MODEL,
+          model: PROOF_DEFAULTS.orchestratorModel,
           toolCount: Object.keys(tools).length,
           requiredTool,
           timeoutSeconds: TURN_TIMEOUT.totalMs / 1000,
@@ -434,7 +435,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         try {
           const result = streamText({
             model: wrapLanguageModel({
-              model: workersAI(this.env.ORCHESTRATOR_MODEL),
+              model: workersAI(PROOF_DEFAULTS.orchestratorModel),
               middleware: forcedToolCallMiddleware,
             }),
             system: [

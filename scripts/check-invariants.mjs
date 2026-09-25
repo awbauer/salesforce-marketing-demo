@@ -5,7 +5,6 @@ import { report } from "./lib/report.mjs";
 const wrangler = await readFile("wrangler.jsonc", "utf8");
 const catalog = JSON.parse(await readFile("packages/contracts/src/tool-catalog.json", "utf8"));
 const required = [
-  PROOF_DEFAULTS.orchestratorModel,
   PROOF_DEFAULTS.imageModel,
   '"new_sqlite_classes"',
   '"CAMPAIGN_ASSETS"',
@@ -22,9 +21,14 @@ const forbidden = [
   "buyer-group",
   "arbitrary-crud",
 ];
+const orchestratorSource = await readFile("apps/edge/src/orchestrator.ts", "utf8");
 const failures = required
   .filter((value) => !wrangler.includes(value))
   .map((value) => `Missing config invariant: ${value}`);
+if (/ORCHESTRATOR_MODEL/.test(wrangler))
+  failures.push("Orchestrator model must be set only in PROOF_DEFAULTS, not wrangler.jsonc");
+if (!orchestratorSource.includes("workersAI(PROOF_DEFAULTS.orchestratorModel)"))
+  failures.push("Orchestrator must read its model from PROOF_DEFAULTS.orchestratorModel");
 for (const value of forbidden)
   if (PROOF_DEFAULTS.allowedWrites.some((item) => item.includes(value)))
     failures.push(`Forbidden write exposed: ${value}`);

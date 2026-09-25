@@ -165,6 +165,21 @@ describe("forced tool call middleware", () => {
     expect(normalizeToolName("other_tool<|channel|>analysis", offered)).toBe(
       "other_tool<|channel|>analysis",
     );
+    const namespaced = new Set([
+      "tool_salesforce_ns_recommend_buyer_group",
+      "tool_salesforce_ns_draft_campaign_content",
+      "tool_salesforce_ns_draft_campaign_brief",
+    ]);
+    expect(normalizeToolName("recommend_buyer_group", namespaced)).toBe(
+      "tool_salesforce_ns_recommend_buyer_group",
+    );
+    expect(normalizeToolName("salesforce_ns_draft_campaign_content", namespaced)).toBe(
+      "tool_salesforce_ns_draft_campaign_content",
+    );
+    expect(normalizeToolName("campaign_brief<|channel|>commentary", namespaced)).toBe(
+      "tool_salesforce_ns_draft_campaign_brief",
+    );
+    expect(normalizeToolName("draft", namespaced)).toBe("draft");
     const garbled = "salesforce_summarize_campaign<|channel|>analysis";
     const { parts } = await run([
       [
