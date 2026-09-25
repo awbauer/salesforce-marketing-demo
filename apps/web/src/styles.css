@@ -22,6 +22,10 @@ button,
 textarea {
   font: inherit;
 }
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
 .topbar {
   height: 72px;
   background: #101b17;
@@ -288,6 +292,15 @@ textarea {
 .text-button:focus-visible {
   background: #e9eee7;
 }
+.quickstart-button {
+  border: 1px solid #b7c5b9;
+  background: #fff;
+  color: var(--forest);
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 750;
+}
 .messages {
   padding: 26px;
   overflow: auto;
@@ -321,10 +334,24 @@ textarea {
   white-space: pre-wrap;
 }
 .recovery,
-.error-banner {
+.error-banner,
+.success-banner {
   padding: 12px;
   border-radius: 8px;
   font-size: 13px;
+}
+.success-banner {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  background: #e4f3e7;
+  color: #204d30;
+  border: 1px solid #b9d5bf;
+}
+.success-banner a,
+.confirmation-card a {
+  color: #174c38;
+  font-weight: 750;
 }
 .confirmation-card {
   border: 1px solid #d4a454;
@@ -499,6 +526,15 @@ textarea {
   justify-content: space-between;
   font-size: 10px;
   color: #7c877f;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.insight-card footer a {
+  color: #315e4d;
+  font-weight: 750;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  width: 100%;
 }
 .activity {
   padding: 4px 18px 24px;
@@ -553,6 +589,99 @@ textarea {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #0d1813b8;
+  backdrop-filter: blur(3px);
+}
+.quickstart-dialog {
+  width: min(680px, 100%);
+  max-height: min(820px, calc(100vh - 48px));
+  overflow: auto;
+  border: 1px solid #cbd5ca;
+  border-radius: 18px;
+  padding: 26px;
+  background: var(--paper);
+  box-shadow: 0 28px 80px #08110c66;
+}
+.quickstart-heading {
+  display: flex;
+  align-items: start;
+  gap: 16px;
+}
+.quickstart-heading .kicker {
+  margin-left: 0;
+}
+.quickstart-heading h2 {
+  margin: 2px 0 0;
+  font-family: Georgia, serif;
+  font-size: 28px;
+  font-weight: 500;
+}
+.dialog-close {
+  margin-left: auto;
+  border: 0;
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  background: #e9eee7;
+  color: var(--forest);
+  font-size: 22px;
+}
+.quickstart-dialog > p,
+.quickstart-steps,
+.coming-soon {
+  color: #536057;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.quickstart-dialog > p {
+  margin: 12px 0;
+}
+.quickstart-dialog h3 {
+  margin: 16px 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.quickstart-steps,
+.coming-soon {
+  margin: 8px 0;
+  padding-left: 22px;
+}
+.prompt-list {
+  display: grid;
+  gap: 6px;
+}
+.prompt-list button {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #cad5c9;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #fff;
+  color: var(--forest);
+  text-align: left;
+  font-weight: 700;
+}
+.prompt-list button:hover,
+.prompt-list button:focus-visible {
+  border-color: #648674;
+  background: #f1f6ed;
+}
+.quickstart-dialog .boundary-note {
+  margin: 14px 0 0;
+  border-left: 3px solid var(--amber);
+  padding: 8px 12px;
+  background: #fff7e8;
+  color: #684918;
 }
 @media (max-width: 1000px) {
   .workspace {
@@ -611,5 +740,11 @@ textarea {
   }
   .composer {
     margin: 0 14px 18px;
+  }
+  .quickstart-dialog {
+    padding: 20px;
+  }
+  .success-banner {
+    flex-direction: column;
   }
 }

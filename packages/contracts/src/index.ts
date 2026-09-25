@@ -187,7 +187,8 @@ export const initialOrchestratorState: OrchestratorState = {
       kind: "readiness",
       eyebrow: "Readiness",
       title: "2 blockers before review",
-      summary: "The proof agent found missing accessibility copy and an unconfirmed consent rule.",
+      summary:
+        "The readiness check found missing accessibility copy and an unconfirmed consent rule.",
       metric: "7 / 9",
       trend: "checks complete",
       state: "stale",
@@ -232,7 +233,7 @@ export const initialOrchestratorState: OrchestratorState = {
     {
       id: "a1",
       label: "Workspace opened",
-      detail: "Server-authoritative proof session",
+      detail: "Server-authoritative demo session",
       occurredAt: "Now",
       status: "complete",
     },
