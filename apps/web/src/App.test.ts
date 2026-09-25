@@ -23,4 +23,27 @@ describe("technical trace hardening", () => {
       "[redacted token]",
     );
   });
+
+  it("appends a response event instead of rewriting the completed tool call", () => {
+    const message = {
+      id: "tool-result",
+      role: "assistant",
+      parts: [
+        {
+          type: "dynamic-tool",
+          toolName: "salesforce_draft_campaign_content",
+          toolCallId: "call-1",
+          state: "output-available",
+          input: { message: "Draft a campaign" },
+          output: { isError: false, structuredContent: { message: "Draft complete" } },
+        },
+      ],
+    } as UIMessage;
+
+    expect(executionTrace(message).map(({ label, state }) => ({ label, state }))).toEqual([
+      { label: "Northstar orchestrator", state: "active" },
+      { label: "Salesforce agent call · Draft Campaign Content", state: "complete" },
+      { label: "Salesforce agent response · Draft Campaign Content", state: "complete" },
+    ]);
+  });
 });

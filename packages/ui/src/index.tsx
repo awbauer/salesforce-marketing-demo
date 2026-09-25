@@ -54,12 +54,21 @@ export function normalizeAssistantText(text: string) {
 
 export function shouldShowChatError(
   hasError: boolean,
-  latestMessage?: { role: string; text: string },
+  messages: readonly {
+    role: string;
+    text: string;
+    hasCompletedToolOutput?: boolean;
+  }[] = [],
 ) {
-  return (
-    hasError &&
-    !(latestMessage?.role === "assistant" && normalizeAssistantText(latestMessage.text).length > 0)
-  );
+  if (!hasError) return false;
+  const latestUserIndex = messages.map((message) => message.role).lastIndexOf("user");
+  return !messages
+    .slice(latestUserIndex + 1)
+    .some(
+      (message) =>
+        message.role === "assistant" &&
+        (message.hasCompletedToolOutput || normalizeAssistantText(message.text).length > 0),
+    );
 }
 
 export function toolFreeTraceDetail(text: string) {
