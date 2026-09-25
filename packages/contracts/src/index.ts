@@ -2,7 +2,8 @@ import { z } from "zod";
 
 export const PROOF_DEFAULTS = Object.freeze({
   workspaceId: "northstar-demo",
-  orchestratorModel: "@cf/openai/gpt-oss-20b",
+  // The only place the orchestrator model is set; the Worker reads it from here. See ADR-004.
+  orchestratorModel: "@cf/openai/gpt-oss-120b",
   imageModel: "@cf/black-forest-labs/flux-2-klein-4b",
   imageSize: 1024,
   imageCap: 100,

@@ -273,7 +273,7 @@ Do not let the model see an unbounded raw MCP catalog. Cap the proof portal at 2
 
 ### Model layer
 
-- Use Cloudflare-hosted `@cf/openai/gpt-oss-20b` as the orchestrator model. It supports function calling and reasoning while keeping the proof on one platform and avoiding another provider credential.
+- Use Cloudflare-hosted `@cf/openai/gpt-oss-120b` as the orchestrator model. It supports function calling and reasoning while keeping the proof on one platform and avoiding another provider credential. ADR-004 records why it replaced `@cf/openai/gpt-oss-20b`.
 - Route inference through Cloudflare AI Gateway for request logging and cost visibility.
 - Keep prompts versioned in the repository.
 - Limit each turn to eight tool calls and a 60-second wall-clock budget.
@@ -875,7 +875,7 @@ Exit: the proof targets pass, evidence is captured, limitations are documented, 
 2. **Agents:** Campaign Creation, Content Builder, Account Discovery, and the custom Campaign Readiness and Governance Agent, all exposed from the new Agent Script Builder. No Journey Decisioning or preview agents.
 3. **Cloudflare:** assume the account already permits Workers, Agents/Durable Objects, D1, R2, Workers AI, Access, AI Gateway, and MCP server portals. Use one proof Worker, one portal, one Durable Object namespace, one D1 database, and one R2 bucket. Optional Gateway DLP, Terraform, staging, and production environments are deferred.
 4. **Identity:** Cloudflare Access email one-time PIN for an explicit evaluator allowlist; per-user Salesforce OAuth; `evaluator` and `demo-admin` roles only.
-5. **Orchestrator model:** Cloudflare-hosted `@cf/openai/gpt-oss-20b` through AI Gateway, with sample sandbox data only and no customer PII in model inputs.
+5. **Orchestrator model:** Cloudflare-hosted `@cf/openai/gpt-oss-120b` through AI Gateway (changed from `gpt-oss-20b` by ADR-004), with sample sandbox data only and no customer PII in model inputs.
 6. **Image generation:** `@cf/black-forest-labs/flux-2-klein-4b`, one 1024×1024 PNG per call, no reference images, one concurrent request per user, and a hard proof cap of 100 images or USD 25.
 7. **Retention:** transcripts and audit events for 14 days; every R2 image object for seven days; Salesforce remains the only source of truth for campaign data and attached assets.
 8. **Writes:** same-user confirmation permits only saving a draft brief/campaign, creating a review task, and attaching a selected generated image. Publish, send, activate, delete, suppress, buyer-group mutation, and arbitrary CRUD are unavailable.
@@ -919,7 +919,7 @@ It is a better proof than a broad read-only chatbot because it validates the dif
 - [Cloudflare Agents SDK MCP client](https://developers.cloudflare.com/agents/model-context-protocol/apis/client-api/)
 - [Cloudflare chat agents](https://developers.cloudflare.com/agents/communication-channels/chat/chat-agents/)
 - [Cloudflare Workers AI model catalog](https://developers.cloudflare.com/workers-ai/models/)
-- [gpt-oss-20b on Workers AI](https://developers.cloudflare.com/workers-ai/models/gpt-oss-20b/)
+- [gpt-oss-120b on Workers AI](https://developers.cloudflare.com/workers-ai/models/gpt-oss-120b/)
 - [FLUX.2 klein 4B on Workers AI](https://developers.cloudflare.com/workers-ai/models/flux-2-klein-4b/)
 - [FLUX.2 dev on Workers AI](https://developers.cloudflare.com/workers-ai/models/flux-2-dev/)
 - [Workers AI bindings](https://developers.cloudflare.com/workers-ai/configuration/bindings/)

@@ -1,4 +1,9 @@
-import { TURN_TRACE_PART_ID, TURN_TRACE_PART_TYPE, type TurnTrace } from "@northstar/contracts";
+import {
+  PROOF_DEFAULTS,
+  TURN_TRACE_PART_ID,
+  TURN_TRACE_PART_TYPE,
+  type TurnTrace,
+} from "@northstar/contracts";
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { executionTrace, readableToolName, sanitizedPayload, sanitizedText } from "./turn-trace";
@@ -59,7 +64,7 @@ describe("technical trace hardening", () => {
     const trace: TurnTrace = {
       startedAt: 1_000,
       events: [
-        { kind: "turn-start", at: 1_000, model: "@cf/openai/gpt-oss-20b", toolCount: 3 },
+        { kind: "turn-start", at: 1_000, model: PROOF_DEFAULTS.orchestratorModel, toolCount: 3 },
         { kind: "step-start", at: 1_010, step: 0 },
         { kind: "reasoning-start", at: 1_020, index: 0 },
         { kind: "reasoning-end", at: 1_520, index: 0, chars: 12 },

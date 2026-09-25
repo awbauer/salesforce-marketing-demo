@@ -49,12 +49,17 @@ export function salvageToolInput(reasoning: string, required: string[]): string 
 
 /**
  * gpt-oss sometimes leaks its channel markup into a tool name, such as
- * `summarize_campaign<|channel|>analysis`. Returns the offered tool name the call was meant for.
+ * `summarize_campaign<|channel|>analysis`, or drops part of the MCP namespace prefix, such as
+ * `recommend_buyer_group` for `tool_salesforce_…_recommend_buyer_group`. Returns the single
+ * offered tool name the call was meant for, or the original name when it is ambiguous.
  */
 export function normalizeToolName(name: string, offered: ReadonlySet<string>) {
   if (offered.has(name)) return name;
   const stripped = name.split("<|")[0]?.trim() ?? name;
-  return offered.has(stripped) ? stripped : name;
+  if (!stripped) return name;
+  if (offered.has(stripped)) return stripped;
+  const matches = [...offered].filter((candidate) => candidate.endsWith(`_${stripped}`));
+  return matches.length === 1 ? (matches[0] as string) : name;
 }
 
 function nameNormalizer(params: CallParams) {
@@ -63,7 +68,7 @@ function nameNormalizer(params: CallParams) {
     if (part.type !== "tool-input-start" && part.type !== "tool-call") return part;
     const toolName = normalizeToolName(part.toolName, offered);
     if (toolName === part.toolName) return part;
-    console.warn("[orchestrator] repaired a tool name that contained model channel markup");
+    console.warn("[orchestrator] repaired a malformed tool name from the model");
     return { ...part, toolName };
   };
 }
