@@ -4,6 +4,7 @@ import { type AuthError, deriveAgentKey, resolvePrincipal } from "./auth";
 import {
   classifyMcpFailure,
   classifyToolResult,
+  requestedToolName,
   requiredToolChoice,
   selectRequiredTool,
   validateImageConcept,
@@ -130,6 +131,9 @@ describe("edge runtime", () => {
       "salesforce_check_campaign_readiness",
     );
     expect(selectRequiredTool("What can this demo do?", names)).toBeUndefined();
+    expect(requestedToolName("Summarize the sample campaign and its recent performance")).toBe(
+      "summarize_campaign",
+    );
     expect(requiredToolChoice(names[0], 0)).toEqual({
       toolChoice: { type: "tool", toolName: names[0] },
     });

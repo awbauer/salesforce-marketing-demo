@@ -12,6 +12,7 @@ import {
   normalizeAssistantText,
   salesforceRecordUrl,
   shouldShowChatError,
+  toolFreeTraceDetail,
 } from "@northstar/ui";
 import { useAgent } from "agents/react";
 import type { UIMessage } from "ai";
@@ -103,12 +104,13 @@ export function executionTrace(message: UIMessage): TraceStep[] {
   const hasCompletedText = message.parts.some(
     (part) => part.type === "text" && part.state !== "streaming" && part.text.trim(),
   );
+  const assistantText = messageText(message);
   return [
     {
       label: "Northstar orchestrator",
       detail: toolSteps.length
         ? "Selected the narrowest governed tools needed for this request"
-        : "Answered without an external tool because no Salesforce action was needed",
+        : toolFreeTraceDetail(assistantText),
       state: hasCompletedText ? "complete" : "active",
     },
     ...toolSteps,
