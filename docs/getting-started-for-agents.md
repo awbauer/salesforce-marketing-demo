@@ -50,7 +50,7 @@ Stable commands and their scope are listed in the root [`README.md`](../README.m
 External state can drift independently of Git. Before changing Salesforce or Cloudflare:
 
 - Read the current evidence in `artifacts/reports/<work-unit-id>/`, but verify any state needed for the next action live.
-- Pass `--target-org northstar-pot` to every Salesforce command. The approved proof-org ID is `00DjV000001wjXLUAY`; the user's explicit proof classification for this org overrides `Organization.IsSandbox` only for this exact ID.
+- Pass `--target-org northstar-pot` to every Salesforce command. Read the approved proof-org ID from the protected `SF_APPROVED_PROOF_ORG_ID` execution environment; the user's explicit proof classification for this org overrides `Organization.IsSandbox` only for that exact ID.
 - Treat every Salesforce artifact that predates this proof as read-only. Never use or modify Fizi, Agent Two, `ABCampaigns`, `abmcpaug31`, `Cloudflare_MCP`, or another existing artifact without explicit permission.
 - Change only the net-new Northstar resources identified in WU-003. The shared Cloudflare Access policy `AWB` may be attached by its verified ID but must not be renamed, edited, or deleted.
 - Use command-line interfaces only unless the user explicitly authorizes computer or browser control. A human completes login, MFA, and OAuth consent prompts.

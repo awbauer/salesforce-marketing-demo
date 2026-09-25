@@ -42,6 +42,7 @@ The Worker deploy follows the existing main-branch workflow. The Salesforce work
 - `pnpm verify` passed all 12 repository gates, including 21 unit tests, 15 Worker tests, the Salesforce metadata contract, HXL validation, and 20 evaluation cases.
 - The Worker regression suite proves that a persisted assistant claim is excluded from the next evidence turn; the UI regression suite proves recovery of an interrupted JSON message envelope.
 - Salesforce check-only deployment `0AfjV000002nTsYSAU` succeeded against the approved proof org for the governed core; the read-back classified the Hosted MCP definition and evaluator permission set as changed.
+- The expected proof-org ID is supplied only by the protected GitHub environment and is required to be non-empty before the exact-target comparison runs.
 
 # Completion
 
