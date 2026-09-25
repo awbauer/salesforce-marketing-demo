@@ -116,6 +116,10 @@ describe("edge runtime", () => {
       result: {
         source: "local-fixture",
         campaignId: "701jV000004GglIQAS",
+        subject: "Review campaign readiness: VERO Phase 1 Launch",
+        priority: "High",
+        dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        description: expect.stringContaining("readiness findings"),
         readBack: true,
         idempotencyKey: confirmation.idempotencyKey,
       },

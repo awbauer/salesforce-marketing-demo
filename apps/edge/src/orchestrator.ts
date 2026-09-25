@@ -445,10 +445,24 @@ export class MarketingOrchestrator extends AIChatAgent<
         const readBack = findToolField(upstream, "readBack");
         const sourceRecordId =
           current.action === "create-review-task" ? findToolField(upstream, "taskId") : campaignId;
+        const taskDetails =
+          current.action === "create-review-task"
+            ? {
+                subject: findToolField(upstream, "subject"),
+                priority: findToolField(upstream, "priority"),
+                dueDate: findToolField(upstream, "dueDate"),
+                description: findToolField(upstream, "description"),
+              }
+            : {};
         if (
           typeof sourceRecordId !== "string" ||
           campaignId !== current.recordId ||
-          readBack !== true
+          readBack !== true ||
+          (current.action === "create-review-task" &&
+            (typeof taskDetails.subject !== "string" ||
+              typeof taskDetails.priority !== "string" ||
+              typeof taskDetails.dueDate !== "string" ||
+              typeof taskDetails.description !== "string"))
         )
           return json(
             {
@@ -485,6 +499,7 @@ export class MarketingOrchestrator extends AIChatAgent<
             recordId: sourceRecordId,
             campaignId,
             status: findToolField(upstream, "status"),
+            ...taskDetails,
             idempotencyKey: current.idempotencyKey,
             readBack: true,
           },
@@ -518,6 +533,15 @@ export class MarketingOrchestrator extends AIChatAgent<
           recordId: fixtureRecordId,
           campaignId: current.recordId,
           status: "Open",
+          ...(current.action === "create-review-task"
+            ? {
+                subject: "Review campaign readiness: VERO Phase 1 Launch",
+                priority: "High",
+                dueDate: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10),
+                description:
+                  "Campaign context, readiness findings, and a human review checklist were recorded in Salesforce.",
+              }
+            : {}),
           idempotencyKey: current.idempotencyKey,
           readBack: true,
         },

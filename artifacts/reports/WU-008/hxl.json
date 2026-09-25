@@ -1,0 +1,9 @@
+{
+  "generatedAt": "2026-09-25T12:38:25.022Z",
+  "status": "passed",
+  "widget": "northstarCampaignReadiness",
+  "lightningType": "northstarCampaignReadinessOutput",
+  "resourceUri": "ui://widget/lightningType/c__northstarCampaignReadinessOutput",
+  "fallback": "native",
+  "failures": []
+}

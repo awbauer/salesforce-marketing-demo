@@ -30,6 +30,9 @@ export function App() {
   const [createdRecord, setCreatedRecord] = useState<{
     objectApiName: "Task";
     recordId: string;
+    subject: string;
+    priority: string;
+    dueDate: string;
   } | null>(null);
   const [quickstartOpen, setQuickstartOpen] = useState(false);
   const confirmationRef = useRef<HTMLElement>(null);
@@ -165,7 +168,8 @@ export function App() {
       const confirmation = await agentAction<Confirmation>("confirmations", {
         action: "create-review-task",
         recordId: campaign.recordId,
-        summary: "Create an open campaign review task for the current readiness blockers.",
+        summary:
+          "Create a campaign review task with current campaign context, readiness findings, a due date, and a human review checklist.",
       });
       setPendingConfirmation(confirmation);
       setState((current) => ({ ...current, pendingConfirmation: confirmation }));
@@ -177,7 +181,14 @@ export function App() {
   async function resolveConfirmation(decision: "execute" | "deny") {
     try {
       const result = await agentAction<{
-        result?: { recordId: string; campaignId: string; readBack: boolean };
+        result?: {
+          recordId: string;
+          campaignId: string;
+          readBack: boolean;
+          subject: string;
+          priority: string;
+          dueDate: string;
+        };
       }>(`confirmations/${decision}`);
       setPendingConfirmation(null);
       setState((current) => ({
@@ -186,7 +197,13 @@ export function App() {
       }));
       if (decision === "execute" && result.result?.readBack) {
         setActionError("");
-        setCreatedRecord({ objectApiName: "Task", recordId: result.result.recordId });
+        setCreatedRecord({
+          objectApiName: "Task",
+          recordId: result.result.recordId,
+          subject: result.result.subject,
+          priority: result.result.priority,
+          dueDate: result.result.dueDate,
+        });
       }
     } catch (actionError) {
       setActionError(actionError instanceof Error ? actionError.message : "Confirmation failed.");
@@ -348,7 +365,10 @@ export function App() {
             )}
             {createdRecord && (
               <div className="success-banner" role="status">
-                <span>Salesforce review task created and verified.</span>
+                <span>
+                  <strong>{createdRecord.subject}</strong>
+                  {` · ${createdRecord.priority} priority · due ${createdRecord.dueDate}`}
+                </span>
                 <a
                   href={salesforceRecordUrl(createdRecord.objectApiName, createdRecord.recordId)}
                   target="_blank"

@@ -1,0 +1,38 @@
+{
+  "generatedAt": "2026-09-25T12:37:12.447Z",
+  "status": "passed",
+  "results": [
+    {
+      "command": "pnpm format:check",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm lint",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm test:unit",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm sf:metadata:check",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm hxl:check",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm contracts:check",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm docs:check",
+      "exitCode": 0
+    }
+  ]
+}

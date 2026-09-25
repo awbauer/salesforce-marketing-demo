@@ -133,7 +133,7 @@ private class NorthstarCampaignActionsTest {
     static void createsOneReviewTaskForDuplicateDelivery() {
         User evaluator = createEvaluator(true);
         System.runAs(evaluator) {
-            Campaign campaign = [SELECT Id FROM Campaign LIMIT 1];
+            Campaign campaign = [SELECT Id, Name, Description FROM Campaign LIMIT 1];
             NorthstarCreateCampaignReviewRequest.Input input = new NorthstarCreateCampaignReviewRequest.Input();
             input.campaignId = campaign.Id;
             input.confirmationId = '0f7b8de9-0a5c-4d94-aa9c-f24f2b2a93c3';
@@ -151,7 +151,37 @@ private class NorthstarCampaignActionsTest {
             System.assertEquals(false, first.replayed);
             System.assertEquals(true, replay.replayed);
             System.assertEquals(first.taskId, replay.taskId);
+            System.assertEquals('Review campaign readiness: ' + campaign.Name, first.subject);
+            System.assertEquals('Normal', first.priority);
+            System.assertEquals(Date.today().addDays(2), first.dueDate);
+            System.assert(first.description.contains(campaign.Description));
+            System.assert(first.description.contains('Review checklist'));
+            System.assert(first.description.contains(String.valueOf(campaign.Id)));
+            System.assertEquals(false, first.description.contains(input.requestHash));
             System.assertEquals(1, [SELECT COUNT() FROM Task WHERE Northstar_Idempotency_Key__c = :input.idempotencyKey]);
+        }
+    }
+
+    @IsTest
+    static void createsActionableReviewForIncompleteCampaign() {
+        Campaign incomplete = new Campaign(Name = 'Incomplete Campaign', Status = 'Planned');
+        insert incomplete;
+        User evaluator = createEvaluator(true);
+        System.runAs(evaluator) {
+            NorthstarCreateCampaignReviewRequest.Input input = new NorthstarCreateCampaignReviewRequest.Input();
+            input.campaignId = incomplete.Id;
+            input.confirmationId = '6bb34618-44bb-4c96-9a4f-1cd3511aa915';
+            input.requestHash = '5dbc26aef159d90d4a37148a3db9a6a32b0084464545ba2faf8e69ada3d074bc';
+            input.idempotencyKey = '297127a2-61dd-4daf-9b8b-5f5f77caf657';
+            authorizeReview(input);
+            NorthstarCreateCampaignReviewRequest.Output result =
+                NorthstarCreateCampaignReviewRequest.run(
+                    new List<NorthstarCreateCampaignReviewRequest.Input>{ input }
+                )[0];
+            System.assertEquals('High', result.priority);
+            System.assert(result.description.contains('Campaign brief is missing.'));
+            System.assert(result.description.contains('Campaign dates are incomplete.'));
+            System.assert(result.description.contains('No campaign brief has been saved.'));
         }
     }
 
