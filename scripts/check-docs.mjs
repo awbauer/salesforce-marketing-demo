@@ -10,6 +10,7 @@ const required = [
   "docs/work-units/WU-003-phase-2-salesforce-core.md",
   "docs/work-units/WU-004-blocked-word-delivery-gate.md",
   "docs/work-units/WU-005-phase-3-readiness-hxl.md",
+  "docs/work-units/WU-006-demo-quickstart-record-links.md",
   "docs/security/phase-1-threat-model.md",
   "docs/demo/phase-2-evaluator-guide.md",
   "infra/cloudflare/pot/README.md",
@@ -25,6 +26,7 @@ const units = await Promise.all([
   readFile(required[5], "utf8"),
   readFile(required[6], "utf8"),
   readFile(required[7], "utf8"),
+  readFile(required[8], "utf8"),
 ]);
 for (const heading of [
   "## Acceptance criteria",
@@ -33,7 +35,8 @@ for (const heading of [
   "## External mutations",
 ])
   for (const [index, unit] of units.entries())
-    if (!unit.includes(heading)) failures.push(`Work unit ${index + 3} missing ${heading}`);
+    if (!unit.includes(heading))
+      failures.push(`Required work unit ${index + 1} missing ${heading}`);
 await report("documentation", {
   status: failures.length ? "failed" : "passed",
   required,

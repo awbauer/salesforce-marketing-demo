@@ -1,5 +1,13 @@
 import type { InsightTile } from "@northstar/contracts";
 
+const SALESFORCE_SANDBOX_ORIGIN = "https://test.salesforce.com";
+
+export function salesforceRecordUrl(objectApiName: string, recordId: string) {
+  const objectName = encodeURIComponent(objectApiName);
+  const id = encodeURIComponent(recordId);
+  return `${SALESFORCE_SANDBOX_ORIGIN}/lightning/r/${objectName}/${id}/view`;
+}
+
 export function normalizeAssistantText(text: string) {
   return text
     .replace(/<br\s*\/?\s*>/gi, "\n")
@@ -78,6 +86,15 @@ export function InsightCard({
       <footer>
         <span>{tile.source.label}</span>
         <time>{tile.source.freshness}</time>
+        {tile.recordRef && (
+          <a
+            href={salesforceRecordUrl(tile.recordRef.objectApiName, tile.recordRef.recordId)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open in Salesforce <span aria-hidden="true">↗</span>
+          </a>
+        )}
       </footer>
     </article>
   );

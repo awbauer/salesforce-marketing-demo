@@ -5,7 +5,7 @@ import {
   type OrchestratorState,
   OrchestratorStateSchema,
 } from "@northstar/contracts";
-import { InsightBoard, normalizeAssistantText } from "@northstar/ui";
+import { InsightBoard, normalizeAssistantText, salesforceRecordUrl } from "@northstar/ui";
 import { useAgent } from "agents/react";
 import type { UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
@@ -27,7 +27,13 @@ export function App() {
   const [connectorBusy, setConnectorBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [pendingConfirmation, setPendingConfirmation] = useState<Confirmation | null>(null);
+  const [createdRecord, setCreatedRecord] = useState<{
+    objectApiName: "Task";
+    recordId: string;
+  } | null>(null);
+  const [quickstartOpen, setQuickstartOpen] = useState(false);
   const confirmationRef = useRef<HTMLElement>(null);
+  const quickstartCloseRef = useRef<HTMLButtonElement>(null);
   const connectorStatusLoaded = useRef(false);
   const agent = useAgent<OrchestratorState>({
     agent: "MarketingOrchestrator",
@@ -85,6 +91,16 @@ export function App() {
   useEffect(() => {
     if (pendingConfirmation) confirmationRef.current?.scrollIntoView({ block: "nearest" });
   }, [pendingConfirmation]);
+
+  useEffect(() => {
+    if (!quickstartOpen) return;
+    quickstartCloseRef.current?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setQuickstartOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [quickstartOpen]);
 
   async function agentAction<T>(path: string, body?: unknown) {
     setActionError("");
@@ -168,7 +184,10 @@ export function App() {
         ...current,
         pendingConfirmation: null,
       }));
-      if (decision === "execute" && result.result?.readBack) setActionError("");
+      if (decision === "execute" && result.result?.readBack) {
+        setActionError("");
+        setCreatedRecord({ objectApiName: "Task", recordId: result.result.recordId });
+      }
     } catch (actionError) {
       setActionError(actionError instanceof Error ? actionError.message : "Confirmation failed.");
     }
@@ -185,7 +204,7 @@ export function App() {
         <div className="top-actions">
           <span className={`connection ${sessionState}`}>
             {sessionState === "ready"
-              ? "Proof workspace"
+              ? "Demo workspace"
               : sessionState === "error"
                 ? "Connection issue"
                 : "Connecting"}
@@ -202,11 +221,8 @@ export function App() {
             <button type="button" className="nav-item active">
               <span>◆</span>Overview
             </button>
-            <button type="button" className="nav-item">
-              <span>◒</span>Campaigns
-            </button>
-            <button type="button" className="nav-item">
-              <span>◇</span>Assets
+            <button type="button" className="nav-item" onClick={() => setQuickstartOpen(true)}>
+              <span>?</span>Quickstart
             </button>
           </div>
           <div>
@@ -270,8 +286,8 @@ export function App() {
             ) : null}
           </section>
           <div className="rail-footer">
-            <span>Proof environment</span>
-            <small>Sample data only</small>
+            <span>Guided demo</span>
+            <small>Fictional sample data</small>
           </div>
         </nav>
         <section className="conversation" aria-labelledby="chat-title">
@@ -284,6 +300,13 @@ export function App() {
               <button type="button" className="text-button" onClick={() => clearHistory()}>
                 New chat
               </button>
+              <button
+                type="button"
+                className="quickstart-button"
+                onClick={() => setQuickstartOpen(true)}
+              >
+                Quickstart
+              </button>
               <span className="agent-badge">
                 <i />
                 Agent online
@@ -294,9 +317,9 @@ export function App() {
             <article className="message assistant">
               <div className="message-author">Northstar orchestrator</div>
               <p>
-                I’m connected to the proof workspace. I can inspect fictional campaign context,
-                surface readiness blockers, and assemble evidence—without publishing or sending
-                anything.
+                Explore the fictional Northstar campaign with governed Salesforce data. I can
+                summarize context, draft content, check readiness, and prepare a review task for
+                your confirmation. Nothing is published or sent.
               </p>
             </article>
             {messages.map((message) => (
@@ -323,6 +346,18 @@ export function App() {
                 {actionError}
               </div>
             )}
+            {createdRecord && (
+              <div className="success-banner" role="status">
+                <span>Salesforce review task created and verified.</span>
+                <a
+                  href={salesforceRecordUrl(createdRecord.objectApiName, createdRecord.recordId)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open task in Salesforce <span aria-hidden="true">↗</span>
+                </a>
+              </div>
+            )}
             {pendingConfirmation && (
               <section
                 ref={confirmationRef}
@@ -335,7 +370,15 @@ export function App() {
                 <dl>
                   <div className="confirmation-detail">
                     <dt>Campaign</dt>
-                    <dd>{pendingConfirmation.recordId}</dd>
+                    <dd>
+                      <a
+                        href={salesforceRecordUrl("Campaign", pendingConfirmation.recordId)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {pendingConfirmation.recordId} <span aria-hidden="true">↗</span>
+                      </a>
+                    </dd>
                   </div>
                   <div className="confirmation-detail">
                     <dt>Expires</dt>
@@ -378,11 +421,11 @@ export function App() {
               id="prompt"
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask about the Northstar sample campaign…"
+              placeholder="Try: Check the sample campaign readiness"
               rows={3}
             />
             <div className="composer-footer">
-              <span>Sample data · No publish actions</span>
+              <span>Fictional data · Confirm before writes · No publish actions</span>
               {busy ? (
                 <button type="button" className="send" onClick={() => stop()}>
                   Stop
@@ -430,6 +473,74 @@ export function App() {
           </section>
         </aside>
       </div>
+      {quickstartOpen && (
+        <div className="dialog-backdrop" role="presentation">
+          <section
+            className="quickstart-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quickstart-title"
+          >
+            <div className="quickstart-heading">
+              <div>
+                <p className="kicker">Guided demo</p>
+                <h2 id="quickstart-title">Start with a real workflow</h2>
+              </div>
+              <button
+                ref={quickstartCloseRef}
+                type="button"
+                className="dialog-close"
+                onClick={() => setQuickstartOpen(false)}
+                aria-label="Close quickstart"
+              >
+                ×
+              </button>
+            </div>
+            <p>
+              Connect Salesforce, then choose a prompt. Each example uses fictional Northstar data
+              and stays inside the demo’s governed tool set.
+            </p>
+            <ol className="quickstart-steps">
+              <li>Confirm the Salesforce connector shows “ready.”</li>
+              <li>Choose a prompt below and send it from the composer.</li>
+              <li>Review the evidence cards; Salesforce records open in a new tab.</li>
+              <li>Approve a write only when the confirmation card matches your intent.</li>
+            </ol>
+            <h3>Try now</h3>
+            <div className="prompt-list">
+              {[
+                "Summarize the sample campaign and its recent performance",
+                "Draft campaign content for the sample audience",
+                "Check the sample campaign readiness and explain every blocker",
+                "Recommend buyer group members using the available sample signals",
+              ].map((prompt) => (
+                <button
+                  type="button"
+                  key={prompt}
+                  onClick={() => {
+                    setInput(prompt);
+                    setQuickstartOpen(false);
+                  }}
+                >
+                  <span>{prompt}</span>
+                  <span aria-hidden="true">→</span>
+                </button>
+              ))}
+            </div>
+            <h3>Coming soon / not yet built</h3>
+            <ul className="coming-soon">
+              <li>Generate, compare, and attach campaign images.</li>
+              <li>Additional HXL cards for standard Salesforce agent results.</li>
+              <li>Representative consent-data evaluation in the supplied sandbox.</li>
+              <li>Expanded account discovery and buyer-group evidence.</li>
+            </ul>
+            <p className="boundary-note">
+              Publishing, sending, activation, deletion, suppression, and arbitrary Salesforce edits
+              are intentionally unavailable in this demo.
+            </p>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
