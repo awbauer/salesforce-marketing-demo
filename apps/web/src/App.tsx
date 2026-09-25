@@ -7,7 +7,12 @@ import {
   OrchestratorStateSchema,
   PHASE_2_CURATED_TOOLS,
 } from "@northstar/contracts";
-import { InsightBoard, normalizeAssistantText, salesforceRecordUrl } from "@northstar/ui";
+import {
+  InsightBoard,
+  normalizeAssistantText,
+  salesforceRecordUrl,
+  shouldShowChatError,
+} from "@northstar/ui";
 import { useAgent } from "agents/react";
 import type { UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
@@ -57,6 +62,12 @@ function readableToolName(name: string) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+function semanticToolFailure(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const status = (value as { semanticStatus?: unknown }).semanticStatus;
+  return status === "unavailable" || status === "error";
+}
+
 export function executionTrace(message: UIMessage): TraceStep[] {
   if (message.role !== "assistant") return [];
   const toolSteps = message.parts.flatMap((part) => {
@@ -69,15 +80,18 @@ export function executionTrace(message: UIMessage): TraceStep[] {
     const complete = state === "output-available";
     const input = "input" in part ? part.input : undefined;
     const output = "output" in part ? part.output : undefined;
+    const unavailable = complete && semanticToolFailure(output);
     return [
       {
         label: `Salesforce agent · ${readableToolName(name)}`,
         detail: failed
           ? "Tool call failed safely"
-          : complete
-            ? "Result returned to the orchestrator"
-            : "Calling through the governed MCP catalog",
-        state: failed ? "error" : complete ? "complete" : "active",
+          : unavailable
+            ? "Salesforce returned no usable business result"
+            : complete
+              ? "Result returned to the orchestrator"
+              : "Calling through the governed MCP catalog",
+        state: failed || unavailable ? "error" : complete ? "complete" : "active",
         payload: JSON.stringify(
           sanitizedPayload({ input, ...(complete ? { output } : {}) }),
           null,
@@ -179,6 +193,11 @@ export function App() {
   }, []);
   const busy = status === "submitted" || status === "streaming" || isRecovering;
   const salesforceReady = state.connector.state === "ready";
+  const latestMessage = messages.at(-1);
+  const showChatError = shouldShowChatError(
+    Boolean(error),
+    latestMessage ? { role: latestMessage.role, text: messageText(latestMessage) } : undefined,
+  );
 
   useEffect(() => {
     if (state.connector.state !== "authenticating") return;
@@ -530,7 +549,7 @@ export function App() {
                 Recovering the durable conversation…
               </div>
             )}
-            {error && (
+            {showChatError && (
               <div className="error-banner" role="alert">
                 The turn was interrupted. Your saved conversation is still available; retry when
                 ready.

@@ -9,7 +9,20 @@ export function salesforceRecordUrl(objectApiName: string, recordId: string) {
 }
 
 export function normalizeAssistantText(text: string) {
-  return text
+  let normalized = text.trim();
+  if (normalized.startsWith("{") && normalized.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(normalized) as unknown;
+      if (parsed && typeof parsed === "object") {
+        const record = parsed as Record<string, unknown>;
+        const candidate = record.message ?? record.text ?? record.response;
+        if (typeof candidate === "string") normalized = candidate;
+      }
+    } catch {
+      // Preserve malformed model output as plain text instead of hiding it.
+    }
+  }
+  return normalized
     .replace(/<br\s*\/?\s*>/gi, "\n")
     .replace(/<[^>]*>/g, "")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
@@ -22,6 +35,16 @@ export function normalizeAssistantText(text: string) {
     .replace(/\n[ \t]+/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+export function shouldShowChatError(
+  hasError: boolean,
+  latestMessage?: { role: string; text: string },
+) {
+  return (
+    hasError &&
+    !(latestMessage?.role === "assistant" && normalizeAssistantText(latestMessage.text).length > 0)
+  );
 }
 
 const labels = {

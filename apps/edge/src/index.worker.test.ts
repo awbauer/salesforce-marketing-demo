@@ -1,7 +1,13 @@
 import { env, SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { type AuthError, deriveAgentKey, resolvePrincipal } from "./auth";
-import { classifyMcpFailure, validateImageConcept } from "./orchestrator";
+import {
+  classifyMcpFailure,
+  classifyToolResult,
+  requiredToolChoice,
+  selectRequiredTool,
+  validateImageConcept,
+} from "./orchestrator";
 
 describe("edge runtime", () => {
   it("bounds image concepts and rejects personal data or embedded instructions", () => {
@@ -91,6 +97,43 @@ describe("edge runtime", () => {
       state: "error",
       errorCode: "UPSTREAM_UNAVAILABLE",
     });
+  });
+  it("does not confuse protocol success with a usable Salesforce result", () => {
+    expect(
+      classifyToolResult({
+        isError: false,
+        structuredContent: {
+          messages: [
+            {
+              message:
+                "There are no business units currently available, so I cannot access the campaign.",
+              result: [],
+            },
+          ],
+        },
+      }),
+    ).toBe("unavailable");
+    expect(classifyToolResult({ isError: true, content: [] })).toBe("error");
+    expect(
+      classifyToolResult({ isError: false, result: [{ campaignId: "701jV000004GglIQAS" }] }),
+    ).toBe("success");
+  });
+  it("forces explicit Salesforce campaign requests through the matching governed tool", () => {
+    const names = ["salesforce_summarize_campaign", "salesforce_check_campaign_readiness"];
+    expect(
+      selectRequiredTool(
+        "Summarize Salesforce Campaign 701jV000004GglIQAS using only live evidence",
+        names,
+      ),
+    ).toBe("salesforce_summarize_campaign");
+    expect(selectRequiredTool("Show readiness blockers for this campaign", names)).toBe(
+      "salesforce_check_campaign_readiness",
+    );
+    expect(selectRequiredTool("What can this demo do?", names)).toBeUndefined();
+    expect(requiredToolChoice(names[0], 0)).toEqual({
+      toolChoice: { type: "tool", toolName: names[0] },
+    });
+    expect(requiredToolChoice(names[0], 1)).toEqual({ toolChoice: "none" });
   });
   it("requires a bounded server-side confirmation before the local review fixture", async () => {
     const missing = await SELF.fetch("https://example.test/agent/confirmations/execute", {
