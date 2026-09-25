@@ -16,6 +16,7 @@
     "dev": "vite",
     "docs:check": "node scripts/check-docs.mjs",
     "eval": "node scripts/run-evals.mjs",
+    "eval:live": "node scripts/run-live-evals.mjs",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "hxl:check": "node scripts/check-hxl.mjs",
