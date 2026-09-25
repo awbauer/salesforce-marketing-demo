@@ -26,7 +26,7 @@ describe("InsightBoard", () => {
     expect(screen.getByText("Native fallback")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /Open in Salesforce/ })[0]).toHaveAttribute(
       "href",
-      "https://my.salesforce.com/lightning/r/Campaign/701jV000004GglIQAS/view",
+      "https://pu1788182184076.my.salesforce.com/lightning/r/Campaign/701jV000004GglIQAS/view",
     );
   });
   it("selects HXL only when the deployed resource is available", () => {
@@ -37,7 +37,7 @@ describe("InsightBoard", () => {
   });
   it("builds an encoded Salesforce sandbox record link", () => {
     expect(salesforceRecordUrl("Campaign Member", "record/id")).toBe(
-      "https://my.salesforce.com/lightning/r/Campaign%20Member/record%2Fid/view",
+      "https://pu1788182184076.my.salesforce.com/lightning/r/Campaign%20Member/record%2Fid/view",
     );
   });
   it("renders the empty recovery state", () => {

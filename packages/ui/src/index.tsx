@@ -1,6 +1,6 @@
 import type { InsightTile } from "@northstar/contracts";
 
-const SALESFORCE_SANDBOX_ORIGIN = "https://my.salesforce.com";
+const SALESFORCE_SANDBOX_ORIGIN = "https://pu1788182184076.my.salesforce.com";
 
 export function salesforceRecordUrl(objectApiName: string, recordId: string) {
   const objectName = encodeURIComponent(objectApiName);
