@@ -4,6 +4,7 @@ import { type AuthError, deriveAgentKey, resolvePrincipal } from "./auth";
 import {
   classifyMcpFailure,
   classifyToolResult,
+  requiredToolChoice,
   selectRequiredTool,
   validateImageConcept,
 } from "./orchestrator";
@@ -129,6 +130,10 @@ describe("edge runtime", () => {
       "salesforce_check_campaign_readiness",
     );
     expect(selectRequiredTool("What can this demo do?", names)).toBeUndefined();
+    expect(requiredToolChoice(names[0], 0)).toEqual({
+      toolChoice: { type: "tool", toolName: names[0] },
+    });
+    expect(requiredToolChoice(names[0], 1)).toEqual({ toolChoice: "none" });
   });
   it("requires a bounded server-side confirmation before the local review fixture", async () => {
     const missing = await SELF.fetch("https://example.test/agent/confirmations/execute", {

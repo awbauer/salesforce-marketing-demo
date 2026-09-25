@@ -29,6 +29,7 @@
     "sf:mcp:oauth": "node scripts/prove-salesforce-mcp.mjs",
     "test:e2e": "playwright test",
     "test:e2e:live": "node scripts/run-live-proof.mjs",
+    "test:production:chat": "node scripts/test-production-chat.mjs",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:worker": "vitest run --config vitest.worker.config.ts",
     "typecheck": "tsc -p apps/web && tsc -p apps/edge && tsc -p packages/evals",

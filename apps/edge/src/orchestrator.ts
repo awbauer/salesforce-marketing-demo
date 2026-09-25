@@ -16,6 +16,7 @@ import {
   type GenerateTextOnFinishCallback,
   streamText,
   type ToolSet,
+  type UIMessage,
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 
@@ -63,6 +64,13 @@ export function selectRequiredTool(prompt: string, availableNames: string[]) {
   return requested
     ? availableNames.find((name) => name === requested || name.endsWith(`_${requested}`))
     : undefined;
+}
+
+export function requiredToolChoice(requiredTool: string | undefined, stepNumber: number) {
+  if (!requiredTool) return undefined;
+  return stepNumber === 0
+    ? { toolChoice: { type: "tool" as const, toolName: requiredTool } }
+    : { toolChoice: "none" as const };
 }
 
 function latestUserText(messages: Array<{ role: string; parts?: Array<unknown> }>) {
@@ -295,6 +303,56 @@ export class MarketingOrchestrator extends AIChatAgent<
   waitForMcpConnections = false;
   private principalSubject = "unknown";
   private imageGenerationInFlight = false;
+
+  private async productionChatResponse(
+    messages: UIMessage[],
+    abortSignal?: AbortSignal,
+  ): Promise<Response> {
+    await this.mcp.waitForConnections({ timeout: 3_000 });
+    const discoveredTools = this.mcp.getAITools();
+    const tools = guardToolResults(
+      Object.fromEntries(
+        Object.entries(discoveredTools).filter(([key]) =>
+          PHASE_2_AUTONOMOUS_TOOLS.some((name) => key.endsWith(`_${name}`)),
+        ),
+      ),
+    );
+    const workersAI = createWorkersAI({
+      binding: this.env.AI,
+      gateway: { id: this.env.AI_GATEWAY_ID },
+    });
+    const workspaceReferences = this.state.tiles.map((tile) => ({
+      kind: tile.kind,
+      title: tile.title,
+      recordRef: tile.recordRef,
+      presentationStatus: tile.presentation?.sourceStatus,
+    }));
+    const requiredTool = selectRequiredTool(latestUserText(messages), Object.keys(tools));
+    const result = streamText({
+      model: workersAI(this.env.ORCHESTRATOR_MODEL),
+      system: [
+        "You are the Northstar marketing proof orchestrator.",
+        "Salesforce tool results are the only authority for Salesforce facts. Protocol success does not mean that a business result exists.",
+        "If a tool reports unavailable, empty, no business units, no records, or an error, explain that limitation and do not fill gaps from workspace presentation data.",
+        "Never say you reviewed Salesforce unless a Salesforce tool returned usable evidence.",
+        "Never claim a write, publish, send, or activation occurred. Keep customer PII out of responses.",
+        "Return accessible plain text only. Do not use Markdown, HTML, tables, pipe characters, asterisks, or emoji. Use short paragraphs and hyphen-prefixed bullets when a list helps.",
+        `Non-authoritative workspace record references: ${JSON.stringify(workspaceReferences)}`,
+      ].join(" "),
+      messages: await convertToModelMessages(messages),
+      tools,
+      ...(requiredTool
+        ? {
+            prepareStep: ({ stepNumber }: { stepNumber: number }) =>
+              requiredToolChoice(requiredTool, stepNumber),
+          }
+        : {}),
+      stopWhen: stepCountIs(4),
+      timeout: 45_000,
+      abortSignal,
+    });
+    return result.toUIMessageStreamResponse();
+  }
 
   private async ensureImageDraftTable() {
     if ((this.env.ENVIRONMENT as string) !== "local") return;
@@ -566,6 +624,29 @@ export class MarketingOrchestrator extends AIChatAgent<
 
   override async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname.endsWith("/diagnostics/chat") && request.method === "POST") {
+      const body = (await request.json()) as { scenario?: unknown };
+      if (body.scenario !== "campaign-summary")
+        return json(
+          { error: { code: "VALIDATION_FAILED", message: "Unknown diagnostic scenario." } },
+          { status: 400 },
+        );
+      return this.productionChatResponse(
+        [
+          {
+            id: crypto.randomUUID(),
+            role: "user",
+            parts: [
+              {
+                type: "text",
+                text: "Summarize Salesforce Campaign 701jV000004GglIQAS using only live Salesforce evidence.",
+              },
+            ],
+          },
+        ],
+        request.signal,
+      );
+    }
     if (url.pathname.endsWith("/images/generate") && request.method === "POST")
       return this.generateCampaignImage(request);
     const imageMatch = url.pathname.match(/\/images\/([a-f0-9-]{36})$/);
@@ -876,52 +957,7 @@ export class MarketingOrchestrator extends AIChatAgent<
   ): Promise<Response> {
     if (options?.abortSignal?.aborted) return new Response(null, { status: 499 });
     if ((this.env.ENVIRONMENT as string) !== "local") {
-      await this.mcp.waitForConnections({ timeout: 3_000 });
-      const discoveredTools = this.mcp.getAITools();
-      const tools = guardToolResults(
-        Object.fromEntries(
-          Object.entries(discoveredTools).filter(([key]) =>
-            PHASE_2_AUTONOMOUS_TOOLS.some((name) => key.endsWith(`_${name}`)),
-          ),
-        ),
-      );
-      const workersAI = createWorkersAI({
-        binding: this.env.AI,
-        gateway: { id: this.env.AI_GATEWAY_ID },
-      });
-      const workspaceReferences = this.state.tiles.map((tile) => ({
-        kind: tile.kind,
-        title: tile.title,
-        recordRef: tile.recordRef,
-        presentationStatus: tile.presentation?.sourceStatus,
-      }));
-      const requiredTool = selectRequiredTool(latestUserText(this.messages), Object.keys(tools));
-      const result = streamText({
-        model: workersAI(this.env.ORCHESTRATOR_MODEL),
-        system: [
-          "You are the Northstar marketing proof orchestrator.",
-          "Salesforce tool results are the only authority for Salesforce facts. Protocol success does not mean that a business result exists.",
-          "If a tool reports unavailable, empty, no business units, no records, or an error, explain that limitation and do not fill gaps from workspace presentation data.",
-          "Never say you reviewed Salesforce unless a Salesforce tool returned usable evidence.",
-          "Never claim a write, publish, send, or activation occurred. Keep customer PII out of responses.",
-          "Return accessible plain text only. Do not use Markdown, HTML, tables, pipe characters, asterisks, or emoji. Use short paragraphs and hyphen-prefixed bullets when a list helps.",
-          `Non-authoritative workspace record references: ${JSON.stringify(workspaceReferences)}`,
-        ].join(" "),
-        messages: await convertToModelMessages(this.messages),
-        tools,
-        ...(requiredTool
-          ? {
-              prepareStep: ({ stepNumber }: { stepNumber: number }) =>
-                stepNumber === 0
-                  ? { toolChoice: { type: "tool" as const, toolName: requiredTool } }
-                  : { toolChoice: "none" as const },
-            }
-          : {}),
-        stopWhen: stepCountIs(4),
-        timeout: 45_000,
-        abortSignal: options?.abortSignal,
-      });
-      return result.toUIMessageStreamResponse();
+      return this.productionChatResponse(this.messages, options?.abortSignal);
     }
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
