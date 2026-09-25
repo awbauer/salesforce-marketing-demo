@@ -144,6 +144,16 @@ describe("turn tracer", () => {
     expect(text()).toMatch(/TypeError: bad message/);
   });
 
+  it("explains Workers AI daily capacity errors instead of echoing the provider payload", () => {
+    const message = describeTurnError(
+      new Error(
+        'Failed after 3 attempts. Last error: Workers AI API error (429 ): {"errors":[{"message":"AiError: you have used up your daily free allocation of 10,000 neurons"}]}',
+      ),
+    );
+    expect(message).toMatch(/^Workers AI has reached this account's daily capacity/);
+    expect(message).toContain("00:00 UTC");
+  });
+
   it("redacts credentials from error messages", () => {
     expect(describeTurnError(new Error("failed with Bearer abc.def"))).toBe(
       "failed with [redacted]",
