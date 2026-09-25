@@ -101,5 +101,5 @@ jobs:
       - name: Read back governed MCP definition
         if: github.event_name != 'pull_request'
         run: |
-          sf project retrieve start --metadata McpServerDefinition:NorthstarMarketingWorkbench --target-org "$SF_TARGET_ORG" --output-dir /tmp/northstar-salesforce-readback --wait 10
-          find /tmp/northstar-salesforce-readback -name 'NorthstarMarketingWorkbench.mcpServerDefinition-meta.xml' -print -quit | grep -q .
+          sf project retrieve start --metadata McpServerDefinition:NorthstarMarketingWorkbench --target-org "$SF_TARGET_ORG" --output-dir .salesforce-readback --wait 10
+          find .salesforce-readback -name 'NorthstarMarketingWorkbench.mcpServerDefinition-meta.xml' -print -quit | grep -q .
