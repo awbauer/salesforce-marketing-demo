@@ -47,41 +47,68 @@ export function salvageToolInput(reasoning: string, required: string[]): string 
   return null;
 }
 
-async function collect(stream: ReadableStream<StreamPart>) {
-  const parts: StreamPart[] = [];
-  const reader = stream.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) return parts;
-    parts.push(value);
-  }
+/**
+ * gpt-oss sometimes leaks its channel markup into a tool name, such as
+ * `summarize_campaign<|channel|>analysis`. Returns the offered tool name the call was meant for.
+ */
+export function normalizeToolName(name: string, offered: ReadonlySet<string>) {
+  if (offered.has(name)) return name;
+  const stripped = name.split("<|")[0]?.trim() ?? name;
+  return offered.has(stripped) ? stripped : name;
 }
 
-function replay(parts: StreamPart[]) {
-  return new ReadableStream<StreamPart>({
-    start(controller) {
-      for (const part of parts) controller.enqueue(part);
-      controller.close();
-    },
-  });
+function nameNormalizer(params: CallParams) {
+  const offered = new Set((params.tools ?? []).map((tool) => tool.name));
+  return (part: StreamPart): StreamPart => {
+    if (part.type !== "tool-input-start" && part.type !== "tool-call") return part;
+    const toolName = normalizeToolName(part.toolName, offered);
+    if (toolName === part.toolName) return part;
+    console.warn("[orchestrator] repaired a tool name that contained model channel markup");
+    return { ...part, toolName };
+  };
 }
 
-/** Rewrites a buffered step whose tool call leaked into reasoning into a structured tool call. */
+const LIVE_PART_TYPES = new Set(["reasoning-start", "reasoning-delta", "reasoning-end"]);
+
+/**
+ * Completes a forced tool-call step from the parts held back while its reasoning streamed live.
+ * Returns the held parts unchanged when they already contain a tool call or an error, a repaired
+ * sequence when the call leaked into reasoning, or null when nothing can be recovered.
+ */
 export function repairForcedToolStep(
-  parts: StreamPart[],
+  held: StreamPart[],
+  reasoning: string,
   toolName: string,
   required: string[],
 ): StreamPart[] | null {
-  if (parts.some((part) => part.type === "tool-call" || part.type === "error")) return parts;
-  const reasoning = parts
-    .map((part) => (part.type === "reasoning-delta" ? part.delta : ""))
-    .join("");
+  if (held.some((part) => part.type === "error")) return held;
+  const calls = held.filter((part) => part.type === "tool-call");
+  if (calls.length > 0 && calls.every((part) => part.toolName === toolName)) return held;
+  // Drop calls to any other tool; the step must call the forced tool or be recovered/retried.
+  const wrongIds = new Set(
+    held.flatMap((part) =>
+      part.type === "tool-call"
+        ? [part.toolCallId]
+        : part.type === "tool-input-start" && part.toolName !== toolName
+          ? [part.id]
+          : [],
+    ),
+  );
+  held = held.filter((part) =>
+    part.type === "tool-call"
+      ? false
+      : part.type === "tool-input-start" ||
+          part.type === "tool-input-delta" ||
+          part.type === "tool-input-end"
+        ? !wrongIds.has(part.id)
+        : true,
+  );
   const input = salvageToolInput(reasoning, required);
   if (!input) return null;
   const toolCallId = `salvaged-${crypto.randomUUID()}`;
-  const finishIndex = parts.findIndex((part) => part.type === "finish");
-  const finish = finishIndex >= 0 ? parts[finishIndex] : undefined;
-  const body = finishIndex >= 0 ? parts.slice(0, finishIndex) : parts;
+  const finishIndex = held.findIndex((part) => part.type === "finish");
+  const finish = finishIndex >= 0 ? held[finishIndex] : undefined;
+  const body = finishIndex >= 0 ? held.slice(0, finishIndex) : held;
   return [
     ...body,
     { type: "tool-input-start", id: toolCallId, toolName },
@@ -109,8 +136,9 @@ function emptyUsage() {
 }
 
 /**
- * Makes forced tool-call steps dependable: caps their output, buffers the short step, recovers a
- * tool call that leaked into reasoning, and retries once when no call can be recovered.
+ * Makes forced tool-call steps dependable: caps their output, streams reasoning live while
+ * holding back the rest of the step, recovers a tool call that leaked into reasoning, and
+ * retries once when no call can be recovered.
  */
 export const forcedToolCallMiddleware: LanguageModelMiddleware = {
   transformParams: async ({ params }) =>
@@ -125,22 +153,59 @@ export const forcedToolCallMiddleware: LanguageModelMiddleware = {
       : params,
   wrapStream: async ({ doStream, params }) => {
     const toolName = forcedToolName(params);
-    if (!toolName) return doStream();
-    const required = requiredKeys(params, toolName);
-    let last: { result: StreamResult; parts: StreamPart[] } | undefined;
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const normalize = nameNormalizer(params);
+    if (!toolName) {
       const result = await doStream();
-      const parts = await collect(result.stream);
-      const repaired = repairForcedToolStep(parts, toolName, required);
-      if (repaired) {
-        if (repaired !== parts)
-          console.warn(`[orchestrator] recovered ${toolName} call from model reasoning`);
-        return { ...result, stream: replay(repaired) };
-      }
-      console.warn(`[orchestrator] forced ${toolName} call missing on attempt ${attempt}`);
-      last = { result, parts };
+      return {
+        ...result,
+        stream: result.stream.pipeThrough(
+          new TransformStream<StreamPart, StreamPart>({
+            transform(part, controller) {
+              controller.enqueue(normalize(part));
+            },
+          }),
+        ),
+      };
     }
-    if (!last) return doStream();
-    return { ...last.result, stream: replay(last.parts) };
+    const required = requiredKeys(params, toolName);
+    const first = await doStream();
+    const stream = new ReadableStream<StreamPart>({
+      async start(controller) {
+        try {
+          let result = first;
+          for (let attempt = 1; ; attempt += 1) {
+            const held: StreamPart[] = [];
+            let reasoning = "";
+            const reader = result.stream.getReader();
+            for (let next = await reader.read(); !next.done; next = await reader.read()) {
+              const part = normalize(next.value);
+              if (part.type === "reasoning-delta") reasoning += part.delta;
+              if (LIVE_PART_TYPES.has(part.type) || (attempt === 1 && part.type === "stream-start"))
+                controller.enqueue(part);
+              else if (part.type !== "stream-start") held.push(part);
+            }
+            const repaired = repairForcedToolStep(held, reasoning, toolName, required);
+            if (repaired && repaired !== held)
+              console.warn(`[orchestrator] recovered ${toolName} call from model reasoning`);
+            if (repaired || attempt >= MAX_ATTEMPTS) {
+              if (!repaired)
+                console.warn(
+                  `[orchestrator] forced ${toolName} call missing after ${attempt} attempts`,
+                );
+              for (const part of repaired ?? held) controller.enqueue(part);
+              controller.close();
+              return;
+            }
+            console.warn(
+              `[orchestrator] forced ${toolName} call missing on attempt ${attempt}; retrying`,
+            );
+            result = await doStream();
+          }
+        } catch (error) {
+          controller.error(error);
+        }
+      },
+    });
+    return { ...first, stream };
   },
 };

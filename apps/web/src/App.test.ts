@@ -161,4 +161,33 @@ describe("technical trace hardening", () => {
       { label: "Turn timed out", state: "error" },
     ]);
   });
+
+  it("flags a tool name outside the governed catalog as an error", () => {
+    const message = {
+      id: "bad-tool",
+      role: "assistant",
+      parts: [
+        {
+          type: TURN_TRACE_PART_TYPE,
+          id: TURN_TRACE_PART_ID,
+          data: {
+            startedAt: 0,
+            events: [
+              {
+                kind: "tool-input-start",
+                at: 10,
+                toolCallId: "bad",
+                toolName: "salesforce_summarize_campaign<|channel|>analysis",
+              },
+            ],
+          },
+        },
+      ],
+    } as UIMessage;
+    expect(executionTrace(message)[0]).toMatchObject({
+      label: "Tool call started · Unrecognized tool request",
+      detail: "The model requested a tool outside the governed catalog",
+      state: "error",
+    });
+  });
 });

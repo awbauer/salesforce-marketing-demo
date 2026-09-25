@@ -58,6 +58,10 @@ export function sanitizedText(value: string, maxLength = 4000) {
   return redacted.length > maxLength ? `${redacted.slice(0, maxLength)}…` : redacted;
 }
 
+function isKnownTool(name: string) {
+  return PHASE_2_CURATED_TOOLS.some((tool) => name === tool || name.endsWith(`_${tool}`));
+}
+
 export function readableToolName(name: string) {
   const known = PHASE_2_CURATED_TOOLS.find((tool) => name === tool || name.endsWith(`_${tool}`));
   if (!known) return "Unrecognized tool request";
@@ -286,8 +290,10 @@ function rowsFromTrace(message: UIMessage, trace: TurnTrace): TraceRow[] {
             key,
             kind: "tool",
             label: `Tool call started · ${readableToolName(event.toolName)}`,
-            detail: "The model selected a governed Salesforce tool",
-            state: "complete",
+            detail: isKnownTool(event.toolName)
+              ? "The model selected a governed Salesforce tool"
+              : "The model requested a tool outside the governed catalog",
+            state: isKnownTool(event.toolName) ? "complete" : "error",
             elapsed,
           },
         ];

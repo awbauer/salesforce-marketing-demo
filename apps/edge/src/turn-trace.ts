@@ -98,6 +98,8 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
       const openReasoning = new Set<string>();
       const openText = new Set<string>();
       const toolNames = new Map<string, string>();
+      // The SDK reports an invalid tool call as both an input error and an output error.
+      const inputErrors = new Set<string>();
       let heldFinish: UIMessageChunk | undefined;
       let failure: { kind: "error" | "abort"; message: string } | undefined;
 
@@ -177,6 +179,7 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
               });
               break;
             case "tool-input-error":
+              inputErrors.add(chunk.toolCallId);
               writer.write(chunk);
               record({
                 kind: "tool-input-error",
@@ -193,11 +196,12 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
               break;
             case "tool-output-error":
               writer.write(chunk);
-              record({
-                kind: "tool-output-error",
-                toolCallId: chunk.toolCallId,
-                message: describeTurnError(chunk.errorText),
-              });
+              if (!inputErrors.has(chunk.toolCallId))
+                record({
+                  kind: "tool-output-error",
+                  toolCallId: chunk.toolCallId,
+                  message: describeTurnError(chunk.errorText),
+                });
               break;
             case "finish":
               heldFinish = chunk;

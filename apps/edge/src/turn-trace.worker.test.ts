@@ -150,11 +150,42 @@ describe("turn tracer", () => {
     );
   });
 
-  it("forces the final allowed step to answer in text", () => {
+  it("sends no tools to text-only steps and only the required tool to forced steps", () => {
     expect(stepToolChoice(undefined, 0)).toBeUndefined();
-    expect(stepToolChoice(undefined, 3)).toEqual({ toolChoice: "none" });
+    expect(stepToolChoice(undefined, 3)).toEqual({ toolChoice: "none", activeTools: [] });
     expect(stepToolChoice("sf_summarize_campaign", 0)).toEqual({
       toolChoice: { type: "tool", toolName: "sf_summarize_campaign" },
+      activeTools: ["sf_summarize_campaign"],
     });
+    expect(stepToolChoice("sf_summarize_campaign", 1)).toEqual({
+      toolChoice: "none",
+      activeTools: [],
+    });
+  });
+
+  it("records an invalid tool call once even though the SDK reports it twice", async () => {
+    const { tracer } = harness();
+    const { trace } = await tracer.pipe(
+      source([
+        { type: "start" },
+        {
+          type: "tool-input-start",
+          toolCallId: "bad",
+          toolName: "sf_summarize_campaign<|channel|>analysis",
+        },
+        {
+          type: "tool-input-error",
+          toolCallId: "bad",
+          toolName: "sf_summarize_campaign<|channel|>analysis",
+          input: {},
+          errorText: "AI_NoSuchToolError",
+        },
+        { type: "tool-output-error", toolCallId: "bad", errorText: "AI_NoSuchToolError" },
+        { type: "finish" },
+      ]),
+    );
+    expect(
+      trace.events.filter((event) => event.kind.startsWith("tool-")).map((e) => e.kind),
+    ).toEqual(["tool-input-start", "tool-input-error"]);
   });
 });
