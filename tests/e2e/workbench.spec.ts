@@ -262,3 +262,119 @@ test("attaches a selected image draft only after an explicit confirmation", asyn
     fullPage: true,
   });
 });
+
+test("shows an honest empty state before any evaluation run is published", async ({ page }) => {
+  await page.route("**/evals/latest.json", (route) => route.fulfill({ status: 404, body: "" }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Evaluations" }).first().click();
+  await expect(page.getByRole("heading", { name: "Evaluations" })).toBeVisible();
+  await expect(page.getByText("No evaluation run has been published yet.")).toBeVisible();
+  await page.getByRole("button", { name: "Back to workspace" }).click();
+  await expect(page.getByRole("heading", { name: "Campaign intelligence" })).toBeVisible();
+});
+
+test("renders model comparison, checks, scenarios, failures, and methodology", async ({
+  page,
+}, testInfo) => {
+  // Synthetic rendering fixture only; published results come from pnpm eval:live.
+  const checks = {
+    toolCorrect: true,
+    textProduced: true,
+    noToolErrors: true,
+    plainText: true,
+    noFalseWriteClaim: true,
+  };
+  const result = (model: string, passed: boolean, trial: number) => ({
+    model,
+    suite: "demo-scenarios",
+    caseId: "demo-summary",
+    prompt: "Summarize the sample campaign and its recent performance",
+    expected: "summarize_campaign",
+    trial,
+    route: "model",
+    toolCalled: passed ? "summarize_campaign" : null,
+    checks: { ...checks, toolCorrect: passed, textProduced: passed },
+    passed,
+    latencyMs: 8000,
+    inputTokens: 1200,
+    outputTokens: 300,
+    steps: passed ? "tool-calls,stop" : "tool-calls,length",
+    excerpt: passed ? "VERO Phase 1 Launch is in progress." : "",
+    ...(passed ? {} : { failure: "toolCorrect, textProduced" }),
+  });
+  const rates = (value: number) =>
+    Object.fromEntries(Object.keys(checks).map((check) => [check, value]));
+  const summary = (model: string, suite: string, passed: number) => ({
+    model,
+    suite,
+    passed,
+    total: 2,
+    checkRates: rates(passed / 2),
+    latencyP50Ms: 8000,
+    latencyP90Ms: 12000,
+    meanOutputTokens: 300,
+  });
+  const suites = ["demo-scenarios", "routing-pipeline", "routing-model-only"];
+  await page.route("**/evals/latest.json", (route) =>
+    route.fulfill({
+      json: {
+        generatedAt: "2026-09-26T01:00:00.000Z",
+        gitSha: "abcdef1",
+        productionModel: "@cf/openai/gpt-oss-120b",
+        methodology: {
+          summary: "Synthetic methodology summary.",
+          pipeline: ["Policy router step."],
+          toolResults: "Fixture tool results.",
+          suites: suites.map((id) => ({
+            id,
+            label: `Suite ${id}`,
+            description: "Desc.",
+            trials: 2,
+          })),
+          checks: Object.keys(checks).map((id) => ({
+            id,
+            label: `Check ${id}`,
+            definition: "Def.",
+          })),
+          limitations: ["Synthetic limitation."],
+        },
+        models: [
+          { id: "@cf/openai/gpt-oss-120b", label: "gpt-oss-120b", included: true },
+          { id: "@cf/openai/gpt-oss-20b", label: "gpt-oss-20b", included: true },
+          { id: "@cf/moonshotai/kimi-k2.6", label: "Kimi K2.6", included: false, note: "Errored." },
+        ],
+        summaries: suites.flatMap((suite) => [
+          summary("@cf/openai/gpt-oss-120b", suite, 2),
+          summary("@cf/openai/gpt-oss-20b", suite, 1),
+        ]),
+        results: [
+          result("@cf/openai/gpt-oss-120b", true, 0),
+          result("@cf/openai/gpt-oss-120b", true, 1),
+          result("@cf/openai/gpt-oss-20b", true, 0),
+          result("@cf/openai/gpt-oss-20b", false, 1),
+        ],
+      },
+    }),
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "Evaluations" }).first().click();
+  const models = page.locator(".evaluation-card", {
+    has: page.getByRole("heading", { name: "Model comparison" }),
+  });
+  await expect(models.getByText("In production")).toBeVisible();
+  await expect(models.getByRole("row", { name: /gpt-oss-20b/ })).toContainText("50%");
+  await expect(page.getByText("Kimi K2.6 not evaluated: Errored.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Failed turns .*\(1\)/ })).toBeVisible();
+  await page.getByText("called no tool").click();
+  await expect(page.getByText("tool-calls,length")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Methodology" })).toBeVisible();
+  await page.getByRole("button", { name: "Suite routing-model-only" }).click();
+  await expect(page.getByRole("button", { name: "Suite routing-model-only" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.screenshot({
+    path: `artifacts/evidence/WU-021/evaluations-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+});

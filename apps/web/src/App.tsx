@@ -16,6 +16,7 @@ import {
 import { useAgent } from "agents/react";
 import type { UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
+import { EvaluationView } from "./EvaluationView";
 import { executionTrace } from "./turn-trace";
 
 function messageText(message: UIMessage) {
@@ -112,6 +113,7 @@ export function App() {
   const [generatedImage, setGeneratedImage] = useState<GeneratedCampaignImage | null>(null);
   const [imageBusy, setImageBusy] = useState(false);
   const [quickstartOpen, setQuickstartOpen] = useState(false);
+  const [view, setView] = useState<"overview" | "evaluations">("overview");
   const confirmationRef = useRef<HTMLElement>(null);
   const quickstartCloseRef = useRef<HTMLButtonElement>(null);
   const connectorStatusLoaded = useRef(false);
@@ -381,8 +383,21 @@ export function App() {
         <nav className="rail" aria-label="Workspace navigation">
           <div>
             <p className="nav-label">Workspace</p>
-            <button type="button" className="nav-item active">
+            <button
+              type="button"
+              className={`nav-item ${view === "overview" ? "active" : ""}`}
+              aria-current={view === "overview" ? "page" : undefined}
+              onClick={() => setView("overview")}
+            >
               <span>◆</span>Overview
+            </button>
+            <button
+              type="button"
+              className={`nav-item ${view === "evaluations" ? "active" : ""}`}
+              aria-current={view === "evaluations" ? "page" : undefined}
+              onClick={() => setView("evaluations")}
+            >
+              <span>✓</span>Evaluations
             </button>
             <button type="button" className="nav-item" onClick={() => setQuickstartOpen(true)}>
               <span>?</span>Quickstart
@@ -472,7 +487,8 @@ export function App() {
             <small>Fictional sample data</small>
           </div>
         </nav>
-        <section className="conversation" aria-labelledby="chat-title">
+        {view === "evaluations" && <EvaluationView onClose={() => setView("overview")} />}
+        <section className="conversation" aria-labelledby="chat-title" hidden={view !== "overview"}>
           <div className="section-header">
             <div>
               <p className="kicker">Orchestrator</p>
@@ -481,6 +497,9 @@ export function App() {
             <div className="chat-actions">
               <button type="button" className="text-button" onClick={() => clearHistory()}>
                 New chat
+              </button>
+              <button type="button" className="text-button" onClick={() => setView("evaluations")}>
+                Evaluations
               </button>
               <button
                 type="button"
@@ -746,7 +765,7 @@ export function App() {
             </div>
           </form>
         </section>
-        <aside className="insights" aria-labelledby="insights-title">
+        <aside className="insights" aria-labelledby="insights-title" hidden={view !== "overview"}>
           <div className="section-header">
             <div>
               <p className="kicker">Live context</p>

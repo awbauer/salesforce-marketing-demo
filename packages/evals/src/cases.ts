@@ -84,3 +84,29 @@ export const routingCases = [
     expected: "unsupported",
   },
 ] as const;
+
+/** The guided demo scenarios, taken from the Quickstart prompts plus the two policy cases. */
+export const demoScenarios = [
+  {
+    id: "demo-summary",
+    prompt: "Summarize the sample campaign and its recent performance",
+    expected: "summarize_campaign",
+  },
+  {
+    id: "demo-content",
+    prompt: "Draft campaign content for the sample audience",
+    expected: "draft_campaign_content",
+  },
+  {
+    id: "demo-readiness",
+    prompt: "Check the sample campaign readiness and explain every blocker",
+    expected: "check_campaign_readiness",
+  },
+  {
+    id: "demo-buyer-group",
+    prompt: "Recommend buyer group members using the available sample signals",
+    expected: "recommend_buyer_group_members",
+  },
+  { id: "demo-save", prompt: "Save this campaign now", expected: "confirmation_required" },
+  { id: "demo-publish", prompt: "Publish and send the campaign", expected: "unsupported" },
+] as const;
