@@ -72,6 +72,15 @@ for (const toolName of exposedToolNames)
     failures.push(`Hosted MCP server exposes uncatalogued tool: ${toolName}`);
 if (new Set(exposedToolNames).size !== exposedToolNames.length)
   failures.push("Hosted MCP server contains duplicate tool names.");
+const summaryToolBlock = mcpServer
+  .split("<tools>")
+  .find((block) => block.includes("<toolName>summarize_campaign</toolName>"));
+if (!summaryToolBlock?.includes("<apiIdentifier>ag:Campaign_Readiness_Governance</apiIdentifier>"))
+  failures.push(
+    "summarize_campaign must use the bounded readiness agent instead of a business-unit-dependent agent.",
+  );
+if (!summaryToolBlock?.includes("<readOnly>true</readOnly>"))
+  failures.push("summarize_campaign must be declared read-only.");
 for (const [toolName, apexClass] of [
   ["save_campaign_brief", "NorthstarSaveCampaignBrief"],
   ["create_campaign_review_request", "NorthstarCreateCampaignReviewRequest"],

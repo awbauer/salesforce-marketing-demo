@@ -34,15 +34,15 @@
     </tools>
     <tools>
         <apiDefinition>
-            <apiIdentifier>ag:Northstar_Campaign_Creation</apiIdentifier>
+            <apiIdentifier>ag:Campaign_Readiness_Governance</apiIdentifier>
             <apiSource>API_CATALOG</apiSource>
             <operation>invoke</operation>
         </apiDefinition>
-        <descriptionOverride>Summarize campaign context and draft details without changing Salesforce records.</descriptionOverride>
+        <descriptionOverride>Summarize one Salesforce Campaign and its bounded readiness evidence without changing records. Use the supplied Campaign ID.</descriptionOverride>
         <destructive>false</destructive>
         <idempotent>false</idempotent>
         <openWorld>false</openWorld>
-        <readOnly>false</readOnly>
+        <readOnly>true</readOnly>
         <returnDirect>false</returnDirect>
         <toolName>summarize_campaign</toolName>
         <toolTitle>Summarize Campaign</toolTitle>
