@@ -7,6 +7,7 @@ import {
   resolveTileRenderMode,
   salesforceRecordUrl,
   shouldShowChatError,
+  toolFreeTraceDetail,
 } from "./index";
 
 afterEach(cleanup);
@@ -34,6 +35,17 @@ describe("InsightBoard", () => {
     ).toBe(false);
     expect(shouldShowChatError(true, { role: "assistant", text: "" })).toBe(true);
     expect(shouldShowChatError(false, { role: "assistant", text: "Complete" })).toBe(false);
+  });
+
+  it("does not describe a missing Salesforce catalog as an intentional tool-free answer", () => {
+    expect(
+      toolFreeTraceDetail(
+        "Salesforce is connected, but the governed tool catalog is not ready for this request.",
+      ),
+    ).toContain("No Salesforce tool completed");
+    expect(toolFreeTraceDetail("Here is how the proof works.")).toContain(
+      "no Salesforce action was needed",
+    );
   });
 
   it("renders typed source and freshness evidence", () => {

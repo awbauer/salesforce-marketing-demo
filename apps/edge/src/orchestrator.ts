@@ -54,13 +54,17 @@ export function classifyToolResult(value: unknown): "success" | "unavailable" | 
     : "success";
 }
 
-export function selectRequiredTool(prompt: string, availableNames: string[]) {
-  const requested = /\b(?:readiness|ready|blocker|risk)\b/i.test(prompt)
+export function requestedToolName(prompt: string) {
+  return /\b(?:readiness|ready|blocker|risk)\b/i.test(prompt)
     ? "check_campaign_readiness"
     : /\b(?:summarize|summary|performance|campaign)\b/i.test(prompt) &&
         /\b(?:salesforce|campaign|701[a-zA-Z0-9]{12,15})\b/i.test(prompt)
       ? "summarize_campaign"
       : null;
+}
+
+export function selectRequiredTool(prompt: string, availableNames: string[]) {
+  const requested = requestedToolName(prompt);
   return requested
     ? availableNames.find((name) => name === requested || name.endsWith(`_${requested}`))
     : undefined;
@@ -308,7 +312,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     messages: UIMessage[],
     abortSignal?: AbortSignal,
   ): Promise<Response> {
-    await this.mcp.waitForConnections({ timeout: 3_000 });
+    await this.mcp.waitForConnections({ timeout: 10_000 });
     const discoveredTools = this.mcp.getAITools();
     const tools = guardToolResults(
       Object.fromEntries(
@@ -327,7 +331,25 @@ export class MarketingOrchestrator extends AIChatAgent<
       recordRef: tile.recordRef,
       presentationStatus: tile.presentation?.sourceStatus,
     }));
-    const requiredTool = selectRequiredTool(latestUserText(messages), Object.keys(tools));
+    const prompt = latestUserText(messages);
+    const requestedTool = requestedToolName(prompt);
+    const requiredTool = selectRequiredTool(prompt, Object.keys(tools));
+    if (requestedTool && !requiredTool) {
+      const stream = createUIMessageStream({
+        execute: async ({ writer }) => {
+          const id = crypto.randomUUID();
+          writer.write({ type: "text-start", id });
+          writer.write({
+            type: "text-delta",
+            id,
+            delta:
+              "Salesforce is connected, but the governed tool catalog is not ready for this request. Check the Salesforce connection status and retry. I did not substitute demo data.",
+          });
+          writer.write({ type: "text-end", id });
+        },
+      });
+      return createUIMessageStreamResponse({ stream });
+    }
     const result = streamText({
       model: workersAI(this.env.ORCHESTRATOR_MODEL),
       system: [

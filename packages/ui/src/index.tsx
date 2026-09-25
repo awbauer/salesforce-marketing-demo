@@ -47,6 +47,12 @@ export function shouldShowChatError(
   );
 }
 
+export function toolFreeTraceDetail(text: string) {
+  return /tool catalog is not ready|salesforce.*unavailable/i.test(normalizeAssistantText(text))
+    ? "No Salesforce tool completed; the response shows the connection recovery step"
+    : "Completed without an external tool because no Salesforce action was needed";
+}
+
 const labels = {
   loading: "Loading",
   empty: "No insight",
