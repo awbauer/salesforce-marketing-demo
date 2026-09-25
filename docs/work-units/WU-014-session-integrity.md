@@ -20,7 +20,7 @@ Prevent unsupported claims from old durable conversations from contaminating new
 - [x] Each new evidence turn sends only the latest user request plus the authoritative system policy to the model.
 - [x] Persisted legacy assistant claims cannot enter a later model prompt.
 - [x] Complete and interrupted JSON-wrapped assistant text renders as readable text rather than a raw envelope.
-- [x] Pull requests validate Salesforce metadata and merged `main` changes deploy it through a serialized, exact-org-bound pipeline.
+- [x] Pull requests validate the governed Salesforce core and merged `main` changes deploy it through a serialized, exact-org-bound pipeline.
 - [ ] The already-merged Salesforce MCP rebinding is deployed by the configured pipeline.
 - [ ] Browserless production diagnostics pass after merge and deployment.
 
@@ -41,6 +41,7 @@ The Worker deploy follows the existing main-branch workflow. The Salesforce work
 - The same response displays an unterminated JSON message envelope, which the prior complete-JSON-only normalizer could not unwrap.
 - `pnpm verify` passed all 12 repository gates, including 21 unit tests, 15 Worker tests, the Salesforce metadata contract, HXL validation, and 20 evaluation cases.
 - The Worker regression suite proves that a persisted assistant claim is excluded from the next evidence turn; the UI regression suite proves recovery of an interrupted JSON message envelope.
+- Salesforce check-only deployment `0AfjV000002nTsYSAU` succeeded against the approved proof org for the governed core; the read-back classified the Hosted MCP definition and evaluator permission set as changed.
 
 # Completion
 

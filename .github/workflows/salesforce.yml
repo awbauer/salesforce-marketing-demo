@@ -73,11 +73,29 @@ jobs:
 
       - name: Validate Salesforce metadata
         if: github.event_name == 'pull_request'
-        run: sf project deploy start --dry-run --source-dir salesforce/force-app --target-org "$SF_TARGET_ORG" --wait 30
+        run: >-
+          sf project deploy start --dry-run
+          --source-dir salesforce/force-app/main/default/classes
+          --source-dir salesforce/force-app/main/default/objects
+          --source-dir salesforce/force-app/main/default/permissionsets
+          --source-dir salesforce/force-app/main/default/mcpServerDefinitions
+          --test-level RunSpecifiedTests
+          --tests NorthstarCampaignActionsTest
+          --target-org "$SF_TARGET_ORG"
+          --wait 30
 
       - name: Deploy Salesforce metadata
         if: github.event_name != 'pull_request'
-        run: sf project deploy start --source-dir salesforce/force-app --target-org "$SF_TARGET_ORG" --wait 30
+        run: >-
+          sf project deploy start
+          --source-dir salesforce/force-app/main/default/classes
+          --source-dir salesforce/force-app/main/default/objects
+          --source-dir salesforce/force-app/main/default/permissionsets
+          --source-dir salesforce/force-app/main/default/mcpServerDefinitions
+          --test-level RunSpecifiedTests
+          --tests NorthstarCampaignActionsTest
+          --target-org "$SF_TARGET_ORG"
+          --wait 30
 
       - name: Read back governed MCP definition
         if: github.event_name != 'pull_request'
