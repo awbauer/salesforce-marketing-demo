@@ -73,6 +73,15 @@ function TechnicalTrace({
   );
 }
 
+const CONFIRMATION_COPY = {
+  "create-review-task": { title: "Create Salesforce review task?", confirm: "Confirm create" },
+  "save-draft-campaign": { title: "Save draft brief to Salesforce?", confirm: "Confirm save" },
+  "attach-generated-image": {
+    title: "Attach image to the Salesforce campaign?",
+    confirm: "Confirm attach",
+  },
+} as const;
+
 export function App() {
   const [state, setState] = useState<OrchestratorState>(initialOrchestratorState);
   const [input, setInput] = useState("");
@@ -88,6 +97,14 @@ export function App() {
     dueDate: string;
     status: string;
     campaignId: string;
+  } | null>(null);
+  const [attachedImage, setAttachedImage] = useState<{
+    contentDocumentId: string;
+    contentVersionId: string;
+    campaignId: string;
+    title: string;
+    contentSize: number;
+    contentHash: string;
   } | null>(null);
   const [imageConcept, setImageConcept] = useState(
     "A quiet trailhead at golden hour with layered hiking gear and room for campaign copy",
@@ -269,7 +286,23 @@ export function App() {
     }
   }
 
+  async function requestImageAttachment() {
+    if (!generatedImage) return;
+    try {
+      const confirmation = await agentAction<Confirmation>("confirmations", {
+        action: "attach-generated-image",
+        recordId: generatedImage.campaignId,
+        imageId: generatedImage.id,
+      });
+      setPendingConfirmation(confirmation);
+      setState((current) => ({ ...current, pendingConfirmation: confirmation }));
+    } catch (actionError) {
+      setActionError(actionError instanceof Error ? actionError.message : "Preflight failed.");
+    }
+  }
+
   async function resolveConfirmation(decision: "execute" | "deny") {
+    const action = pendingConfirmation?.action;
     try {
       const result = await agentAction<{
         result?: {
@@ -280,6 +313,10 @@ export function App() {
           subject: string;
           priority: string;
           dueDate: string;
+          contentVersionId?: string;
+          title?: string;
+          contentSize?: number;
+          contentHash?: string;
         };
       }>(`confirmations/${decision}`);
       setPendingConfirmation(null);
@@ -287,7 +324,22 @@ export function App() {
         ...current,
         pendingConfirmation: null,
       }));
-      if (decision === "execute" && result.result?.readBack) {
+      if (
+        decision === "execute" &&
+        result.result?.readBack &&
+        action === "attach-generated-image"
+      ) {
+        setActionError("");
+        setAttachedImage({
+          contentDocumentId: result.result.recordId,
+          contentVersionId: result.result.contentVersionId ?? "",
+          campaignId: result.result.campaignId,
+          title: result.result.title ?? "Campaign image",
+          contentSize: result.result.contentSize ?? 0,
+          contentHash: result.result.contentHash ?? "",
+        });
+        setGeneratedImage((image) => (image ? { ...image, lifecycle: "attached" } : image));
+      } else if (decision === "execute" && result.result?.readBack) {
         setActionError("");
         setCreatedRecord({
           objectApiName: "Task",
@@ -540,6 +592,56 @@ export function App() {
                 </details>
               </section>
             )}
+            {attachedImage && (
+              <section className="success-banner" role="status">
+                <div>
+                  <strong>Image attached to the campaign</strong>
+                  <span>{` · ${attachedImage.title} · ${Math.round(attachedImage.contentSize / 1024)} KB`}</span>
+                </div>
+                <a
+                  href={salesforceRecordUrl("ContentDocument", attachedImage.contentDocumentId)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open file in Salesforce <span aria-hidden="true">↗</span>
+                </a>
+                <details className="write-trace">
+                  <summary>Inspect confirmed Salesforce execution</summary>
+                  <ol>
+                    <li>Orchestrator verified same-user, unexpired confirmation.</li>
+                    <li>Orchestrator re-checked the stored image against the confirmed hash.</li>
+                    <li>Salesforce MCP invoked attach_campaign_image.</li>
+                    <li>Apex verified the hash and created one file linked to the Campaign.</li>
+                    <li>
+                      Salesforce returned the file, its stored checksum, and the Campaign link.
+                    </li>
+                  </ol>
+                  <pre>
+                    {JSON.stringify(
+                      {
+                        request: {
+                          action: "attach-generated-image",
+                          campaignId: attachedImage.campaignId,
+                          contentHash: attachedImage.contentHash,
+                          confirmation: "[redacted]",
+                          idempotencyKey: "[redacted]",
+                        },
+                        response: {
+                          contentDocumentId: attachedImage.contentDocumentId,
+                          contentVersionId: attachedImage.contentVersionId,
+                          linkedCampaignId: attachedImage.campaignId,
+                          title: attachedImage.title,
+                          contentSize: attachedImage.contentSize,
+                          readBack: true,
+                        },
+                      },
+                      null,
+                      2,
+                    )}
+                  </pre>
+                </details>
+              </section>
+            )}
             {pendingConfirmation && (
               <section
                 ref={confirmationRef}
@@ -547,8 +649,19 @@ export function App() {
                 aria-labelledby="confirmation-title"
               >
                 <p className="kicker">Confirmation required</p>
-                <h3 id="confirmation-title">Create Salesforce review task?</h3>
+                <h3 id="confirmation-title">
+                  {CONFIRMATION_COPY[pendingConfirmation.action].title}
+                </h3>
                 <p>{pendingConfirmation.summary}</p>
+                {pendingConfirmation.action === "attach-generated-image" &&
+                  generatedImage &&
+                  generatedImage.id === pendingConfirmation.imageId && (
+                    <img
+                      className="confirmation-image"
+                      src={generatedImage.imageUrl}
+                      alt={`Draft to attach: ${generatedImage.promptSummary}`}
+                    />
+                  )}
                 <dl>
                   <div className="confirmation-detail">
                     <dt>Campaign</dt>
@@ -562,6 +675,14 @@ export function App() {
                       </a>
                     </dd>
                   </div>
+                  {pendingConfirmation.contentHash && (
+                    <div className="confirmation-detail">
+                      <dt>Image hash</dt>
+                      <dd>
+                        <code>{pendingConfirmation.contentHash.slice(0, 16)}…</code>
+                      </dd>
+                    </div>
+                  )}
                   <div className="confirmation-detail">
                     <dt>Expires</dt>
                     <dd>{new Date(pendingConfirmation.expiresAt).toLocaleTimeString()}</dd>
@@ -580,7 +701,7 @@ export function App() {
                     className="confirm-button"
                     onClick={() => void resolveConfirmation("execute")}
                   >
-                    Confirm create
+                    {CONFIRMATION_COPY[pendingConfirmation.action].confirm}
                   </button>
                 </div>
               </section>
@@ -672,12 +793,28 @@ export function App() {
               <figure className="generated-image-card">
                 <img src={generatedImage.imageUrl} alt="Generated Northstar campaign draft" />
                 <figcaption>
-                  <strong>Reviewable draft</strong>
+                  <strong>
+                    {generatedImage.lifecycle === "attached"
+                      ? "Attached to the campaign"
+                      : "Reviewable draft"}
+                  </strong>
                   <span className="generated-image-summary">{generatedImage.promptSummary}</span>
                   <small className="generated-image-metadata">
-                    {generatedImage.width}×{generatedImage.height} · expires in seven days · not
-                    attached to Salesforce
+                    {generatedImage.width}×{generatedImage.height} ·{" "}
+                    {generatedImage.lifecycle === "attached"
+                      ? "Salesforce holds the attached file; this draft copy expires in seven days"
+                      : "expires in seven days · not attached to Salesforce"}
                   </small>
+                  {generatedImage.lifecycle === "draft" && (
+                    <button
+                      type="button"
+                      className="secondary-button attach-image-button"
+                      onClick={() => void requestImageAttachment()}
+                      disabled={pendingConfirmation !== null}
+                    >
+                      Attach to campaign
+                    </button>
+                  )}
                   <details className="payload-viewer image-payload">
                     <summary>Technical payload and provenance</summary>
                     <pre>
@@ -788,11 +925,11 @@ export function App() {
             </div>
             <p>
               Use <strong>Generate campaign visual</strong> in the Insights panel to create a
-              governed Workers AI draft and inspect its storage trace.
+              governed Workers AI draft, then <strong>Attach to campaign</strong> and confirm to
+              store it on the Salesforce Campaign as a file.
             </p>
             <h3>Coming soon / not yet built</h3>
             <ul className="coming-soon">
-              <li>Select and attach a generated campaign image to Salesforce.</li>
               <li>Additional HXL cards for standard Salesforce agent results.</li>
               <li>Representative consent-data evaluation in the supplied sandbox.</li>
               <li>Expanded account discovery and buyer-group evidence.</li>

@@ -40,6 +40,33 @@ private class NorthstarCampaignActionsTest {
         );
     }
 
+    // A valid 1x1 PNG; fictional test content only.
+    private static final String TEST_PNG_BASE64 =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+    private static void authorizeImage(NorthstarAttachCampaignImage.Input input) {
+        Long expiresAt = DateTime.now().addMinutes(4).getTime() / 1000;
+        input.confirmationId = signedConfirmation(
+            'attach-generated-image', input.campaignId, input.confirmationId, input.requestHash,
+            input.idempotencyKey, expiresAt, 'test-evaluator'
+        );
+    }
+
+    private static NorthstarAttachCampaignImage.Input imageInput(Id campaignId, String idempotencyKey) {
+        NorthstarAttachCampaignImage.Input input = new NorthstarAttachCampaignImage.Input();
+        input.campaignId = campaignId;
+        input.imageBase64 = TEST_PNG_BASE64;
+        input.contentHash = EncodingUtil.convertToHex(
+            Crypto.generateDigest('SHA-256', EncodingUtil.base64Decode(TEST_PNG_BASE64))
+        ).toLowerCase();
+        input.title = 'Northstar campaign image';
+        input.altText = 'A quiet trailhead at golden hour with layered hiking gear.';
+        input.confirmationId = 'c2b1f0a4-7a55-4c4b-9e0e-1d3d0f7b9a11';
+        input.requestHash = '4b6f2c1d0e9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c';
+        input.idempotencyKey = idempotencyKey;
+        return input;
+    }
+
     private static User createEvaluator(Boolean grantPermissions) {
         String unique = String.valueOf(DateTime.now().getTime()) + String.valueOf(Crypto.getRandomInteger()).replace('-', '');
         User evaluator = new User(
@@ -277,5 +304,79 @@ private class NorthstarCampaignActionsTest {
                 System.assertNotEquals(null, expected.getMessage());
             }
         }
+    }
+
+    @IsTest
+    static void attachesVerifiedImageOnceAndReadsItBack() {
+        User evaluator = createEvaluator(true);
+        Campaign campaign = [SELECT Id FROM Campaign LIMIT 1];
+        System.runAs(evaluator) {
+            NorthstarAttachCampaignImage.Input input = imageInput(
+                campaign.Id, '6a0f3c2e-58b4-4f7e-9d21-3c8a5b7e0f14'
+            );
+            authorizeImage(input);
+            Test.startTest();
+            NorthstarAttachCampaignImage.Output first = NorthstarAttachCampaignImage.run(
+                new List<NorthstarAttachCampaignImage.Input>{ input }
+            )[0];
+            NorthstarAttachCampaignImage.Output replay = NorthstarAttachCampaignImage.run(
+                new List<NorthstarAttachCampaignImage.Input>{ input }
+            )[0];
+            Test.stopTest();
+            System.assertEquals(false, first.replayed);
+            System.assertEquals(true, replay.replayed);
+            System.assertEquals(true, first.readBack);
+            System.assertEquals(first.contentVersionId, replay.contentVersionId);
+            System.assertEquals(campaign.Id, first.campaignId);
+            System.assertEquals('Northstar campaign image', first.title);
+            System.assertEquals(input.contentHash, first.contentHash);
+            System.assert(first.contentSize > 0);
+            System.assertEquals(1, [
+                SELECT COUNT() FROM ContentDocumentLink
+                WHERE ContentDocumentId = :first.contentDocumentId AND LinkedEntityId = :campaign.Id
+            ]);
+            System.assertEquals(1, [
+                SELECT COUNT() FROM ContentVersion WHERE Northstar_Idempotency_Key__c = :input.idempotencyKey
+            ]);
+        }
+    }
+
+    @IsTest
+    static void refusesImageWhoseBytesDoNotMatchTheConfirmedHash() {
+        User evaluator = createEvaluator(true);
+        Campaign campaign = [SELECT Id FROM Campaign LIMIT 1];
+        System.runAs(evaluator) {
+            NorthstarAttachCampaignImage.Input input = imageInput(
+                campaign.Id, '0d9e1f2a-3b4c-4d5e-8f60-718293a4b5c6'
+            );
+            input.contentHash = '0000000000000000000000000000000000000000000000000000000000000000';
+            authorizeImage(input);
+            try {
+                NorthstarAttachCampaignImage.run(new List<NorthstarAttachCampaignImage.Input>{ input });
+                System.assert(false, 'Expected content hash verification failure');
+            } catch (NorthstarAttachCampaignImage.NorthstarAttachException expected) {
+                System.assert(expected.getMessage().contains('do not match'));
+            }
+            System.assertEquals(0, [
+                SELECT COUNT() FROM ContentVersion WHERE Northstar_Idempotency_Key__c = :input.idempotencyKey
+            ]);
+        }
+    }
+
+    @IsTest
+    static void refusesImageAttachmentWithoutConfirmation() {
+        Campaign campaign = [SELECT Id FROM Campaign LIMIT 1];
+        NorthstarAttachCampaignImage.Input input = imageInput(
+            campaign.Id, '5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9'
+        );
+        try {
+            NorthstarAttachCampaignImage.run(new List<NorthstarAttachCampaignImage.Input>{ input });
+            System.assert(false, 'Expected confirmation failure');
+        } catch (NorthstarAttachCampaignImage.NorthstarAttachException expected) {
+            System.assertNotEquals(null, expected.getMessage());
+        }
+        System.assertEquals(0, [
+            SELECT COUNT() FROM ContentVersion WHERE Northstar_Idempotency_Key__c = :input.idempotencyKey
+        ]);
     }
 }
