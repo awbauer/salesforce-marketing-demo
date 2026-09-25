@@ -6,6 +6,7 @@ import {
   normalizeAssistantText,
   resolveTileRenderMode,
   salesforceRecordUrl,
+  shouldShowChatError,
 } from "./index";
 
 afterEach(cleanup);
@@ -17,6 +18,22 @@ describe("InsightBoard", () => {
         "**Campaign readiness** || **Brief** | Audience<br>Channel || |---|---|",
       ),
     ).toBe("Campaign readiness\nBrief · Audience\nChannel");
+    expect(
+      normalizeAssistantText(
+        JSON.stringify({ message: "Campaign overview\n- Engagement is holding steady" }),
+      ),
+    ).toBe("Campaign overview\n- Engagement is holding steady");
+  });
+
+  it("does not pair a completed answer with a contradictory interruption error", () => {
+    expect(
+      shouldShowChatError(true, {
+        role: "assistant",
+        text: JSON.stringify({ message: "A complete Salesforce-grounded response." }),
+      }),
+    ).toBe(false);
+    expect(shouldShowChatError(true, { role: "assistant", text: "" })).toBe(true);
+    expect(shouldShowChatError(false, { role: "assistant", text: "Complete" })).toBe(false);
   });
 
   it("renders typed source and freshness evidence", () => {

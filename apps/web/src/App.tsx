@@ -7,7 +7,12 @@ import {
   OrchestratorStateSchema,
   PHASE_2_CURATED_TOOLS,
 } from "@northstar/contracts";
-import { InsightBoard, normalizeAssistantText, salesforceRecordUrl } from "@northstar/ui";
+import {
+  InsightBoard,
+  normalizeAssistantText,
+  salesforceRecordUrl,
+  shouldShowChatError,
+} from "@northstar/ui";
 import { useAgent } from "agents/react";
 import type { UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
@@ -188,6 +193,11 @@ export function App() {
   }, []);
   const busy = status === "submitted" || status === "streaming" || isRecovering;
   const salesforceReady = state.connector.state === "ready";
+  const latestMessage = messages.at(-1);
+  const showChatError = shouldShowChatError(
+    Boolean(error),
+    latestMessage ? { role: latestMessage.role, text: messageText(latestMessage) } : undefined,
+  );
 
   useEffect(() => {
     if (state.connector.state !== "authenticating") return;
@@ -539,7 +549,7 @@ export function App() {
                 Recovering the durable conversation…
               </div>
             )}
-            {error && (
+            {showChatError && (
               <div className="error-banner" role="alert">
                 The turn was interrupted. Your saved conversation is still available; retry when
                 ready.
