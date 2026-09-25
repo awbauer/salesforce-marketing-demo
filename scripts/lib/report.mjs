@@ -3,13 +3,16 @@ import { dirname, resolve } from "node:path";
 
 async function activeWorkUnit() {
   const units = await readdir("docs/work-units");
+  let newestBlocked;
   for (const file of units
     .filter((name) => name.startsWith("WU-") && name.endsWith(".md"))
     .sort()) {
     const content = await readFile(`docs/work-units/${file}`, "utf8");
-    if (/^status: active$/m.test(content)) return file.match(/^(WU-\d+)/)?.[1] ?? "WU-002";
+    const id = file.match(/^(WU-\d+)/)?.[1];
+    if (/^status: (active|in_progress)$/m.test(content)) return id ?? "WU-002";
+    if (/^status: blocked$/m.test(content) && id) newestBlocked = id;
   }
-  return "WU-002";
+  return newestBlocked ?? "WU-002";
 }
 
 export async function report(name, data, workUnit) {

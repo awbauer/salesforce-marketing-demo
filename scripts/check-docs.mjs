@@ -9,6 +9,7 @@ const required = [
   "docs/work-units/WU-002-phase-1-foundation.md",
   "docs/work-units/WU-003-phase-2-salesforce-core.md",
   "docs/work-units/WU-004-blocked-word-delivery-gate.md",
+  "docs/work-units/WU-005-phase-3-readiness-hxl.md",
   "docs/security/phase-1-threat-model.md",
   "docs/demo/phase-2-evaluator-guide.md",
   "infra/cloudflare/pot/README.md",
@@ -20,7 +21,11 @@ for (const path of required)
   } catch {
     failures.push(`Missing ${path}`);
   }
-const units = await Promise.all([readFile(required[5], "utf8"), readFile(required[6], "utf8")]);
+const units = await Promise.all([
+  readFile(required[5], "utf8"),
+  readFile(required[6], "utf8"),
+  readFile(required[7], "utf8"),
+]);
 for (const heading of [
   "## Acceptance criteria",
   "## Verification",

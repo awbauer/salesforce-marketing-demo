@@ -1,7 +1,7 @@
 ---
 id: WU-003
 title: Deliver the Phase 2 Salesforce core
-status: active
+status: blocked
 plan_sections: [3, 7, 8, 10, 11, 14, 15, 16, 17]
 owners: [agent]
 ---
@@ -68,6 +68,6 @@ Intended mutations are limited to deploying and activating source-controlled met
 
 ## Completion
 
-- Final status: active
+- Final status: blocked only on representative consent data that is absent from the supplied proof org and outside the three permitted proof writes. All other Phase 2 gates, including evaluator OAuth and the confirmed Salesforce write/read-back, pass.
 - Commit chain: `2b9e580` through `de2660e` on `feat/phase-2-salesforce-core`; subsequent evidence updates remain on the same Phase 2 pull request.
 - Summary: implementation in progress; do not treat local fixtures as Salesforce proof.

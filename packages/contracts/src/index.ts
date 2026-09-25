@@ -64,6 +64,14 @@ export const ConfirmationSchema = z.object({
 });
 export type Confirmation = z.infer<typeof ConfirmationSchema>;
 
+export const PortableTilePresentationSchema = z.object({
+  kind: z.literal("hxl"),
+  resourceUri: z.string().regex(/^ui:\/\/widget\/lightningType\/c__[a-zA-Z0-9_]+$/),
+  sourceStatus: z.enum(["source-validated", "deployed", "unavailable"]),
+  fallback: z.literal("native"),
+});
+export type PortableTilePresentation = z.infer<typeof PortableTilePresentationSchema>;
+
 export const PHASE_2_AUTONOMOUS_TOOLS = Object.freeze([
   "draft_campaign_brief",
   "refine_campaign_preview",
@@ -98,6 +106,7 @@ export const InsightTileSchema = z.object({
   recordRef: z
     .object({ system: z.literal("salesforce"), objectApiName: z.string(), recordId: z.string() })
     .optional(),
+  presentation: PortableTilePresentationSchema.optional(),
 });
 export type InsightTile = z.infer<typeof InsightTileSchema>;
 
@@ -193,6 +202,12 @@ export const initialOrchestratorState: OrchestratorState = {
         system: "salesforce",
         objectApiName: "Campaign",
         recordId: "701jV000004GglIQAS",
+      },
+      presentation: {
+        kind: "hxl",
+        resourceUri: "ui://widget/lightningType/c__northstarCampaignReadinessOutput",
+        sourceStatus: "deployed",
+        fallback: "native",
       },
     },
     {

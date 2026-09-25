@@ -1,0 +1,34 @@
+{
+  "generatedAt": "2026-09-25T00:04:31Z",
+  "status": "enabled-and-deployed",
+  "target": {
+    "alias": "northstar-pot",
+    "apiVersion": "67.0"
+  },
+  "metadataDescribe": {
+    "lightningTypeBundle": "available",
+    "uiWidgetBundle": "available"
+  },
+  "localCli": {
+    "result": "Source-format inference is unavailable in the installed CLI; Metadata API package validation and deployment succeeded."
+  },
+  "externalMutation": true,
+  "deployment": {
+    "id": "0AfjV000002kRP3SAM",
+    "status": "Succeeded",
+    "componentsDeployed": 2,
+    "componentErrors": 0
+  },
+  "readBack": [
+    {
+      "type": "UiWidgetBundle",
+      "fullName": "northstarCampaignReadiness",
+      "lastModifiedDate": "2026-09-25T00:04:31.000Z"
+    },
+    {
+      "type": "LightningTypeBundle",
+      "fullName": "northstarCampaignReadinessOutput",
+      "lastModifiedDate": "2026-09-25T00:04:30.000Z"
+    }
+  ]
+}
