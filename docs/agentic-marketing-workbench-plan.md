@@ -899,6 +899,8 @@ This slice exercises the complete architecture:
 - CLT/HXL campaign readiness card.
 - Human approval, idempotent Flow mutation, audit, and authoritative read-back.
 
+The vertical slice must produce artifacts that are useful outside the demo UI. A saved campaign brief must contain reviewable campaign content; a review request must be a populated Salesforce Task with campaign context, explicit readiness findings, ownership workflow details such as priority and due date, and an actionable human checklist; a selected image must be attached to the authoritative Campaign. IDs, hashes, generic labels, and empty records are evidence metadata, not acceptable primary deliverables.
+
 It is a better proof than a broad read-only chatbot because it validates the difficult boundaries: identity, tool routing, portable UI, consent, generated-asset governance, approval, and recovery.
 
 ## 19. Primary references

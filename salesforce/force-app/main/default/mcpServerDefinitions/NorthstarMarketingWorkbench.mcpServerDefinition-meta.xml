@@ -188,7 +188,7 @@
             <apiSource>API_CATALOG</apiSource>
             <operation>NorthstarCreateCampaignReviewRequest</operation>
         </apiDefinition>
-        <descriptionOverride>Create one confirmed Salesforce campaign-review Task using a host-issued confirmation, request hash, and idempotency key; returns authoritative read-back.</descriptionOverride>
+        <descriptionOverride>Create one confirmed Salesforce campaign-review Task with campaign context, readiness findings, a due date, and a human review checklist; returns authoritative read-back.</descriptionOverride>
         <destructive>false</destructive>
         <idempotent>true</idempotent>
         <openWorld>false</openWorld>

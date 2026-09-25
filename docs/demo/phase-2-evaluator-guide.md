@@ -21,9 +21,10 @@ Use this guide to test the deployed Salesforce core with the fictional Northstar
 1. Select **Create review request** on the readiness tile.
 2. Review the campaign ID, summary, and five-minute expiry. Select **Cancel** once and verify that no task is created.
 3. Start the request again and select **Confirm create** once.
-4. Verify the success state reports that the review task was created and verified, then use **Open task in Salesforce** to inspect the record.
-5. Verify the activity feed reports **Review request created** with a Salesforce read-back record ID.
-6. Record the same idempotency key and source record ID from the D1 confirmation audit and Salesforce Task read-back. Retrying execution must not create a second Task.
+4. Verify the success state shows the Task subject, priority, and due date, then use **Open task in Salesforce** to inspect the record.
+5. Verify the Salesforce Task contains the campaign name, status, type, schedule, draft brief, explicit readiness findings, and the three-step human review checklist. An incomplete campaign must produce a high-priority Task that names the missing brief or dates; internal confirmation hashes must not appear in the Task description.
+6. Verify the activity feed reports **Review request created** with a Salesforce read-back record ID.
+7. Record the same idempotency key and source record ID from the D1 confirmation audit and Salesforce Task read-back. Retrying execution must not create a second Task.
 
 ## Current demo boundary
 
