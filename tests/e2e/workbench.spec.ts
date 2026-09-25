@@ -27,14 +27,25 @@ test("opens the workspace, renders evidence tiles, and completes a durable turn"
   await expect.poll(() => assistantMessages.count(), { timeout: 15_000 }).toBeGreaterThan(before);
   await expect(page.getByText(/strongest signal is stable engagement/i).last()).toBeVisible();
   const trace = page.locator(".execution-trace").last();
-  await expect(trace.getByText("Behind the scenes · technical trace")).toBeVisible();
-  await expect(trace.getByText("Northstar orchestrator")).toBeVisible();
-  await expect(trace.getByText(/private model reasoning are not exposed/i)).toBeVisible();
+  await trace.getByText("Behind the scenes · technical trace").click();
+  for (const label of [
+    "Turn started",
+    "Step 1 started",
+    "Reasoning started",
+    /Reasoning ended in/,
+    "Text started",
+    /Text ended in/,
+    "Turn completed",
+  ])
+    await expect(trace.getByText(label, { exact: typeof label === "string" })).toBeVisible();
+  await trace.getByText("Model reasoning").click();
+  await expect(trace.getByText(/answer from the fictional local fixture/i)).toBeVisible();
+  await expect(trace.getByText(/personal data are redacted/i)).toBeVisible();
   await trace.screenshot({
-    path: `artifacts/evidence/WU-009/technical-trace-detail-${testInfo.project.name}.png`,
+    path: `artifacts/evidence/WU-016/technical-trace-detail-${testInfo.project.name}.png`,
   });
   await page.screenshot({
-    path: `artifacts/evidence/WU-009/technical-trace-${testInfo.project.name}.png`,
+    path: `artifacts/evidence/WU-016/technical-trace-${testInfo.project.name}.png`,
     fullPage: true,
   });
   await page.getByRole("button", { name: "Create review request" }).click();

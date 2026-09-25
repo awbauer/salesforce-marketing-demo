@@ -144,6 +144,84 @@ export const OrchestratorStateSchema = z.object({
 });
 export type OrchestratorState = z.infer<typeof OrchestratorStateSchema>;
 
+export const TURN_TRACE_PART_TYPE = "data-turn-trace" as const;
+export const TURN_TRACE_PART_ID = "turn-trace" as const;
+
+export const TurnTraceEventSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("turn-start"),
+    at: z.number(),
+    model: z.string(),
+    toolCount: z.number().int().nonnegative(),
+    requiredTool: z.string().optional(),
+  }),
+  z.object({ kind: z.literal("step-start"), at: z.number(), step: z.number().int() }),
+  z.object({
+    kind: z.literal("step-finish"),
+    at: z.number(),
+    step: z.number().int(),
+    finishReason: z.string(),
+    inputTokens: z.number().optional(),
+    outputTokens: z.number().optional(),
+    reasoningTokens: z.number().optional(),
+  }),
+  z.object({ kind: z.literal("reasoning-start"), at: z.number(), index: z.number().int() }),
+  z.object({
+    kind: z.literal("reasoning-end"),
+    at: z.number(),
+    index: z.number().int(),
+    chars: z.number().int(),
+  }),
+  z.object({ kind: z.literal("text-start"), at: z.number(), index: z.number().int() }),
+  z.object({
+    kind: z.literal("text-end"),
+    at: z.number(),
+    index: z.number().int(),
+    chars: z.number().int(),
+  }),
+  z.object({
+    kind: z.literal("tool-input-start"),
+    at: z.number(),
+    toolCallId: z.string(),
+    toolName: z.string(),
+  }),
+  z.object({
+    kind: z.literal("tool-input-available"),
+    at: z.number(),
+    toolCallId: z.string(),
+    toolName: z.string(),
+  }),
+  z.object({
+    kind: z.literal("tool-input-error"),
+    at: z.number(),
+    toolCallId: z.string(),
+    toolName: z.string(),
+    message: z.string(),
+  }),
+  z.object({ kind: z.literal("tool-output-available"), at: z.number(), toolCallId: z.string() }),
+  z.object({
+    kind: z.literal("tool-output-error"),
+    at: z.number(),
+    toolCallId: z.string(),
+    message: z.string(),
+  }),
+  z.object({ kind: z.literal("abort"), at: z.number(), reason: z.string() }),
+  z.object({ kind: z.literal("error"), at: z.number(), message: z.string() }),
+  z.object({ kind: z.literal("fallback-text"), at: z.number(), reason: z.string() }),
+  z.object({
+    kind: z.literal("turn-finish"),
+    at: z.number(),
+    outcome: z.enum(["completed", "aborted", "timed-out", "failed"]),
+  }),
+]);
+export type TurnTraceEvent = z.infer<typeof TurnTraceEventSchema>;
+
+export const TurnTraceSchema = z.object({
+  startedAt: z.number(),
+  events: z.array(TurnTraceEventSchema),
+});
+export type TurnTrace = z.infer<typeof TurnTraceSchema>;
+
 export const SessionSchema = z.object({
   workspaceId: z.string(),
   principal: PrincipalSchema,

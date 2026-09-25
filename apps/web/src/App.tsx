@@ -12,11 +12,11 @@ import {
   normalizeAssistantText,
   salesforceRecordUrl,
   shouldShowChatError,
-  toolFreeTraceDetail,
 } from "@northstar/ui";
 import { useAgent } from "agents/react";
 import type { UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
+import { executionTrace } from "./turn-trace";
 
 function messageText(message: UIMessage) {
   const text = message.parts
@@ -28,119 +28,49 @@ function messageText(message: UIMessage) {
   return message.role === "assistant" ? normalizeAssistantText(text) : text;
 }
 
-type TraceStep = {
-  label: string;
-  detail: string;
-  state: "active" | "complete" | "error";
-  payload?: string;
-};
-
-const REDACTED_KEYS =
-  /token|secret|password|authorization|cookie|signature|confirmation|requesthash|idempotency/i;
-
-export function sanitizedPayload(value: unknown): unknown {
-  if (typeof value === "string") {
-    if (/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i.test(value)) return "[redacted personal data]";
-    if (/(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/.test(value))
-      return "[redacted personal data]";
-    const redacted = value
-      .replace(/\bBearer\s+[^\s"']+/gi, "Bearer [redacted]")
-      .replace(
-        /\beyJ[a-zA-Z0-9_-]{12,}\.[a-zA-Z0-9_-]{12,}\.[a-zA-Z0-9_-]{8,}\b/g,
-        "[redacted token]",
-      );
-    return redacted.length > 500 ? `${redacted.slice(0, 500)}…` : redacted;
-  }
-  if (Array.isArray(value)) return value.slice(0, 20).map(sanitizedPayload);
-  if (value && typeof value === "object")
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, child]) => [
-        key,
-        REDACTED_KEYS.test(key) ? "[redacted]" : sanitizedPayload(child),
-      ]),
-    );
-  return value;
-}
-
-export function readableToolName(name: string) {
-  const known = PHASE_2_CURATED_TOOLS.find((tool) => name === tool || name.endsWith(`_${tool}`));
-  if (!known) return "Unrecognized tool request";
-  return known.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-function semanticToolFailure(value: unknown): boolean {
-  if (!value || typeof value !== "object") return false;
-  const status = (value as { semanticStatus?: unknown }).semanticStatus;
-  return status === "unavailable" || status === "error";
-}
-
-export function executionTrace(message: UIMessage): TraceStep[] {
-  if (message.role !== "assistant") return [];
-  const toolSteps = message.parts.flatMap((part) => {
-    const dynamicName = part.type === "dynamic-tool" ? part.toolName : null;
-    const staticName = part.type.startsWith("tool-") ? part.type.slice(5) : null;
-    const name = dynamicName ?? staticName;
-    if (!name || !("state" in part)) return [];
-    const state = String(part.state);
-    const failed = state === "output-error" || state === "output-denied";
-    const complete = state === "output-available";
-    const input = "input" in part ? part.input : undefined;
-    const output = "output" in part ? part.output : undefined;
-    const unavailable = complete && semanticToolFailure(output);
-    const readableName = readableToolName(name);
-    const callStep = {
-      label: `Salesforce agent call · ${readableName}`,
-      detail:
-        complete || failed
-          ? "Call completed through the governed MCP catalog"
-          : "Calling through the governed MCP catalog",
-      state: complete || failed ? ("complete" as const) : ("active" as const),
-      payload: JSON.stringify(sanitizedPayload({ input }), null, 2),
-    } satisfies TraceStep;
-    if (!complete && !failed) return [callStep];
-    const errorText = "errorText" in part ? part.errorText : undefined;
-    return [
-      callStep,
-      {
-        label: `Salesforce agent response · ${readableName}`,
-        detail: failed
-          ? "Tool call failed safely"
-          : unavailable
-            ? "Salesforce returned no usable business result"
-            : "Result returned to the orchestrator",
-        state: failed || unavailable ? "error" : "complete",
-        payload: JSON.stringify(
-          sanitizedPayload(failed ? { error: errorText } : { output }),
-          null,
-          2,
-        ),
-      } satisfies TraceStep,
-    ];
-  });
-  const hasCompletedText = message.parts.some(
-    (part) => part.type === "text" && part.state !== "streaming" && part.text.trim(),
+function TechnicalTrace({
+  rows,
+  live,
+}: {
+  rows: ReturnType<typeof executionTrace>;
+  live: boolean;
+}) {
+  if (rows.length === 0) return null;
+  const errors = rows.filter((row) => row.state === "error").length;
+  return (
+    <details className="execution-trace" open={live || errors > 0}>
+      <summary>
+        Behind the scenes · technical trace
+        <span className="trace-summary-meta">
+          {` · ${rows.length} events${errors ? ` · ${errors} with issues` : ""}${live ? " · live" : ""}`}
+        </span>
+      </summary>
+      <ol>
+        {rows.map((row) => (
+          <li className={`trace-${row.state} trace-kind-${row.kind}`} key={row.key}>
+            <i className={`trace-indicator indicator-${row.state}`} />
+            <div className="trace-detail">
+              <div className="trace-heading">
+                <strong>{row.label}</strong>
+                {row.elapsed && <time className="trace-time">{row.elapsed}</time>}
+              </div>
+              <span className="trace-copy">{row.detail}</span>
+              {row.payload && (
+                <details className="payload-viewer">
+                  <summary>{row.payloadLabel ?? "Sanitized payload"}</summary>
+                  <pre>{row.payload}</pre>
+                </details>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+      <p className="trace-boundary">
+        Every model and tool lifecycle event for this turn, in order, with times from the start of
+        the turn. Credentials, confirmation material, and personal data are redacted.
+      </p>
+    </details>
   );
-  if (toolSteps.length === 0 && !hasCompletedText) return [];
-  const assistantText = messageText(message);
-  return [
-    {
-      label: "Northstar orchestrator",
-      detail: toolSteps.length
-        ? "Selected the narrowest governed tools needed for this request"
-        : toolFreeTraceDetail(assistantText),
-      state: hasCompletedText ? "complete" : "active",
-    },
-    ...toolSteps,
-    ...(hasCompletedText
-      ? [
-          {
-            label: "Evidence assembled",
-            detail: "Combined returned evidence into the visible response",
-            state: "complete" as const,
-          },
-        ]
-      : []),
-  ];
 }
 
 export function App() {
@@ -528,32 +458,11 @@ export function App() {
                   {message.role === "user" ? "You" : "Northstar orchestrator"}
                 </div>
                 <p>{messageText(message)}</p>
-                {message.role === "assistant" && executionTrace(message).length > 0 && (
-                  <details className="execution-trace" open>
-                    <summary>Behind the scenes · technical trace</summary>
-                    <ol>
-                      {executionTrace(message).map((step, index) => (
-                        <li className={`trace-${step.state}`} key={`${step.label}-${index}`}>
-                          <i className={`trace-indicator indicator-${step.state}`} />
-                          <div className="trace-detail">
-                            <strong>{step.label}</strong>
-                            <span className="trace-copy">{step.detail}</span>
-                            {step.payload && (
-                              <details className="payload-viewer">
-                                <summary>Sanitized request / response payload</summary>
-                                <pre>{step.payload}</pre>
-                              </details>
-                            )}
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                    <p className="trace-boundary">
-                      Shows execution rationale and sanitized operational data. Credentials,
-                      confirmation material, personal data, and private model reasoning are not
-                      exposed.
-                    </p>
-                  </details>
+                {message.role === "assistant" && (
+                  <TechnicalTrace
+                    rows={executionTrace(message)}
+                    live={busy && message.id === messages.at(-1)?.id}
+                  />
                 )}
               </article>
             ))}
