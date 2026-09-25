@@ -64,7 +64,7 @@ jobs:
           SF_SFDX_AUTH_URL: ${{ secrets.SF_SFDX_AUTH_URL }}
         run: |
           test -n "$SF_SFDX_AUTH_URL"
-          printf '%s' "$SF_SFDX_AUTH_URL" | sf org login sfdx-url --sfdx-url-stdin --alias "$SF_TARGET_ORG"
+          printf '%s' "$SF_SFDX_AUTH_URL" | sf org login sfdx-url --alias "$SF_TARGET_ORG" --sfdx-url-stdin
 
       - name: Fail closed if authentication targets another org
         run: |
