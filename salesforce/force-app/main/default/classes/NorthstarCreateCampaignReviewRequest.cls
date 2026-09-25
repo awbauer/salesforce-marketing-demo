@@ -114,7 +114,7 @@ global with sharing class NorthstarCreateCampaignReviewRequest {
             '1. Resolve each readiness finding.',
             '2. Confirm content, accessibility, consent, and schedule.',
             '3. Update the campaign and return it for readiness review.', '',
-            'Salesforce campaign: ' + campaign.Id
+            'This Task is related to the Campaign through Salesforce Related To.'
         });
         return truncate(String.join(lines, '\n'), 32000);
     }

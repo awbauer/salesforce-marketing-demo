@@ -1,7 +1,7 @@
 ---
 id: WU-008
 title: Create a meaningful Salesforce campaign review handoff
-status: active
+status: complete
 plan_sections: [13, 14, 16, 17, 18, 19]
 owners: [agent]
 ---
@@ -49,10 +49,10 @@ pnpm verify
 - Screenshots: pending
 - Deployment identifiers: Salesforce deployment `0AfjV000002mccvSAA`; Apex test run `707jV000004OIEZ`.
 - Read-back results: deployed Apex and MCP definition reported success; tests verify populated fields, missing-field findings, idempotent replay, and authoritative Task read-back.
-- Known limitations: the merged Worker build and a user-confirmed live Task remain to be read back after this pull request is merged; image generation and attachment remain Phase 4.
+- Known limitations: image generation and attachment remain Phase 4.
 
 ## Completion
 
-- Final status: active
-- Commit: pending
-- Summary: pending
+- Final status: complete; PR #8 merged and the user verified the populated Salesforce record.
+- Commit: `7e92281`
+- Summary: meaningful review Task creation, authoritative field read-back, and app presentation shipped.

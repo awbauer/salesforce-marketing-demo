@@ -156,7 +156,8 @@ private class NorthstarCampaignActionsTest {
             System.assertEquals(Date.today().addDays(2), first.dueDate);
             System.assert(first.description.contains(campaign.Description));
             System.assert(first.description.contains('Review checklist'));
-            System.assert(first.description.contains(String.valueOf(campaign.Id)));
+            System.assert(first.description.contains('related to the Campaign'));
+            System.assertEquals(campaign.Id, [SELECT WhatId FROM Task WHERE Id = :first.taskId].WhatId);
             System.assertEquals(false, first.description.contains(input.requestHash));
             System.assertEquals(1, [SELECT COUNT() FROM Task WHERE Northstar_Idempotency_Key__c = :input.idempotencyKey]);
         }

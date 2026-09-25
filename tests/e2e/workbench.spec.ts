@@ -8,6 +8,8 @@ test("opens the workspace, renders evidence tiles, and completes a durable turn"
   await expect(page.getByRole("navigation", { name: "Workspace navigation" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Campaign intelligence" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Insights" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Generate campaign visual" })).toBeVisible();
+  await expect(page.getByText("13 configured tools")).toBeVisible();
   const campaignLink = page.getByRole("link", { name: /Open in Salesforce/ }).first();
   await expect(campaignLink).toHaveAttribute(
     "href",
@@ -24,6 +26,17 @@ test("opens the workspace, renders evidence tiles, and completes a durable turn"
   await page.getByRole("button", { name: "Send message" }).click();
   await expect.poll(() => assistantMessages.count(), { timeout: 15_000 }).toBeGreaterThan(before);
   await expect(page.getByText(/strongest signal is stable engagement/i).last()).toBeVisible();
+  const trace = page.locator(".execution-trace").last();
+  await expect(trace.getByText("Behind the scenes · technical trace")).toBeVisible();
+  await expect(trace.getByText("Northstar orchestrator")).toBeVisible();
+  await expect(trace.getByText(/private model reasoning are not exposed/i)).toBeVisible();
+  await trace.screenshot({
+    path: `artifacts/evidence/WU-009/technical-trace-detail-${testInfo.project.name}.png`,
+  });
+  await page.screenshot({
+    path: `artifacts/evidence/WU-009/technical-trace-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
   await page.getByRole("button", { name: "Create review request" }).click();
   await expect(page.getByRole("heading", { name: "Create Salesforce review task?" })).toBeVisible();
   await expect(

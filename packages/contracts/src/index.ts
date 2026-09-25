@@ -64,6 +64,21 @@ export const ConfirmationSchema = z.object({
 });
 export type Confirmation = z.infer<typeof ConfirmationSchema>;
 
+export const GeneratedCampaignImageSchema = z.object({
+  id: z.string().uuid(),
+  campaignId: z.string().regex(/^[a-zA-Z0-9]{15,18}$/),
+  imageUrl: z.string().startsWith("/agent/images/"),
+  promptSummary: z.string().min(1).max(280),
+  channel: z.enum(["email", "web", "social"]),
+  width: z.literal(PROOF_DEFAULTS.imageSize),
+  height: z.literal(PROOF_DEFAULTS.imageSize),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  model: z.literal(PROOF_DEFAULTS.imageModel),
+  lifecycle: z.literal("draft"),
+  expiresAt: z.string().datetime(),
+});
+export type GeneratedCampaignImage = z.infer<typeof GeneratedCampaignImageSchema>;
+
 export const PortableTilePresentationSchema = z.object({
   kind: z.literal("hxl"),
   resourceUri: z.string().regex(/^ui:\/\/widget\/lightningType\/c__[a-zA-Z0-9_]+$/),
