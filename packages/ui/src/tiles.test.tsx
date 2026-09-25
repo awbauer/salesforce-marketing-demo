@@ -24,6 +24,9 @@ describe("InsightBoard", () => {
         JSON.stringify({ message: "Campaign overview\n- Engagement is holding steady" }),
       ),
     ).toBe("Campaign overview\n- Engagement is holding steady");
+    expect(normalizeAssistantText('{"message":"Campaign overview\\n- Evidence pending')).toBe(
+      "Campaign overview\n- Evidence pending",
+    );
   });
 
   it("does not pair a completed answer with a contradictory interruption error", () => {

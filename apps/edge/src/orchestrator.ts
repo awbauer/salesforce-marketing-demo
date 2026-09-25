@@ -96,6 +96,14 @@ function latestUserText(messages: Array<{ role: string; parts?: Array<unknown> }
     .join(" ");
 }
 
+export function evidenceTurnMessages(messages: UIMessage[]): UIMessage[] {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === "user") return [message];
+  }
+  return [];
+}
+
 function guardToolResults(tools: ToolSet): ToolSet {
   return Object.fromEntries(
     Object.entries(tools).map(([name, definition]) => {
@@ -315,6 +323,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     messages: UIMessage[],
     abortSignal?: AbortSignal,
   ): Promise<Response> {
+    const turnMessages = evidenceTurnMessages(messages);
     await this.mcp.waitForConnections({ timeout: 10_000 });
     const discoveredTools = this.mcp.getAITools();
     const tools = guardToolResults(
@@ -334,7 +343,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       recordRef: tile.recordRef,
       presentationStatus: tile.presentation?.sourceStatus,
     }));
-    const prompt = latestUserText(messages);
+    const prompt = latestUserText(turnMessages);
     const requestedTool = requestedToolName(prompt);
     const requiredTool = selectRequiredTool(prompt, Object.keys(tools));
     if (requestedTool && !requiredTool) {
@@ -364,7 +373,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         "Return accessible plain text only. Do not use Markdown, HTML, tables, pipe characters, asterisks, or emoji. Use short paragraphs and hyphen-prefixed bullets when a list helps.",
         `Non-authoritative workspace record references: ${JSON.stringify(workspaceReferences)}`,
       ].join(" "),
-      messages: await convertToModelMessages(messages),
+      messages: await convertToModelMessages(turnMessages),
       tools,
       ...(requiredTool
         ? {

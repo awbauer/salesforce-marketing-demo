@@ -1,0 +1,86 @@
+name: Salesforce metadata
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/salesforce.yml"
+      - "salesforce/**"
+      - "sfdx-project.json"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/salesforce.yml"
+      - "salesforce/**"
+      - "sfdx-project.json"
+  workflow_dispatch:
+
+concurrency:
+  group: salesforce-proof-org
+  cancel-in-progress: false
+
+jobs:
+  validate-or-deploy:
+    runs-on: ubuntu-latest
+    environment: proof
+    permissions:
+      contents: read
+    env:
+      SF_TARGET_ORG: northstar-ci
+      SF_APPROVED_PROOF_ORG_ID: 00DjV000001wjXLUAY
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install pinned Salesforce CLI
+        run: npm install --global @salesforce/cli@2.128.5
+
+      - name: Prepare local-only blocked-word gate
+        env:
+          BLOCKED_WORDS_LOCAL: ${{ secrets.BLOCKED_WORDS_LOCAL }}
+        run: |
+          test -n "$BLOCKED_WORDS_LOCAL"
+          mkdir -p .config
+          printf '%s\n' "$BLOCKED_WORDS_LOCAL" > .config/blocked-words.local
+          chmod 600 .config/blocked-words.local
+
+      - name: Run repository security and metadata contracts
+        run: |
+          pnpm security:blocked-words
+          pnpm sf:metadata:check
+
+      - name: Authenticate the dedicated proof org
+        env:
+          SF_SFDX_AUTH_URL: ${{ secrets.SF_SFDX_AUTH_URL }}
+        run: |
+          test -n "$SF_SFDX_AUTH_URL"
+          printf '%s' "$SF_SFDX_AUTH_URL" | sf org login sfdx-url --sfdx-url-stdin --alias "$SF_TARGET_ORG"
+
+      - name: Fail closed if authentication targets another org
+        run: |
+          ACTUAL_ORG_ID=$(sf data query --target-org "$SF_TARGET_ORG" --query "SELECT Id FROM Organization LIMIT 1" --json | jq -r '.result.records[0].Id')
+          test "$ACTUAL_ORG_ID" = "$SF_APPROVED_PROOF_ORG_ID"
+
+      - name: Validate Salesforce metadata
+        if: github.event_name == 'pull_request'
+        run: sf project deploy start --dry-run --source-dir salesforce/force-app --target-org "$SF_TARGET_ORG" --wait 30
+
+      - name: Deploy Salesforce metadata
+        if: github.event_name != 'pull_request'
+        run: sf project deploy start --source-dir salesforce/force-app --target-org "$SF_TARGET_ORG" --wait 30
+
+      - name: Read back governed MCP definition
+        if: github.event_name != 'pull_request'
+        run: |
+          sf project retrieve start --metadata McpServerDefinition:NorthstarMarketingWorkbench --target-org "$SF_TARGET_ORG" --output-dir /tmp/northstar-salesforce-readback --wait 10
+          find /tmp/northstar-salesforce-readback -name 'NorthstarMarketingWorkbench.mcpServerDefinition-meta.xml' -print -quit | grep -q .

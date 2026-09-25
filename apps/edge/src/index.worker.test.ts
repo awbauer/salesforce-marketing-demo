@@ -4,6 +4,7 @@ import { type AuthError, deriveAgentKey, resolvePrincipal } from "./auth";
 import {
   classifyMcpFailure,
   classifyToolResult,
+  evidenceTurnMessages,
   requestedToolName,
   requiredToolChoice,
   selectRequiredTool,
@@ -141,6 +142,26 @@ describe("edge runtime", () => {
       toolChoice: { type: "tool", toolName: names[0] },
     });
     expect(requiredToolChoice(names[0], 1)).toEqual({ toolChoice: "none" });
+  });
+  it("excludes legacy assistant claims from a new evidence turn", () => {
+    const messages = [
+      {
+        id: "old-user",
+        role: "user" as const,
+        parts: [{ type: "text" as const, text: "Old question" }],
+      },
+      {
+        id: "poisoned-assistant",
+        role: "assistant" as const,
+        parts: [{ type: "text" as const, text: "Unsupported workspace claims" }],
+      },
+      {
+        id: "current-user",
+        role: "user" as const,
+        parts: [{ type: "text" as const, text: "Summarize the sample campaign" }],
+      },
+    ];
+    expect(evidenceTurnMessages(messages)).toEqual([messages[2]]);
   });
   it("requires a bounded server-side confirmation before the local review fixture", async () => {
     const missing = await SELF.fetch("https://example.test/agent/confirmations/execute", {
