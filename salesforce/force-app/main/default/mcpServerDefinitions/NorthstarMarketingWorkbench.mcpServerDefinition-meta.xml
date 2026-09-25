@@ -197,4 +197,19 @@
         <toolName>create_campaign_review_request</toolName>
         <toolTitle>Create Confirmed Campaign Review Request</toolTitle>
     </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>aa:apex-NorthstarAttachCampaignImage</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>NorthstarAttachCampaignImage</operation>
+        </apiDefinition>
+        <descriptionOverride>Attach one confirmed, hash-verified generated PNG to a Salesforce Campaign as a file using a host-issued confirmation, request hash, and idempotency key; returns authoritative read-back. Does not publish or send anything.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>true</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>false</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>attach_campaign_image</toolName>
+        <toolTitle>Attach Confirmed Campaign Image</toolTitle>
+    </tools>
 </McpServerDefinition>

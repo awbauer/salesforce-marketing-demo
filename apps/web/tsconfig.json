@@ -9,6 +9,7 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "../../packages/contracts/src/**/*.ts",
+    "../../packages/evals/src/report.ts",
     "../../packages/ui/src/**/*.tsx"
   ],
   "exclude": ["../../packages/**/*.test.ts", "../../packages/**/*.test.tsx"]

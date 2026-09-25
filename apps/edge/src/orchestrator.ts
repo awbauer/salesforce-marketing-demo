@@ -25,7 +25,23 @@ import {
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { forcedToolCallMiddleware } from "./forced-tool-middleware";
+import {
+  MAX_OUTPUT_TOKENS,
+  MAX_TURN_STEPS,
+  orchestratorSystemPrompt,
+  requestedToolName,
+  selectRequiredTool,
+  stepToolChoice,
+  TURN_TIMEOUT,
+} from "./turn-policy";
 import { createTurnTracer, describeTurnError, type TurnRoute } from "./turn-trace";
+
+export {
+  requestedToolName,
+  requiredToolChoice,
+  selectRequiredTool,
+  stepToolChoice,
+} from "./turn-policy";
 
 export type AgentProps = { principalSubject: string; workspaceId: string };
 type OrchestratorBindings = CloudflareBindings & {
@@ -33,14 +49,15 @@ type OrchestratorBindings = CloudflareBindings & {
   CONFIRMATION_SIGNING_KEY?: string;
 };
 
-const MAX_TURN_STEPS = 4;
-// Salesforce agent calls can take tens of seconds, so the budget covers model steps plus tool time.
-const TURN_TIMEOUT = { totalMs: 150_000, chunkMs: 60_000, toolMs: 120_000 } as const;
-// Workers AI defaults to 256 output tokens, which gpt-oss reasoning can exhaust before any text.
-const MAX_OUTPUT_TOKENS = 4096;
-
 const IMAGE_PROMPT_VERSION = "campaign-image-v1";
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+// Matches the Apex attachment limit, which keeps the decoded image inside the synchronous heap.
+const ATTACH_MAX_BYTES = 3 * 1024 * 1024;
+const ACTIVITY_LABELS = {
+  "create-review-task": "Review request created",
+  "save-draft-campaign": "Draft campaign brief saved",
+  "attach-generated-image": "Campaign image attached",
+} as const;
 const IMAGE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 const SEMANTIC_FAILURE_PATTERN =
@@ -65,50 +82,6 @@ export function classifyToolResult(value: unknown): "success" | "unavailable" | 
   return SEMANTIC_FAILURE_PATTERN.test(collectResultText(value).join(" "))
     ? "unavailable"
     : "success";
-}
-
-export function requestedToolName(prompt: string) {
-  return /\b(?:readiness|ready|blocker|risk)\b/i.test(prompt)
-    ? "check_campaign_readiness"
-    : /\b(?:draft|write|create|generate)\b/i.test(prompt) &&
-        /\b(?:content|copy|subject line|preheader|email|sms|landing page)\b/i.test(prompt)
-      ? "draft_campaign_content"
-      : /\b(?:summarize|summary|performance|campaign)\b/i.test(prompt) &&
-          /\b(?:salesforce|campaign|701[a-zA-Z0-9]{12,15})\b/i.test(prompt)
-        ? "summarize_campaign"
-        : null;
-}
-
-export function selectRequiredTool(prompt: string, availableNames: string[]) {
-  const requested = requestedToolName(prompt);
-  return requested
-    ? availableNames.find((name) => name === requested || name.endsWith(`_${requested}`))
-    : undefined;
-}
-
-export function requiredToolChoice(requiredTool: string | undefined, stepNumber: number) {
-  if (!requiredTool) return undefined;
-  return stepNumber === 0
-    ? { toolChoice: { type: "tool" as const, toolName: requiredTool } }
-    : { toolChoice: "none" as const };
-}
-
-/**
- * Per-step tool settings. A forced step only sees its required tool, and text-only steps receive
- * no tools at all: Workers AI does not enforce `toolChoice: "none"`, so gpt-oss otherwise emits
- * malformed tool calls instead of the summary. The last allowed step is always text-only.
- */
-export function stepToolChoice(
-  requiredTool: string | undefined,
-  stepNumber: number,
-  maxSteps = MAX_TURN_STEPS,
-) {
-  const forced = requiredToolChoice(requiredTool, stepNumber);
-  if (forced && forced.toolChoice !== "none")
-    return { ...forced, activeTools: [requiredTool as string] };
-  if (forced || stepNumber >= maxSteps - 1)
-    return { toolChoice: "none" as const, activeTools: [] as string[] };
-  return undefined;
 }
 
 function latestUserText(messages: Array<{ role: string; parts?: Array<unknown> }>) {
@@ -192,6 +165,13 @@ function decodeBase64(value: string) {
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
   return bytes;
+}
+
+function encodeBase64(bytes: Uint8Array) {
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000)
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  return btoa(binary);
 }
 
 function json(value: unknown, init: ResponseInit = {}) {
@@ -464,15 +444,7 @@ export class MarketingOrchestrator extends AIChatAgent<
               model: workersAI(PROOF_DEFAULTS.orchestratorModel),
               middleware: forcedToolCallMiddleware,
             }),
-            system: [
-              "You are the Northstar marketing proof orchestrator.",
-              "Salesforce tool results are the only authority for Salesforce facts. Protocol success does not mean that a business result exists.",
-              "If a tool reports unavailable, empty, no business units, no records, or an error, explain that limitation and do not fill gaps from workspace presentation data.",
-              "Never say you reviewed Salesforce unless a Salesforce tool returned usable evidence.",
-              "Never claim a write, publish, send, or activation occurred. Keep customer PII out of responses.",
-              "Return accessible plain text only. Do not use Markdown, HTML, tables, pipe characters, asterisks, or emoji. Use short paragraphs and hyphen-prefixed bullets when a list helps.",
-              `Non-authoritative workspace record references: ${JSON.stringify(workspaceReferences)}`,
-            ].join(" "),
+            system: orchestratorSystemPrompt(workspaceReferences),
             messages: await convertToModelMessages(turnMessages),
             tools,
             prepareStep: ({ stepNumber }: { stepNumber: number }) =>
@@ -666,6 +638,64 @@ export class MarketingOrchestrator extends AIChatAgent<
     }
   }
 
+  private async findImageDraft(imageId: string) {
+    if (!/^[a-f0-9-]{36}$/.test(imageId)) return null;
+    await this.ensureImageDraftTable();
+    const draft = await this.env.APP_DB.prepare(
+      `SELECT image_id, campaign_id, channel, prompt_summary, content_hash, r2_key, lifecycle, expires_at
+       FROM campaign_image_drafts
+       WHERE image_id = ? AND workspace_id = ? AND principal_subject = ?`,
+    )
+      .bind(imageId, this.state.workspaceId, this.principalSubject)
+      .first<{
+        image_id: string;
+        campaign_id: string;
+        channel: string;
+        prompt_summary: string;
+        content_hash: string;
+        r2_key: string;
+        lifecycle: string;
+        expires_at: string;
+      }>();
+    return draft && Date.parse(draft.expires_at) > Date.now() ? draft : null;
+  }
+
+  /** Loads the confirmed draft from R2 and re-verifies it against the hash bound into the confirmation. */
+  private async loadConfirmedImage(
+    confirmation: ReturnType<typeof ConfirmationSchema.parse>,
+  ): Promise<
+    { imageBase64: string; contentHash: string; title: string; altText: string } | { error: string }
+  > {
+    const draft = confirmation.imageId ? await this.findImageDraft(confirmation.imageId) : null;
+    if (
+      draft?.lifecycle !== "draft" ||
+      draft.campaign_id !== confirmation.recordId ||
+      draft.content_hash !== confirmation.contentHash
+    )
+      return { error: "The confirmed image draft is no longer available. Generate it again." };
+    const object = await this.env.CAMPAIGN_ASSETS.get(draft.r2_key);
+    if (!object) return { error: "The confirmed image draft is no longer available." };
+    const bytes = new Uint8Array(await object.arrayBuffer());
+    if (bytes.byteLength > ATTACH_MAX_BYTES)
+      return { error: "The image is larger than the Salesforce attachment limit." };
+    if ((await sha256Bytes(bytes)) !== confirmation.contentHash)
+      return { error: "The stored image no longer matches the confirmed content hash." };
+    return {
+      imageBase64: encodeBase64(bytes),
+      contentHash: draft.content_hash,
+      title: `Northstar ${draft.channel} campaign image`,
+      altText: `Generated campaign image: ${draft.prompt_summary}`,
+    };
+  }
+
+  private async markImageAttached(imageId: string) {
+    await this.env.APP_DB.prepare(
+      "UPDATE campaign_image_drafts SET lifecycle = 'attached' WHERE image_id = ? AND workspace_id = ?",
+    )
+      .bind(imageId, this.state.workspaceId)
+      .run();
+  }
+
   private async serveCampaignImage(imageId: string) {
     await this.ensureImageDraftTable();
     const image = await this.env.APP_DB.prepare(
@@ -833,17 +863,45 @@ export class MarketingOrchestrator extends AIChatAgent<
         action?: unknown;
         recordId?: unknown;
         summary?: unknown;
+        imageId?: unknown;
       };
       const action = body.action;
       const recordId = body.recordId;
-      const summary = body.summary;
       if (
-        (action !== "save-draft-campaign" && action !== "create-review-task") ||
+        (action !== "save-draft-campaign" &&
+          action !== "create-review-task" &&
+          action !== "attach-generated-image") ||
         typeof recordId !== "string" ||
-        !/^[a-zA-Z0-9]{15,18}$/.test(recordId) ||
-        typeof summary !== "string" ||
-        !summary.trim()
+        !/^[a-zA-Z0-9]{15,18}$/.test(recordId)
       )
+        return json(
+          { error: { code: "VALIDATION_FAILED", message: "The confirmation request is invalid." } },
+          { status: 400 },
+        );
+      let summary = typeof body.summary === "string" ? body.summary.trim() : "";
+      let image: { imageId: string; contentHash: string } | undefined;
+      if (action === "attach-generated-image") {
+        const draft =
+          typeof body.imageId === "string" ? await this.findImageDraft(body.imageId) : null;
+        if (!draft || draft.campaign_id !== recordId || draft.lifecycle !== "draft")
+          return json(
+            {
+              error: {
+                code: "VALIDATION_FAILED",
+                message: "Choose an unexpired draft image generated for this campaign.",
+              },
+            },
+            { status: 400 },
+          );
+        image = { imageId: draft.image_id, contentHash: draft.content_hash };
+        // The summary is server-authored so the confirmation card states exactly what is attached.
+        summary =
+          `Attach the selected ${draft.channel} image draft to the campaign as a Salesforce file. Concept: ${draft.prompt_summary}`.slice(
+            0,
+            500,
+          );
+      }
+      if (!summary)
         return json(
           { error: { code: "VALIDATION_FAILED", message: "The confirmation request is invalid." } },
           { status: 400 },
@@ -854,8 +912,9 @@ export class MarketingOrchestrator extends AIChatAgent<
         JSON.stringify({
           action,
           recordId,
-          summary: summary.trim(),
+          summary,
           principal: this.principalSubject,
+          ...(image ?? {}),
         }),
       );
       const confirmation = ConfirmationSchema.parse({
@@ -865,9 +924,10 @@ export class MarketingOrchestrator extends AIChatAgent<
         principalSubject: this.principalSubject,
         requestHash,
         idempotencyKey,
-        summary: summary.trim(),
+        summary,
         expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
         status: "pending",
+        ...(image ?? {}),
       });
       await this.recordConfirmationAudit(confirmation, "pending");
       this.setState({ ...this.state, pendingConfirmation: confirmation });
@@ -924,7 +984,9 @@ export class MarketingOrchestrator extends AIChatAgent<
         const toolName =
           current.action === "create-review-task"
             ? "create_campaign_review_request"
-            : "save_campaign_brief";
+            : current.action === "attach-generated-image"
+              ? "attach_campaign_image"
+              : "save_campaign_brief";
         const entry = Object.entries(tools).find(([key]) => key.endsWith(`_${toolName}`));
         const tool = entry?.[1];
         if (!tool || !("execute" in tool) || typeof tool.execute !== "function")
@@ -959,6 +1021,15 @@ export class MarketingOrchestrator extends AIChatAgent<
           principalHex,
           confirmationSignature,
         ].join(".");
+        const imagePayload =
+          current.action === "attach-generated-image"
+            ? await this.loadConfirmedImage(current)
+            : undefined;
+        if (imagePayload && "error" in imagePayload)
+          return json(
+            { error: { code: "CONFLICT", message: imagePayload.error } },
+            { status: 409 },
+          );
         let upstream: unknown;
         try {
           upstream = await resolveToolResult(
@@ -968,6 +1039,7 @@ export class MarketingOrchestrator extends AIChatAgent<
                   {
                     campaignId: current.recordId,
                     ...(current.action === "save-draft-campaign" ? { brief: current.summary } : {}),
+                    ...(imagePayload ?? {}),
                     confirmationId: signedConfirmation,
                     requestHash: current.requestHash,
                     idempotencyKey: current.idempotencyKey,
@@ -992,7 +1064,20 @@ export class MarketingOrchestrator extends AIChatAgent<
         const campaignId = findToolField(upstream, "campaignId");
         const readBack = findToolField(upstream, "readBack");
         const sourceRecordId =
-          current.action === "create-review-task" ? findToolField(upstream, "taskId") : campaignId;
+          current.action === "create-review-task"
+            ? findToolField(upstream, "taskId")
+            : current.action === "attach-generated-image"
+              ? findToolField(upstream, "contentDocumentId")
+              : campaignId;
+        const imageDetails =
+          current.action === "attach-generated-image"
+            ? {
+                contentVersionId: findToolField(upstream, "contentVersionId"),
+                title: findToolField(upstream, "title"),
+                contentSize: findToolField(upstream, "contentSize"),
+                contentHash: findToolField(upstream, "contentHash"),
+              }
+            : {};
         const taskDetails =
           current.action === "create-review-task"
             ? {
@@ -1010,7 +1095,12 @@ export class MarketingOrchestrator extends AIChatAgent<
             (typeof taskDetails.subject !== "string" ||
               typeof taskDetails.priority !== "string" ||
               typeof taskDetails.dueDate !== "string" ||
-              typeof taskDetails.description !== "string"))
+              typeof taskDetails.description !== "string")) ||
+          (current.action === "attach-generated-image" &&
+            (typeof imageDetails.contentVersionId !== "string" ||
+              typeof imageDetails.title !== "string" ||
+              typeof imageDetails.contentSize !== "number" ||
+              imageDetails.contentHash !== current.contentHash))
         )
           return json(
             {
@@ -1023,16 +1113,14 @@ export class MarketingOrchestrator extends AIChatAgent<
           );
         const executed = { ...current, status: "executed" as const };
         await this.recordConfirmationAudit(current, "executed", sourceRecordId);
+        if (current.imageId) await this.markImageAttached(current.imageId);
         this.setState({
           ...this.state,
           pendingConfirmation: null,
           activity: [
             {
               id: `${current.action}-${sourceRecordId}`,
-              label:
-                current.action === "create-review-task"
-                  ? "Review request created"
-                  : "Draft campaign brief saved",
+              label: ACTIVITY_LABELS[current.action],
               detail: `Salesforce read-back · ${sourceRecordId}`,
               occurredAt: "Now",
               status: "complete",
@@ -1048,25 +1136,35 @@ export class MarketingOrchestrator extends AIChatAgent<
             campaignId,
             status: findToolField(upstream, "status"),
             ...taskDetails,
+            ...imageDetails,
             idempotencyKey: current.idempotencyKey,
             readBack: true,
           },
         });
       }
       const executed = { ...current, status: "executed" as const };
+      // The local fixture still verifies the confirmed image bytes so the flow is exercised end to end.
+      const fixtureImage =
+        current.action === "attach-generated-image"
+          ? await this.loadConfirmedImage(current)
+          : undefined;
+      if (fixtureImage && "error" in fixtureImage)
+        return json({ error: { code: "CONFLICT", message: fixtureImage.error } }, { status: 409 });
       const fixtureRecordId =
-        current.action === "create-review-task" ? "00T000000000001" : current.recordId;
+        current.action === "create-review-task"
+          ? "00T000000000001"
+          : current.action === "attach-generated-image"
+            ? "069000000000001"
+            : current.recordId;
       await this.recordConfirmationAudit(current, "executed", fixtureRecordId);
+      if (current.imageId) await this.markImageAttached(current.imageId);
       this.setState({
         ...this.state,
         pendingConfirmation: null,
         activity: [
           {
             id: `${current.action}-${current.id}`,
-            label:
-              current.action === "create-review-task"
-                ? "Review request created"
-                : "Draft campaign brief saved",
+            label: ACTIVITY_LABELS[current.action],
             detail: `Local fixture read-back · ${current.recordId}`,
             occurredAt: "Now",
             status: "complete",
@@ -1088,6 +1186,14 @@ export class MarketingOrchestrator extends AIChatAgent<
                 dueDate: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10),
                 description:
                   "Campaign context, readiness findings, and a human review checklist were recorded in Salesforce.",
+              }
+            : {}),
+          ...(fixtureImage
+            ? {
+                contentVersionId: "068000000000001",
+                title: fixtureImage.title,
+                contentSize: Math.floor((fixtureImage.imageBase64.length * 3) / 4),
+                contentHash: fixtureImage.contentHash,
               }
             : {}),
           idempotencyKey: current.idempotencyKey,

@@ -54,8 +54,13 @@ export type ConnectorState = z.infer<typeof ConnectorStateSchema>;
 
 export const ConfirmationSchema = z.object({
   id: z.string().uuid(),
-  action: z.enum(["save-draft-campaign", "create-review-task"]),
+  action: z.enum(["save-draft-campaign", "create-review-task", "attach-generated-image"]),
   recordId: z.string().regex(/^[a-zA-Z0-9]{15,18}$/),
+  imageId: z.string().uuid().optional(),
+  contentHash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   principalSubject: z.string().min(1),
   requestHash: z.string().regex(/^[a-f0-9]{64}$/),
   idempotencyKey: z.string().uuid(),
@@ -75,7 +80,7 @@ export const GeneratedCampaignImageSchema = z.object({
   height: z.literal(PROOF_DEFAULTS.imageSize),
   contentHash: z.string().regex(/^[a-f0-9]{64}$/),
   model: z.literal(PROOF_DEFAULTS.imageModel),
-  lifecycle: z.literal("draft"),
+  lifecycle: z.enum(["draft", "attached"]),
   expiresAt: z.string().datetime(),
 });
 export type GeneratedCampaignImage = z.infer<typeof GeneratedCampaignImageSchema>;
@@ -106,6 +111,7 @@ export const PHASE_2_CURATED_TOOLS = Object.freeze([
   ...PHASE_2_AUTONOMOUS_TOOLS,
   "save_campaign_brief",
   "create_campaign_review_request",
+  "attach_campaign_image",
 ] as const);
 
 export const InsightTileSchema = z.object({

@@ -9,7 +9,7 @@ test("opens the workspace, renders evidence tiles, and completes a durable turn"
   await expect(page.getByRole("heading", { name: "Campaign intelligence" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Insights" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Generate campaign visual" })).toBeVisible();
-  await expect(page.getByText("13 configured tools")).toBeVisible();
+  await expect(page.getByText("14 configured tools")).toBeVisible();
   const campaignLink = page.getByRole("link", { name: /Open in Salesforce/ }).first();
   await expect(campaignLink).toHaveAttribute(
     "href",
@@ -162,6 +162,219 @@ test("routes chat write requests to the confirmation flow without claiming a wri
   await expect(page.locator(".message.assistant").last()).toContainText("I didn't take it");
   await page.screenshot({
     path: `artifacts/evidence/WU-019/policy-route-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+});
+
+test("attaches a selected image draft only after an explicit confirmation", async ({
+  page,
+}, testInfo) => {
+  const imageId = "3f1d2c4b-5a6e-4f70-8a9b-0c1d2e3f4a5b";
+  const contentHash = "a".repeat(64);
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
+  const confirmation = {
+    id: "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a4b",
+    action: "attach-generated-image",
+    recordId: "701jV000004GglIQAS",
+    imageId,
+    contentHash,
+    principalSubject: "local-evaluator",
+    requestHash: "b".repeat(64),
+    idempotencyKey: "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d",
+    summary: "Attach the selected email image draft to the campaign as a Salesforce file.",
+    expiresAt,
+    status: "pending",
+  };
+  let attachRequest: unknown;
+  await page.route("**/agent/images/generate", (route) =>
+    route.fulfill({
+      status: 201,
+      json: {
+        id: imageId,
+        campaignId: "701jV000004GglIQAS",
+        imageUrl: `/agent/images/${imageId}`,
+        promptSummary: "A quiet trailhead at golden hour",
+        channel: "email",
+        width: 1024,
+        height: 1024,
+        contentHash,
+        model: "@cf/black-forest-labs/flux-2-klein-4b",
+        lifecycle: "draft",
+        expiresAt,
+      },
+    }),
+  );
+  await page.route(`**/agent/images/${imageId}`, (route) =>
+    route.fulfill({ status: 200, contentType: "image/png", body: png }),
+  );
+  await page.route("**/agent/confirmations", (route) => {
+    attachRequest = route.request().postDataJSON();
+    return route.fulfill({ status: 201, json: confirmation });
+  });
+  await page.route("**/agent/confirmations/execute", (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        confirmation: { ...confirmation, status: "executed" },
+        result: {
+          source: "salesforce",
+          recordId: "069jV000000AbCdQAK",
+          contentVersionId: "068jV000000AbCdQAK",
+          campaignId: "701jV000004GglIQAS",
+          title: "Northstar email campaign image",
+          contentSize: 1_482_113,
+          contentHash,
+          readBack: true,
+        },
+      },
+    }),
+  );
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Generate draft" }).click();
+  await page.getByRole("button", { name: "Attach to campaign" }).click();
+  expect(attachRequest).toEqual({
+    action: "attach-generated-image",
+    recordId: "701jV000004GglIQAS",
+    imageId,
+  });
+  const card = page.locator(".confirmation-card");
+  await expect(
+    card.getByRole("heading", { name: "Attach image to the Salesforce campaign?" }),
+  ).toBeVisible();
+  await expect(card.getByRole("img", { name: /Draft to attach/ })).toBeVisible();
+  await expect(card.getByText(contentHash.slice(0, 16))).toBeVisible();
+  await card.getByRole("button", { name: "Confirm attach" }).click();
+  const banner = page.locator(".success-banner");
+  await expect(banner.getByText("Image attached to the campaign")).toBeVisible();
+  await expect(banner.getByRole("link", { name: /Open file in Salesforce/ })).toHaveAttribute(
+    "href",
+    "https://pu1788182184076.my.salesforce.com/lightning/r/ContentDocument/069jV000000AbCdQAK/view",
+  );
+  await expect(page.getByText("Attached to the campaign", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Attach to campaign" })).toHaveCount(0);
+  await page.screenshot({
+    path: `artifacts/evidence/WU-020/image-attached-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+});
+
+test("shows an honest empty state before any evaluation run is published", async ({ page }) => {
+  await page.route("**/evals/latest.json", (route) => route.fulfill({ status: 404, body: "" }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Evaluations" }).first().click();
+  await expect(page.getByRole("heading", { name: "Evaluations" })).toBeVisible();
+  await expect(page.getByText("No evaluation run has been published yet.")).toBeVisible();
+  await page.getByRole("button", { name: "Back to workspace" }).click();
+  await expect(page.getByRole("heading", { name: "Campaign intelligence" })).toBeVisible();
+});
+
+test("renders model comparison, checks, scenarios, failures, and methodology", async ({
+  page,
+}, testInfo) => {
+  // Synthetic rendering fixture only; published results come from pnpm eval:live.
+  const checks = {
+    toolCorrect: true,
+    textProduced: true,
+    noToolErrors: true,
+    plainText: true,
+    noFalseWriteClaim: true,
+  };
+  const result = (model: string, passed: boolean, trial: number) => ({
+    model,
+    suite: "demo-scenarios",
+    caseId: "demo-summary",
+    prompt: "Summarize the sample campaign and its recent performance",
+    expected: "summarize_campaign",
+    trial,
+    route: "model",
+    toolCalled: passed ? "summarize_campaign" : null,
+    checks: { ...checks, toolCorrect: passed, textProduced: passed },
+    passed,
+    latencyMs: 8000,
+    inputTokens: 1200,
+    outputTokens: 300,
+    steps: passed ? "tool-calls,stop" : "tool-calls,length",
+    excerpt: passed ? "VERO Phase 1 Launch is in progress." : "",
+    ...(passed ? {} : { failure: "toolCorrect, textProduced" }),
+  });
+  const rates = (value: number) =>
+    Object.fromEntries(Object.keys(checks).map((check) => [check, value]));
+  const summary = (model: string, suite: string, passed: number) => ({
+    model,
+    suite,
+    passed,
+    total: 2,
+    checkRates: rates(passed / 2),
+    latencyP50Ms: 8000,
+    latencyP90Ms: 12000,
+    meanOutputTokens: 300,
+  });
+  const suites = ["demo-scenarios", "routing-pipeline", "routing-model-only"];
+  await page.route("**/evals/latest.json", (route) =>
+    route.fulfill({
+      json: {
+        generatedAt: "2026-09-26T01:00:00.000Z",
+        gitSha: "abcdef1",
+        productionModel: "@cf/openai/gpt-oss-120b",
+        methodology: {
+          summary: "Synthetic methodology summary.",
+          pipeline: ["Policy router step."],
+          toolResults: "Fixture tool results.",
+          suites: suites.map((id) => ({
+            id,
+            label: `Suite ${id}`,
+            description: "Desc.",
+            trials: 2,
+          })),
+          checks: Object.keys(checks).map((id) => ({
+            id,
+            label: `Check ${id}`,
+            definition: "Def.",
+          })),
+          limitations: ["Synthetic limitation."],
+        },
+        models: [
+          { id: "@cf/openai/gpt-oss-120b", label: "gpt-oss-120b", included: true },
+          { id: "@cf/openai/gpt-oss-20b", label: "gpt-oss-20b", included: true },
+          { id: "@cf/moonshotai/kimi-k2.6", label: "Kimi K2.6", included: false, note: "Errored." },
+        ],
+        summaries: suites.flatMap((suite) => [
+          summary("@cf/openai/gpt-oss-120b", suite, 2),
+          summary("@cf/openai/gpt-oss-20b", suite, 1),
+        ]),
+        results: [
+          result("@cf/openai/gpt-oss-120b", true, 0),
+          result("@cf/openai/gpt-oss-120b", true, 1),
+          result("@cf/openai/gpt-oss-20b", true, 0),
+          result("@cf/openai/gpt-oss-20b", false, 1),
+        ],
+      },
+    }),
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "Evaluations" }).first().click();
+  const models = page.locator(".evaluation-card", {
+    has: page.getByRole("heading", { name: "Model comparison" }),
+  });
+  await expect(models.getByText("In production")).toBeVisible();
+  await expect(models.getByRole("row", { name: /gpt-oss-20b/ })).toContainText("50%");
+  await expect(page.getByText("Kimi K2.6 not evaluated: Errored.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Failed turns .*\(1\)/ })).toBeVisible();
+  await page.getByText("called no tool").click();
+  await expect(page.getByText("tool-calls,length")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Methodology" })).toBeVisible();
+  await page.getByRole("button", { name: "Suite routing-model-only" }).click();
+  await expect(page.getByRole("button", { name: "Suite routing-model-only" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.screenshot({
+    path: `artifacts/evidence/WU-021/evaluations-${testInfo.project.name}.png`,
     fullPage: true,
   });
 });

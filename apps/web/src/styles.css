@@ -996,3 +996,236 @@ a {
     flex-direction: column;
   }
 }
+
+.attach-image-button {
+  justify-self: start;
+  margin-top: 6px;
+}
+.confirmation-image {
+  display: block;
+  width: 160px;
+  max-width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  margin: 8px 0;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
+.evaluations-view {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: auto;
+  background: var(--paper);
+}
+.conversation[hidden],
+.insights[hidden] {
+  display: none;
+}
+.evaluations-view > .section-header {
+  flex-shrink: 0;
+}
+.evaluations-back {
+  margin-left: auto;
+}
+.evaluations-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 24px 32px;
+  max-width: 1120px;
+}
+.evaluation-meta,
+.evaluation-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.evaluation-empty {
+  padding: 18px;
+  border: 1px dashed #cfdbcf;
+  border-radius: 10px;
+  background: #f4f7f1;
+}
+.evaluation-empty p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+.evaluation-card {
+  font-size: 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+  background: #fff;
+}
+.evaluation-card h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+.evaluation-card h4 {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  color: var(--forest);
+}
+.evaluation-card-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.evaluation-table-wrap {
+  margin-top: 10px;
+  overflow-x: auto;
+}
+.evaluation-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.evaluation-table th,
+.evaluation-table td {
+  padding: 8px 10px;
+  border-top: 1px solid #e0e7de;
+  text-align: left;
+  vertical-align: top;
+}
+.evaluation-table thead th {
+  border-top: none;
+  color: var(--muted);
+  font-weight: 650;
+  white-space: nowrap;
+}
+.evaluation-table tbody th {
+  font-weight: 650;
+  color: var(--forest);
+}
+.evaluation-prompt {
+  min-width: 220px;
+}
+.evaluation-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--lime);
+  color: var(--forest);
+  font-size: 10px;
+  font-weight: 700;
+}
+.pass-rate {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pass-rate small {
+  color: var(--muted);
+  font-weight: 500;
+}
+.pass-rate.good {
+  color: #2f7a4a;
+}
+.pass-rate.fair {
+  color: #8a5a12;
+}
+.pass-rate.poor {
+  color: #a4412f;
+}
+.rate-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.rate-track {
+  width: 56px;
+  height: 6px;
+  border-radius: 999px;
+  background: #e0e7de;
+  overflow: hidden;
+}
+.rate-fill {
+  display: block;
+  height: 100%;
+  background: #4da069;
+}
+.evaluation-tabs {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.evaluation-tabs button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #fff;
+  color: var(--forest);
+  font-size: 12px;
+  cursor: pointer;
+}
+.evaluation-tabs button[aria-pressed="true"] {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: #fff;
+}
+.evaluation-filter {
+  font-size: 12px;
+  color: var(--muted);
+}
+.evaluation-excluded {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.evaluation-failures {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+}
+.evaluation-failure {
+  border-top: 1px solid #e0e7de;
+  padding: 8px 0;
+}
+.evaluation-failures summary {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+.evaluation-failures summary span {
+  color: var(--muted);
+}
+.evaluation-failures dl,
+.evaluation-definitions {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.evaluation-failures dt,
+.evaluation-definitions dt {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--forest);
+}
+.evaluation-failures dd,
+.evaluation-definitions dd {
+  margin: 0;
+  font-size: 12px;
+  color: #3c4a42;
+}
+@media (max-width: 1000px) {
+  .evaluations-view {
+    grid-column: 2;
+  }
+}
+@media (max-width: 650px) {
+  .evaluations-body {
+    padding: 16px 16px 24px;
+  }
+}

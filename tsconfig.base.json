@@ -5,7 +5,8 @@
     "composite": false,
     "paths": {
       "@northstar/contracts": ["./packages/contracts/src/index.ts"],
-      "@northstar/ui": ["./packages/ui/src/index.tsx"]
+      "@northstar/ui": ["./packages/ui/src/index.tsx"],
+      "@northstar/evals/report": ["./packages/evals/src/report.ts"]
     },
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,

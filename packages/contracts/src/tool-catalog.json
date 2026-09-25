@@ -80,6 +80,13 @@
       "source": "salesforce-apex",
       "autonomous": false,
       "allowedWrite": "create-review-task"
+    },
+    {
+      "name": "attach_campaign_image",
+      "riskClass": "write",
+      "source": "salesforce-apex",
+      "autonomous": false,
+      "allowedWrite": "attach-generated-image"
     }
   ]
 }
