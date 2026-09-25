@@ -7,7 +7,9 @@ import {
   type OrchestratorState,
   PHASE_2_AUTONOMOUS_TOOLS,
   PHASE_2_CURATED_TOOLS,
+  POLICY_RESPONSES,
   PROOF_DEFAULTS,
+  classifyPolicyIntent,
 } from "@northstar/contracts";
 import {
   convertToModelMessages,
@@ -23,7 +25,7 @@ import {
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { forcedToolCallMiddleware } from "./forced-tool-middleware";
-import { createTurnTracer, describeTurnError } from "./turn-trace";
+import { createTurnTracer, describeTurnError, type TurnRoute } from "./turn-trace";
 
 export type AgentProps = { principalSubject: string; workspaceId: string };
 type OrchestratorBindings = CloudflareBindings & {
@@ -336,25 +338,25 @@ async function resolveToolResult(value: unknown) {
   return await Promise.resolve(value);
 }
 
-function localFixtureStream(abortSignal?: AbortSignal): ReadableStream<UIMessageChunk> {
+/** A scripted turn with no model call, used for the local fixture and policy responses. */
+function scriptedTurnStream(
+  texts: string[],
+  { reasoning, abortSignal }: { reasoning?: string; abortSignal?: AbortSignal } = {},
+): ReadableStream<UIMessageChunk> {
   const reasoningId = crypto.randomUUID();
   const textId = crypto.randomUUID();
   const chunks: UIMessageChunk[] = [
     { type: "start" },
     { type: "start-step" },
-    { type: "reasoning-start", id: reasoningId },
-    {
-      type: "reasoning-delta",
-      id: reasoningId,
-      delta: "The request needs no Salesforce tool; answer from the fictional local fixture.",
-    },
-    { type: "reasoning-end", id: reasoningId },
+    ...(reasoning
+      ? ([
+          { type: "reasoning-start", id: reasoningId },
+          { type: "reasoning-delta", id: reasoningId, delta: reasoning },
+          { type: "reasoning-end", id: reasoningId },
+        ] satisfies UIMessageChunk[])
+      : []),
     { type: "text-start", id: textId },
-    ...[
-      "I reviewed the fictional Northstar sample campaign. ",
-      "The strongest signal is stable engagement, while accessibility copy and the commercial-consent scope remain the two readiness blockers. ",
-      "I have not changed, published, or sent anything.",
-    ].map((delta) => ({ type: "text-delta" as const, id: textId, delta })),
+    ...texts.map((delta) => ({ type: "text-delta" as const, id: textId, delta })),
     { type: "text-end", id: textId },
     { type: "finish-step" },
     { type: "finish", finishReason: "stop" },
@@ -366,6 +368,38 @@ function localFixtureStream(abortSignal?: AbortSignal): ReadableStream<UIMessage
       else controller.enqueue(next);
     },
   });
+}
+
+const POLICY_ROUTER = "Northstar policy router";
+
+function scriptedResponse(
+  texts: string[],
+  options: {
+    model: string;
+    route?: TurnRoute;
+    reasoning?: string;
+    abortSignal?: AbortSignal;
+  },
+) {
+  const stream = createUIMessageStream({
+    execute: async ({ writer }) => {
+      const tracer = createTurnTracer(writer, {
+        model: options.model,
+        toolCount: 0,
+        timeoutSeconds: TURN_TIMEOUT.totalMs / 1000,
+        userAbortSignal: options.abortSignal,
+        ...(options.route ? { route: options.route } : {}),
+      });
+      await tracer.pipe(
+        scriptedTurnStream(texts, {
+          reasoning: options.reasoning,
+          abortSignal: options.abortSignal,
+        }),
+      );
+    },
+    onError: describeTurnError,
+  });
+  return createUIMessageStreamResponse({ stream });
 }
 
 export class MarketingOrchestrator extends AIChatAgent<
@@ -407,28 +441,20 @@ export class MarketingOrchestrator extends AIChatAgent<
     const prompt = latestUserText(turnMessages);
     const requestedTool = requestedToolName(prompt);
     const requiredTool = selectRequiredTool(prompt, Object.keys(tools));
-    if (requestedTool && !requiredTool) {
-      const stream = createUIMessageStream({
-        execute: async ({ writer }) => {
-          const id = crypto.randomUUID();
-          writer.write({ type: "text-start", id });
-          writer.write({
-            type: "text-delta",
-            id,
-            delta:
-              "Salesforce is connected, but the governed tool catalog is not ready for this request. Check the Salesforce connection status and retry. I did not substitute demo data.",
-          });
-          writer.write({ type: "text-end", id });
-        },
-      });
-      return createUIMessageStreamResponse({ stream });
-    }
+    if (requestedTool && !requiredTool)
+      return scriptedResponse(
+        [
+          "Salesforce is connected, but the governed tool catalog is not ready for this request. Check the Salesforce connection status and retry. I did not substitute demo data.",
+        ],
+        { model: POLICY_ROUTER, route: "catalog-unavailable", abortSignal },
+      );
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         const tracer = createTurnTracer(writer, {
           model: PROOF_DEFAULTS.orchestratorModel,
           toolCount: Object.keys(tools).length,
           requiredTool,
+          route: "model",
           timeoutSeconds: TURN_TIMEOUT.totalMs / 1000,
           userAbortSignal: abortSignal,
         });
@@ -1081,22 +1107,28 @@ export class MarketingOrchestrator extends AIChatAgent<
     options?: OnChatMessageOptions,
   ): Promise<Response> {
     if (options?.abortSignal?.aborted) return new Response(null, { status: 499 });
-    if ((this.env.ENVIRONMENT as string) !== "local") {
-      return this.productionChatResponse(this.messages, options?.abortSignal);
-    }
     const abortSignal = options?.abortSignal;
-    const stream = createUIMessageStream({
-      execute: async ({ writer }) => {
-        const tracer = createTurnTracer(writer, {
-          model: "local-fixture",
-          toolCount: 0,
-          timeoutSeconds: TURN_TIMEOUT.totalMs / 1000,
-          userAbortSignal: abortSignal,
-        });
-        await tracer.pipe(localFixtureStream(abortSignal));
+    // Writes and forbidden actions never reach the model, so it cannot claim they happened.
+    const policyIntent = classifyPolicyIntent(latestUserText(evidenceTurnMessages(this.messages)));
+    if (policyIntent)
+      return scriptedResponse([POLICY_RESPONSES[policyIntent]], {
+        model: POLICY_ROUTER,
+        route: policyIntent,
+        abortSignal,
+      });
+    if ((this.env.ENVIRONMENT as string) !== "local")
+      return this.productionChatResponse(this.messages, abortSignal);
+    return scriptedResponse(
+      [
+        "I reviewed the fictional Northstar sample campaign. ",
+        "The strongest signal is stable engagement, while accessibility copy and the commercial-consent scope remain the two readiness blockers. ",
+        "I have not changed, published, or sent anything.",
+      ],
+      {
+        model: "local-fixture",
+        reasoning: "The request needs no Salesforce tool; answer from the fictional local fixture.",
+        abortSignal,
       },
-      onError: describeTurnError,
-    });
-    return createUIMessageStreamResponse({ stream });
+    );
   }
 }

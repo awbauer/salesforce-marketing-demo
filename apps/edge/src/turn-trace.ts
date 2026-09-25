@@ -27,10 +27,13 @@ function isTimeout(reason: string) {
   return /timeout|timed out/i.test(reason);
 }
 
+export type TurnRoute = NonNullable<Extract<TurnTraceEvent, { kind: "turn-start" }>["route"]>;
+
 export type TurnTraceOptions = {
   model: string;
   toolCount: number;
   requiredTool?: string;
+  route?: TurnRoute;
   timeoutSeconds: number;
   /** The caller's own signal; an abort here means the user stopped the turn. */
   userAbortSignal?: AbortSignal;
@@ -61,6 +64,7 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
     model: options.model,
     toolCount: options.toolCount,
     ...(options.requiredTool ? { requiredTool: options.requiredTool } : {}),
+    ...(options.route ? { route: options.route } : {}),
   });
 
   return {

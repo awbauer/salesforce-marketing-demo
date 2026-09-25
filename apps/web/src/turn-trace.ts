@@ -118,6 +118,14 @@ export function turnTrace(message: UIMessage): TurnTrace | null {
   return parsed.success ? parsed.data : null;
 }
 
+const ROUTE_DETAIL = {
+  "confirmation-required":
+    "Handled by the policy router without a model call: writes need the confirmation flow",
+  unsupported: "Handled by the policy router without a model call: this action is blocked",
+  "catalog-unavailable":
+    "Handled without a model call: the governed Salesforce tool catalog is not ready",
+} as const;
+
 const json = (value: unknown) => JSON.stringify(sanitizedPayload(value), null, 2);
 const plural = (count: number, noun: string) =>
   `${count.toLocaleString()} ${noun}${count === 1 ? "" : "s"}`;
@@ -193,7 +201,9 @@ function rowsFromTrace(message: UIMessage, trace: TurnTrace): TraceRow[] {
             kind: "turn",
             label: "Turn started",
             detail: [
-              `Model ${event.model}`,
+              event.route && event.route !== "model"
+                ? ROUTE_DETAIL[event.route]
+                : `Model ${event.model}`,
               `${plural(event.toolCount, "governed tool")} available`,
               event.requiredTool ? `routed to ${readableToolName(event.requiredTool)}` : null,
             ]
