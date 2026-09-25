@@ -24,7 +24,7 @@ async function seedDraft(imageId: string, campaignId = CAMPAIGN_ID) {
   const contentHash = await sha256(PNG);
   await env.APP_DB.prepare(
     `INSERT INTO campaign_image_drafts VALUES (?, 'northstar-demo', 'local-evaluator', ?, 'email',
-      'A quiet trailhead at golden hour', 'campaign-image-v1', 'test-model', 1024, 1024, ?, ?,
+      'A quiet trailhead at golden hour', 'campaign-image-v1', '@cf/black-forest-labs/flux-2-klein-4b', 1024, 1024, ?, ?,
       'draft', NULL, ?, ?)`,
   )
     .bind(
@@ -112,5 +112,36 @@ describe("confirmed campaign image attachment", () => {
     const imageId = crypto.randomUUID();
     await seedDraft(imageId, "701jV000009ZZZZQAS");
     expect((await preflight(imageId)).status).toBe(400);
+  });
+
+  it("lists this user's variants and rejects a draft so it can no longer be attached", async () => {
+    const first = crypto.randomUUID();
+    const second = crypto.randomUUID();
+    await seedDraft(first);
+    await seedDraft(second);
+    const listed = await SELF.fetch(`https://example.test/agent/images?campaignId=${CAMPAIGN_ID}`);
+    const { images } = (await listed.json()) as {
+      images: Array<{ id: string; lifecycle: string }>;
+    };
+    expect(images.map((image) => image.id)).toEqual(expect.arrayContaining([first, second]));
+
+    const rejected = await SELF.fetch(`https://example.test/agent/images/${first}/reject`, {
+      method: "POST",
+    });
+    expect(rejected.status).toBe(200);
+    const after = (await (
+      await SELF.fetch(`https://example.test/agent/images?campaignId=${CAMPAIGN_ID}`)
+    ).json()) as { images: Array<{ id: string; lifecycle: string }> };
+    expect(after.images.find((image) => image.id === first)?.lifecycle).toBe("rejected");
+    expect((await preflight(first)).status).toBe(400);
+    expect(
+      (await SELF.fetch(`https://example.test/agent/images/${first}/reject`, { method: "POST" }))
+        .status,
+    ).toBe(409);
+  });
+
+  it("does not list variants for an invalid campaign", async () => {
+    const response = await SELF.fetch("https://example.test/agent/images?campaignId=bad");
+    await expect(response.json()).resolves.toEqual({ images: [] });
   });
 });

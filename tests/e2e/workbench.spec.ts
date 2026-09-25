@@ -439,3 +439,55 @@ test("reflects operator kill switches and offers the audit export", async ({ pag
     "/agent/audit/export",
   );
 });
+
+test("reviews persisted image variants and rejects one so it cannot be attached", async ({
+  page,
+}, testInfo) => {
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  const variant = (id: string, promptSummary: string) => ({
+    id,
+    campaignId: "701jV000004GglIQAS",
+    imageUrl: `/agent/images/${id}`,
+    promptSummary,
+    channel: "email",
+    width: 1024,
+    height: 1024,
+    contentHash: "c".repeat(64),
+    model: "@cf/black-forest-labs/flux-2-klein-4b",
+    lifecycle: "draft",
+    expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+  });
+  const newest = variant("11111111-2222-4333-8444-555555555555", "Sunrise over a ridge trail");
+  const older = variant("66666666-7777-4888-8999-000000000000", "Campfire with gear laid out");
+  let rejected = "";
+  await page.route("**/agent/images?campaignId=*", (route) =>
+    route.fulfill({ json: { images: [newest, older] } }),
+  );
+  await page.route(/\/agent\/images\/[a-f0-9-]{36}$/, (route) =>
+    route.fulfill({ status: 200, contentType: "image/png", body: png }),
+  );
+  await page.route(/\/agent\/images\/[a-f0-9-]{36}\/reject$/, (route) => {
+    rejected = route.request().url().split("/").at(-2) ?? "";
+    return route.fulfill({ json: { id: rejected, lifecycle: "rejected" } });
+  });
+
+  await page.goto("/");
+  const gallery = page.getByRole("group", { name: "Variants (2)" });
+  await expect(gallery.getByRole("button")).toHaveCount(2);
+  await expect(page.locator(".generated-image-summary")).toHaveText("Sunrise over a ridge trail");
+  await gallery.getByRole("button", { name: /Campfire with gear laid out/ }).click();
+  await expect(page.locator(".generated-image-summary")).toHaveText("Campfire with gear laid out");
+  await page.getByRole("button", { name: "Reject variant" }).click();
+  expect(rejected).toBe(older.id);
+  await expect(gallery.getByRole("button", { name: /Campfire.*\(rejected\)/ })).toBeVisible();
+  await gallery.getByRole("button", { name: /Campfire/ }).click();
+  await expect(page.getByRole("button", { name: "Attach to campaign" })).toHaveCount(0);
+  await expect(page.getByText("Rejected variant")).toBeVisible();
+  await page.screenshot({
+    path: `artifacts/evidence/WU-024/image-variants-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+});

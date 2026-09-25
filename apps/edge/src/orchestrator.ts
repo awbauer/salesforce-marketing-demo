@@ -831,6 +831,78 @@ export class MarketingOrchestrator extends AIChatAgent<
     };
   }
 
+  /** Lists this user's unexpired variants for a campaign, newest first, for review and selection. */
+  private async listImageDrafts(campaignId: string | null) {
+    if (!campaignId || !/^[a-zA-Z0-9]{15,18}$/.test(campaignId)) return [];
+    await this.ensureImageDraftTable();
+    const rows = await this.env.APP_DB.prepare(
+      `SELECT image_id, campaign_id, channel, prompt_summary, model_id, width, height, content_hash,
+         lifecycle, expires_at
+       FROM campaign_image_drafts
+       WHERE workspace_id = ? AND principal_subject = ? AND campaign_id = ? AND expires_at > ?
+       ORDER BY created_at DESC LIMIT 24`,
+    )
+      .bind(this.state.workspaceId, this.principalSubject, campaignId, new Date().toISOString())
+      .all<{
+        image_id: string;
+        campaign_id: string;
+        channel: string;
+        prompt_summary: string;
+        model_id: string;
+        width: number;
+        height: number;
+        content_hash: string;
+        lifecycle: string;
+        expires_at: string;
+      }>();
+    return rows.results.flatMap((row) => {
+      const parsed = GeneratedCampaignImageSchema.safeParse({
+        id: row.image_id,
+        campaignId: row.campaign_id,
+        imageUrl: `/agent/images/${row.image_id}`,
+        promptSummary: row.prompt_summary,
+        channel: row.channel,
+        width: row.width,
+        height: row.height,
+        contentHash: row.content_hash,
+        model: row.model_id,
+        lifecycle: row.lifecycle,
+        expiresAt: row.expires_at,
+      });
+      return parsed.success ? [parsed.data] : [];
+    });
+  }
+
+  private async rejectImageDraft(imageId: string) {
+    const draft = await this.findImageDraft(imageId);
+    if (draft?.lifecycle !== "draft")
+      return json(
+        {
+          error: {
+            code: "CONFLICT",
+            message: "Only an unexpired, unattached draft can be rejected.",
+          },
+        },
+        { status: 409 },
+      );
+    if (this.state.pendingConfirmation?.imageId === imageId)
+      return json(
+        {
+          error: {
+            code: "CONFLICT",
+            message: "Cancel the pending attachment before rejecting it.",
+          },
+        },
+        { status: 409 },
+      );
+    await this.env.APP_DB.prepare(
+      "UPDATE campaign_image_drafts SET lifecycle = 'rejected' WHERE image_id = ? AND workspace_id = ?",
+    )
+      .bind(imageId, this.state.workspaceId)
+      .run();
+    return json({ id: imageId, lifecycle: "rejected" });
+  }
+
   private async markImageAttached(imageId: string) {
     await this.env.APP_DB.prepare(
       "UPDATE campaign_image_drafts SET lifecycle = 'attached' WHERE image_id = ? AND workspace_id = ?",
@@ -979,6 +1051,10 @@ export class MarketingOrchestrator extends AIChatAgent<
       return json({ retentionDays: TURN_HISTORY_RETENTION_DAYS, turns: this.listTurns() });
     if (url.pathname.endsWith("/images/generate") && request.method === "POST")
       return this.generateCampaignImage(request);
+    if (url.pathname.endsWith("/images") && request.method === "GET")
+      return json({ images: await this.listImageDrafts(url.searchParams.get("campaignId")) });
+    const rejectMatch = url.pathname.match(/\/images\/([a-f0-9-]{36})\/reject$/);
+    if (rejectMatch && request.method === "POST") return this.rejectImageDraft(rejectMatch[1]);
     const imageMatch = url.pathname.match(/\/images\/([a-f0-9-]{36})$/);
     if (imageMatch && request.method === "GET") return this.serveCampaignImage(imageMatch[1]);
     if (url.pathname.endsWith("/salesforce/status")) return json(this.syncConnector());
