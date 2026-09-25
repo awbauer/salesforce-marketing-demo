@@ -289,6 +289,7 @@ Keep image generation inside the Cloudflare application rather than inventing an
 - Validate the returned media type, byte size, and dimensions; calculate a content hash; then store the image under an R2 draft key such as `drafts/{tenantId}/{conversationId}/{imageId}`.
 - Persist model ID, prompt version and summary, seed when returned, dimensions, hash, R2 key, creator, campaign reference, and lifecycle state in D1/audit storage.
 - Return a native `generatedCampaignImageCard` with a short-lived authorized image URL. Generated images are drafts, not approved brand assets.
+- Make orchestration observable in the workbench: show the host decision summary, curated tool discovery, Salesforce-agent and host-owned tool calls, lifecycle state, source/read-back boundary, and expandable sanitized request/response payloads. Never expose credentials, confirmation material, customer PII, or private model chain-of-thought.
 - Require a human to select a variant and separately confirm its attachment to Salesforce. The attachment action performs applicable content checks and reads back the authoritative asset reference.
 - Cap the proof at 100 generated images or USD 25 of Workers AI image spend, whichever comes first, with one in-flight generation per user. A retry creates a new record rather than overwriting a variant.
 - Delete every R2 image object after seven days, including a selected variant after it has been attached to Salesforce. Reference images are disabled.

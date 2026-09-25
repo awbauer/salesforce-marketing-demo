@@ -2,6 +2,7 @@ import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import {
   ConfirmationSchema,
   type ConnectorState,
+  GeneratedCampaignImageSchema,
   initialOrchestratorState,
   type OrchestratorState,
   PHASE_2_AUTONOMOUS_TOOLS,
@@ -22,6 +23,39 @@ type OrchestratorBindings = CloudflareBindings & {
   SALESFORCE_MCP_URL?: string;
   CONFIRMATION_SIGNING_KEY?: string;
 };
+
+const IMAGE_PROMPT_VERSION = "campaign-image-v1";
+const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+const IMAGE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function validateImageConcept(value: unknown) {
+  if (typeof value !== "string") return null;
+  const concept = value.trim().replace(/\s+/g, " ");
+  if (concept.length < 8 || concept.length > 280) return null;
+  if (/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i.test(concept)) return null;
+  if (/(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/.test(concept)) return null;
+  if (
+    /ignore (?:all |any )?(?:previous|prior) instructions|system prompt|customer list/i.test(
+      concept,
+    )
+  )
+    return null;
+  return concept;
+}
+
+function pngDimensions(bytes: Uint8Array) {
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (bytes.length < 24 || signature.some((byte, index) => bytes[index] !== byte)) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
+function decodeBase64(value: string) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
 
 function json(value: unknown, init: ResponseInit = {}) {
   const headers = new Headers(init.headers);
@@ -131,6 +165,11 @@ async function sha256(value: string) {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+async function sha256Bytes(value: Uint8Array) {
+  const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(value).buffer);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 async function hmacSha256Hex(key: string, value: string) {
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
@@ -172,6 +211,196 @@ export class MarketingOrchestrator extends AIChatAgent<
   maxPersistedMessages = 100;
   waitForMcpConnections = false;
   private principalSubject = "unknown";
+  private imageGenerationInFlight = false;
+
+  private async ensureImageDraftTable() {
+    if ((this.env.ENVIRONMENT as string) !== "local") return;
+    await this.env.APP_DB.exec(
+      "CREATE TABLE IF NOT EXISTS campaign_image_drafts (image_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, principal_subject TEXT NOT NULL, campaign_id TEXT NOT NULL, channel TEXT NOT NULL, prompt_summary TEXT NOT NULL, prompt_version TEXT NOT NULL, model_id TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL, content_hash TEXT NOT NULL, r2_key TEXT NOT NULL UNIQUE, lifecycle TEXT NOT NULL, seed INTEGER, created_at TEXT NOT NULL, expires_at TEXT NOT NULL)",
+    );
+  }
+
+  private async generateCampaignImage(request: Request) {
+    if (this.imageGenerationInFlight)
+      return json(
+        { error: { code: "CONFLICT", message: "An image is already being generated." } },
+        { status: 409 },
+      );
+    const body = (await request.json()) as {
+      campaignId?: unknown;
+      channel?: unknown;
+      concept?: unknown;
+      seed?: unknown;
+    };
+    if (typeof body.campaignId !== "string" || !/^[a-zA-Z0-9]{15,18}$/.test(body.campaignId))
+      return json(
+        { error: { code: "VALIDATION_FAILED", message: "Choose a valid campaign." } },
+        { status: 400 },
+      );
+    if (body.channel !== "email" && body.channel !== "web" && body.channel !== "social")
+      return json(
+        { error: { code: "VALIDATION_FAILED", message: "Choose a supported channel." } },
+        { status: 400 },
+      );
+    const concept = validateImageConcept(body.concept);
+    if (!concept)
+      return json(
+        {
+          error: {
+            code: "VALIDATION_FAILED",
+            message:
+              "Use a short creative concept without contact details, customer data, or embedded instructions.",
+          },
+        },
+        { status: 400 },
+      );
+    const seed =
+      typeof body.seed === "number" && Number.isInteger(body.seed) && body.seed >= 0
+        ? body.seed
+        : undefined;
+    await this.ensureImageDraftTable();
+    const usage = await this.env.APP_DB.prepare(
+      "SELECT COUNT(*) AS count FROM campaign_image_drafts WHERE workspace_id = ?",
+    )
+      .bind(this.state.workspaceId)
+      .first<{ count: number }>();
+    if ((usage?.count ?? 0) >= 100)
+      return json(
+        { error: { code: "RATE_LIMITED", message: "The 100-image proof cap has been reached." } },
+        { status: 429 },
+      );
+
+    this.imageGenerationInFlight = true;
+    try {
+      const prompt = [
+        "Create a polished square campaign image for the fictional Northstar outdoor lifestyle brand.",
+        `Channel: ${body.channel}.`,
+        `Creative concept: ${concept}.`,
+        "Editorial photography, warm natural light, inclusive but no identifiable real person, no text, no logo, no product claims.",
+      ].join(" ");
+      const form = new FormData();
+      form.append("prompt", prompt);
+      form.append("width", String(1024));
+      form.append("height", String(1024));
+      if (seed !== undefined) form.append("seed", String(seed));
+      const encoded = new Response(form);
+      const result = await this.env.AI.run("@cf/black-forest-labs/flux-2-klein-4b", {
+        multipart: {
+          body: encoded.body ?? undefined,
+          contentType: encoded.headers.get("content-type") ?? undefined,
+        },
+      });
+      if (!result.image)
+        return json(
+          {
+            error: { code: "UPSTREAM_UNAVAILABLE", message: "The image model returned no image." },
+          },
+          { status: 502 },
+        );
+      const bytes = decodeBase64(result.image);
+      const dimensions = pngDimensions(bytes);
+      if (
+        bytes.byteLength > IMAGE_MAX_BYTES ||
+        dimensions?.width !== 1024 ||
+        dimensions.height !== 1024
+      )
+        return json(
+          {
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message: "The generated image failed media validation.",
+            },
+          },
+          { status: 502 },
+        );
+      const id = crypto.randomUUID();
+      const contentHash = await sha256Bytes(bytes);
+      const ownerHash = (await sha256(this.principalSubject)).slice(0, 24);
+      const r2Key = `drafts/${this.state.workspaceId}/${ownerHash}/${id}.png`;
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + IMAGE_RETENTION_MS).toISOString();
+      await this.env.CAMPAIGN_ASSETS.put(r2Key, bytes, {
+        httpMetadata: { contentType: "image/png" },
+        customMetadata: {
+          campaignId: body.campaignId,
+          lifecycle: "draft",
+          expiresAt,
+          promptVersion: IMAGE_PROMPT_VERSION,
+        },
+      });
+      await this.env.APP_DB.prepare(
+        `INSERT INTO campaign_image_drafts (
+          image_id, workspace_id, principal_subject, campaign_id, channel, prompt_summary,
+          prompt_version, model_id, width, height, content_hash, r2_key, lifecycle, seed,
+          created_at, expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
+      )
+        .bind(
+          id,
+          this.state.workspaceId,
+          this.principalSubject,
+          body.campaignId,
+          body.channel,
+          concept,
+          IMAGE_PROMPT_VERSION,
+          this.env.CAMPAIGN_IMAGE_MODEL,
+          dimensions.width,
+          dimensions.height,
+          contentHash,
+          r2Key,
+          seed ?? null,
+          now.toISOString(),
+          expiresAt,
+        )
+        .run();
+      return json(
+        GeneratedCampaignImageSchema.parse({
+          id,
+          campaignId: body.campaignId,
+          imageUrl: `/agent/images/${id}`,
+          promptSummary: concept,
+          channel: body.channel,
+          width: dimensions.width,
+          height: dimensions.height,
+          contentHash,
+          model: this.env.CAMPAIGN_IMAGE_MODEL,
+          lifecycle: "draft",
+          expiresAt,
+        }),
+        { status: 201 },
+      );
+    } finally {
+      this.imageGenerationInFlight = false;
+    }
+  }
+
+  private async serveCampaignImage(imageId: string) {
+    await this.ensureImageDraftTable();
+    const image = await this.env.APP_DB.prepare(
+      `SELECT r2_key, expires_at FROM campaign_image_drafts
+       WHERE image_id = ? AND workspace_id = ? AND principal_subject = ?`,
+    )
+      .bind(imageId, this.state.workspaceId, this.principalSubject)
+      .first<{ r2_key: string; expires_at: string }>();
+    if (!image || Date.parse(image.expires_at) <= Date.now())
+      return json(
+        { error: { code: "NOT_FOUND", message: "Image draft not found." } },
+        { status: 404 },
+      );
+    const object = await this.env.CAMPAIGN_ASSETS.get(image.r2_key);
+    if (!object)
+      return json(
+        { error: { code: "NOT_FOUND", message: "Image draft not found." } },
+        { status: 404 },
+      );
+    return new Response(object.body, {
+      headers: {
+        "content-type": object.httpMetadata?.contentType ?? "image/png",
+        "cache-control": "private, no-store",
+        "content-security-policy": "default-src 'none'; sandbox",
+      },
+    });
+  }
 
   override async onStart(props?: AgentProps) {
     await super.onStart(props);
@@ -254,6 +483,10 @@ export class MarketingOrchestrator extends AIChatAgent<
 
   override async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname.endsWith("/images/generate") && request.method === "POST")
+      return this.generateCampaignImage(request);
+    const imageMatch = url.pathname.match(/\/images\/([a-f0-9-]{36})$/);
+    if (imageMatch && request.method === "GET") return this.serveCampaignImage(imageMatch[1]);
     if (url.pathname.endsWith("/salesforce/status")) return json(this.syncConnector());
     if (url.pathname.endsWith("/salesforce/connect") && request.method === "POST") {
       const endpoint = this.env.SALESFORCE_MCP_URL;
