@@ -19,8 +19,23 @@ export function normalizeAssistantText(text: string) {
         if (typeof candidate === "string") normalized = candidate;
       }
     } catch {
-      // Preserve malformed model output as plain text instead of hiding it.
+      // Fall through to the partial-envelope recovery below.
     }
+  }
+  const partial = normalized.match(/^\{\s*"(?:message|text|response)"\s*:\s*"([\s\S]*)$/);
+  if (partial) {
+    let fragment = (partial[1] ?? "").replace(/"\s*\}\s*$/, "");
+    try {
+      fragment = JSON.parse(`"${fragment.replace(/"$/, "")}"`) as string;
+    } catch {
+      fragment = fragment
+        .replace(/\\n/g, "\n")
+        .replace(/\\r/g, "\n")
+        .replace(/\\t/g, "\t")
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, "\\");
+    }
+    normalized = fragment;
   }
   return normalized
     .replace(/<br\s*\/?\s*>/gi, "\n")
