@@ -10,6 +10,8 @@ const required = [
   '"new_sqlite_classes"',
   '"CAMPAIGN_ASSETS"',
   '"APP_DB"',
+  '"database_id": "120cf689-0652-476c-9e4e-8af5b83e3627"',
+  '"bucket_name": "northstar-marketing-workbench-pot-campaign-assets"',
 ];
 const forbidden = [
   "publish",

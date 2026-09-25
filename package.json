@@ -11,6 +11,8 @@
   "scripts": {
     "build": "vite build",
     "contracts:check": "node scripts/check-invariants.mjs",
+    "deploy": "pnpm build && wrangler deploy --config wrangler.jsonc",
+    "deploy:dry-run": "pnpm build && wrangler deploy --dry-run --config wrangler.jsonc",
     "dev": "vite",
     "docs:check": "node scripts/check-docs.mjs",
     "eval": "node scripts/run-evals.mjs",

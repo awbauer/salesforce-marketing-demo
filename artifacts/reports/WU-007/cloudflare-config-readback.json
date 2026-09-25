@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-09-25T00:45:52Z",
+  "status": "passed",
+  "externalMutation": false,
+  "targetWorker": "northstar-marketing-workbench-pot",
+  "bindings": {
+    "d1": "northstar-marketing-workbench-pot",
+    "r2": "northstar-marketing-workbench-pot-campaign-assets",
+    "durableObject": "MarketingOrchestrator",
+    "ai": "AI",
+    "assets": "ASSETS"
+  },
+  "runtimeSecretNames": [
+    "ACCESS_AUD",
+    "ACCESS_TEAM_DOMAIN",
+    "CONFIRMATION_SIGNING_KEY"
+  ],
+  "dryRun": {
+    "result": "passed",
+    "assets": 5,
+    "bindingsMatched": true
+  },
+  "verification": {
+    "result": "passed",
+    "gates": 12
+  }
+}

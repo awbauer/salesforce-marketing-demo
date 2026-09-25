@@ -2,7 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "northstar-marketing-workbench-pot",
   "main": "apps/edge/src/index.ts",
-  "compatibility_date": "2026-09-19",
+  "compatibility_date": "2026-09-24",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "binding": "ASSETS",
@@ -30,12 +30,15 @@
   "d1_databases": [
     {
       "binding": "APP_DB",
-      "database_name": "northstar-marketing-workbench-pot"
+      "database_name": "northstar-marketing-workbench-pot",
+      "database_id": "120cf689-0652-476c-9e4e-8af5b83e3627",
+      "migrations_dir": "migrations"
     }
   ],
   "r2_buckets": [
     {
-      "binding": "CAMPAIGN_ASSETS"
+      "binding": "CAMPAIGN_ASSETS",
+      "bucket_name": "northstar-marketing-workbench-pot-campaign-assets"
     }
   ],
   "vars": {
