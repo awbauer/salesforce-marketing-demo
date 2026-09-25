@@ -30,6 +30,9 @@ const checks = {
   toolCompleted: /tool-output-available/.test(stream),
   assistantTextCompleted: /text-end/.test(stream),
   noStreamError: !/"type":"(?:error|abort)"/.test(stream),
+  turnTraced: /"type":"data-turn-trace"/.test(stream),
+  traceCompleted: /"kind":"turn-finish","outcome":"completed"/.test(stream),
+  noRecoveryFallback: !/"kind":"fallback-text"/.test(stream),
 };
 const passed = Object.values(checks).every(Boolean);
 await report("production-chat", {

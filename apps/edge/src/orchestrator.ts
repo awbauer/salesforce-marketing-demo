@@ -17,14 +17,22 @@ import {
   streamText,
   type ToolSet,
   type UIMessage,
+  type UIMessageChunk,
+  wrapLanguageModel,
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
+import { forcedToolCallMiddleware } from "./forced-tool-middleware";
+import { createTurnTracer, describeTurnError } from "./turn-trace";
 
 export type AgentProps = { principalSubject: string; workspaceId: string };
 type OrchestratorBindings = CloudflareBindings & {
   SALESFORCE_MCP_URL?: string;
   CONFIRMATION_SIGNING_KEY?: string;
 };
+
+const MAX_TURN_STEPS = 4;
+// Salesforce agent calls can take tens of seconds, so the budget covers model steps plus tool time.
+const TURN_TIMEOUT = { totalMs: 150_000, chunkMs: 60_000, toolMs: 120_000 } as const;
 
 const IMAGE_PROMPT_VERSION = "campaign-image-v1";
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
@@ -78,6 +86,18 @@ export function requiredToolChoice(requiredTool: string | undefined, stepNumber:
   return stepNumber === 0
     ? { toolChoice: { type: "tool" as const, toolName: requiredTool } }
     : { toolChoice: "none" as const };
+}
+
+/** Forces the last allowed step to write text so a tool loop cannot end without an answer. */
+export function stepToolChoice(
+  requiredTool: string | undefined,
+  stepNumber: number,
+  maxSteps = MAX_TURN_STEPS,
+) {
+  return (
+    requiredToolChoice(requiredTool, stepNumber) ??
+    (stepNumber >= maxSteps - 1 ? { toolChoice: "none" as const } : undefined)
+  );
 }
 
 function latestUserText(messages: Array<{ role: string; parts?: Array<unknown> }>) {
@@ -307,6 +327,38 @@ async function resolveToolResult(value: unknown) {
   return await Promise.resolve(value);
 }
 
+function localFixtureStream(abortSignal?: AbortSignal): ReadableStream<UIMessageChunk> {
+  const reasoningId = crypto.randomUUID();
+  const textId = crypto.randomUUID();
+  const chunks: UIMessageChunk[] = [
+    { type: "start" },
+    { type: "start-step" },
+    { type: "reasoning-start", id: reasoningId },
+    {
+      type: "reasoning-delta",
+      id: reasoningId,
+      delta: "The request needs no Salesforce tool; answer from the fictional local fixture.",
+    },
+    { type: "reasoning-end", id: reasoningId },
+    { type: "text-start", id: textId },
+    ...[
+      "I reviewed the fictional Northstar sample campaign. ",
+      "The strongest signal is stable engagement, while accessibility copy and the commercial-consent scope remain the two readiness blockers. ",
+      "I have not changed, published, or sent anything.",
+    ].map((delta) => ({ type: "text-delta" as const, id: textId, delta })),
+    { type: "text-end", id: textId },
+    { type: "finish-step" },
+    { type: "finish", finishReason: "stop" },
+  ];
+  return new ReadableStream({
+    pull(controller) {
+      const next = chunks.shift();
+      if (!next || abortSignal?.aborted) controller.close();
+      else controller.enqueue(next);
+    },
+  });
+}
+
 export class MarketingOrchestrator extends AIChatAgent<
   OrchestratorBindings,
   OrchestratorState,
@@ -362,30 +414,59 @@ export class MarketingOrchestrator extends AIChatAgent<
       });
       return createUIMessageStreamResponse({ stream });
     }
-    const result = streamText({
-      model: workersAI(this.env.ORCHESTRATOR_MODEL),
-      system: [
-        "You are the Northstar marketing proof orchestrator.",
-        "Salesforce tool results are the only authority for Salesforce facts. Protocol success does not mean that a business result exists.",
-        "If a tool reports unavailable, empty, no business units, no records, or an error, explain that limitation and do not fill gaps from workspace presentation data.",
-        "Never say you reviewed Salesforce unless a Salesforce tool returned usable evidence.",
-        "Never claim a write, publish, send, or activation occurred. Keep customer PII out of responses.",
-        "Return accessible plain text only. Do not use Markdown, HTML, tables, pipe characters, asterisks, or emoji. Use short paragraphs and hyphen-prefixed bullets when a list helps.",
-        `Non-authoritative workspace record references: ${JSON.stringify(workspaceReferences)}`,
-      ].join(" "),
-      messages: await convertToModelMessages(turnMessages),
-      tools,
-      ...(requiredTool
-        ? {
+    const stream = createUIMessageStream({
+      execute: async ({ writer }) => {
+        const tracer = createTurnTracer(writer, {
+          model: this.env.ORCHESTRATOR_MODEL,
+          toolCount: Object.keys(tools).length,
+          requiredTool,
+          timeoutSeconds: TURN_TIMEOUT.totalMs / 1000,
+          userAbortSignal: abortSignal,
+        });
+        try {
+          const result = streamText({
+            model: wrapLanguageModel({
+              model: workersAI(this.env.ORCHESTRATOR_MODEL),
+              middleware: forcedToolCallMiddleware,
+            }),
+            system: [
+              "You are the Northstar marketing proof orchestrator.",
+              "Salesforce tool results are the only authority for Salesforce facts. Protocol success does not mean that a business result exists.",
+              "If a tool reports unavailable, empty, no business units, no records, or an error, explain that limitation and do not fill gaps from workspace presentation data.",
+              "Never say you reviewed Salesforce unless a Salesforce tool returned usable evidence.",
+              "Never claim a write, publish, send, or activation occurred. Keep customer PII out of responses.",
+              "Return accessible plain text only. Do not use Markdown, HTML, tables, pipe characters, asterisks, or emoji. Use short paragraphs and hyphen-prefixed bullets when a list helps.",
+              `Non-authoritative workspace record references: ${JSON.stringify(workspaceReferences)}`,
+            ].join(" "),
+            messages: await convertToModelMessages(turnMessages),
+            tools,
             prepareStep: ({ stepNumber }: { stepNumber: number }) =>
-              requiredToolChoice(requiredTool, stepNumber),
-          }
-        : {}),
-      stopWhen: stepCountIs(4),
-      timeout: 45_000,
-      abortSignal,
+              stepToolChoice(requiredTool, stepNumber),
+            stopWhen: stepCountIs(MAX_TURN_STEPS),
+            timeout: TURN_TIMEOUT,
+            abortSignal,
+            onStepFinish: (step) => tracer.recordStepFinish(step),
+            onError: ({ error }) => console.error("[orchestrator] turn stream error", error),
+          });
+          const { outcome } = await tracer.pipe(
+            result.toUIMessageStream({ sendReasoning: true, onError: describeTurnError }),
+          );
+          if (outcome !== "completed")
+            console.warn(`[orchestrator] turn ended with outcome ${outcome}`);
+        } catch (error) {
+          console.error("[orchestrator] turn setup failed", error);
+          await tracer.pipe(
+            new ReadableStream({
+              start(controller) {
+                controller.error(error);
+              },
+            }),
+          );
+        }
+      },
+      onError: describeTurnError,
     });
-    return result.toUIMessageStreamResponse();
+    return createUIMessageStreamResponse({ stream });
   }
 
   private async ensureImageDraftTable() {
@@ -993,20 +1074,18 @@ export class MarketingOrchestrator extends AIChatAgent<
     if ((this.env.ENVIRONMENT as string) !== "local") {
       return this.productionChatResponse(this.messages, options?.abortSignal);
     }
+    const abortSignal = options?.abortSignal;
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
-        const id = crypto.randomUUID();
-        writer.write({ type: "text-start", id });
-        for (const text of [
-          "I reviewed the fictional Northstar sample campaign. ",
-          "The strongest signal is stable engagement, while accessibility copy and the commercial-consent scope remain the two readiness blockers. ",
-          "I have not changed, published, or sent anything.",
-        ]) {
-          if (options?.abortSignal?.aborted) break;
-          writer.write({ type: "text-delta", id, delta: text });
-        }
-        writer.write({ type: "text-end", id });
+        const tracer = createTurnTracer(writer, {
+          model: "local-fixture",
+          toolCount: 0,
+          timeoutSeconds: TURN_TIMEOUT.totalMs / 1000,
+          userAbortSignal: abortSignal,
+        });
+        await tracer.pipe(localFixtureStream(abortSignal));
       },
+      onError: describeTurnError,
     });
     return createUIMessageStreamResponse({ stream });
   }
