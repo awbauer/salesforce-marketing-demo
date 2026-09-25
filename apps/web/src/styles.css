@@ -931,7 +931,13 @@ a {
   background: #fff7e8;
   color: #684918;
 }
+.compact-nav {
+  display: none;
+}
 @media (max-width: 1000px) {
+  .compact-nav {
+    display: inline-flex;
+  }
   .workspace {
     grid-template-columns: 72px 1fr;
   }
@@ -1294,4 +1300,14 @@ a {
 }
 .history-answer {
   white-space: pre-wrap;
+}
+
+.operations-notice {
+  margin: 0 18px 12px;
+  padding: 10px 12px;
+  border: 1px solid #e7cf9f;
+  border-radius: 8px;
+  background: #fff7e8;
+  color: #684918;
+  font-size: 12px;
 }

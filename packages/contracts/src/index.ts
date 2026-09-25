@@ -278,6 +278,36 @@ export const TurnTraceSchema = z.object({
 });
 export type TurnTrace = z.infer<typeof TurnTraceSchema>;
 
+export const WRITE_TOOL_BY_ACTION = Object.freeze({
+  "save-draft-campaign": "save_campaign_brief",
+  "create-review-task": "create_campaign_review_request",
+  "attach-generated-image": "attach_campaign_image",
+} as const);
+
+export const OperationControlsSchema = z.object({
+  writesEnabled: z.boolean(),
+  disabledTools: z.array(z.enum(PHASE_2_CURATED_TOOLS as unknown as [string, ...string[]])),
+});
+export type OperationControls = z.infer<typeof OperationControlsSchema>;
+
+/**
+ * Operator kill switches from Worker variables. Writes stay enabled unless WRITES_ENABLED is
+ * exactly "false"; DISABLED_TOOLS is a comma-separated list, and unknown names are ignored.
+ */
+export function parseOperationControls(env: {
+  WRITES_ENABLED?: string;
+  DISABLED_TOOLS?: string;
+}): OperationControls {
+  const requested = (env.DISABLED_TOOLS ?? "")
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
+  return {
+    writesEnabled: env.WRITES_ENABLED?.trim().toLowerCase() !== "false",
+    disabledTools: PHASE_2_CURATED_TOOLS.filter((tool) => requested.includes(tool)),
+  };
+}
+
 export const TURN_HISTORY_RETENTION_DAYS = PROOF_DEFAULTS.transcriptRetentionDays;
 
 export const TurnRecordSchema = z.object({
