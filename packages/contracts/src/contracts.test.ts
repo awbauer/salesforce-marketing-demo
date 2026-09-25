@@ -18,11 +18,12 @@ describe("proof contracts", () => {
   });
   it("keeps every Salesforce write outside autonomous model execution", () => {
     const writes = catalog.tools.filter((tool) => tool.riskClass === "write");
-    expect(writes).toHaveLength(2);
+    expect(writes).toHaveLength(3);
     expect(writes.every((tool) => tool.autonomous === false)).toBe(true);
     expect(writes.map((tool) => tool.allowedWrite)).toEqual([
       "save-draft-campaign",
       "create-review-task",
+      "attach-generated-image",
     ]);
   });
 });
