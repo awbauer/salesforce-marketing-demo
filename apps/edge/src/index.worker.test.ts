@@ -134,6 +134,9 @@ describe("edge runtime", () => {
     expect(requestedToolName("Summarize the sample campaign and its recent performance")).toBe(
       "summarize_campaign",
     );
+    expect(requestedToolName("Draft campaign content for the sample audience")).toBe(
+      "draft_campaign_content",
+    );
     expect(requiredToolChoice(names[0], 0)).toEqual({
       toolChoice: { type: "tool", toolName: names[0] },
     });

@@ -57,10 +57,13 @@ export function classifyToolResult(value: unknown): "success" | "unavailable" | 
 export function requestedToolName(prompt: string) {
   return /\b(?:readiness|ready|blocker|risk)\b/i.test(prompt)
     ? "check_campaign_readiness"
-    : /\b(?:summarize|summary|performance|campaign)\b/i.test(prompt) &&
-        /\b(?:salesforce|campaign|701[a-zA-Z0-9]{12,15})\b/i.test(prompt)
-      ? "summarize_campaign"
-      : null;
+    : /\b(?:draft|write|create|generate)\b/i.test(prompt) &&
+        /\b(?:content|copy|subject line|preheader|email|sms|landing page)\b/i.test(prompt)
+      ? "draft_campaign_content"
+      : /\b(?:summarize|summary|performance|campaign)\b/i.test(prompt) &&
+          /\b(?:salesforce|campaign|701[a-zA-Z0-9]{12,15})\b/i.test(prompt)
+        ? "summarize_campaign"
+        : null;
 }
 
 export function selectRequiredTool(prompt: string, availableNames: string[]) {

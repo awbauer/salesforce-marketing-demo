@@ -14,7 +14,13 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
-    include: ["packages/**/*.test.ts", "packages/**/*.test.tsx", "scripts/**/*.test.mjs"],
+    include: [
+      "apps/web/**/*.test.ts",
+      "apps/web/**/*.test.tsx",
+      "packages/**/*.test.ts",
+      "packages/**/*.test.tsx",
+      "scripts/**/*.test.mjs",
+    ],
     setupFiles: ["./tests/setup.ts"],
   },
 });

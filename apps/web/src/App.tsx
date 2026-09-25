@@ -38,12 +38,18 @@ type TraceStep = {
 const REDACTED_KEYS =
   /token|secret|password|authorization|cookie|signature|confirmation|requesthash|idempotency/i;
 
-function sanitizedPayload(value: unknown): unknown {
+export function sanitizedPayload(value: unknown): unknown {
   if (typeof value === "string") {
     if (/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i.test(value)) return "[redacted personal data]";
     if (/(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/.test(value))
       return "[redacted personal data]";
-    return value.length > 500 ? `${value.slice(0, 500)}…` : value;
+    const redacted = value
+      .replace(/\bBearer\s+[^\s"']+/gi, "Bearer [redacted]")
+      .replace(
+        /\beyJ[a-zA-Z0-9_-]{12,}\.[a-zA-Z0-9_-]{12,}\.[a-zA-Z0-9_-]{8,}\b/g,
+        "[redacted token]",
+      );
+    return redacted.length > 500 ? `${redacted.slice(0, 500)}…` : redacted;
   }
   if (Array.isArray(value)) return value.slice(0, 20).map(sanitizedPayload);
   if (value && typeof value === "object")
@@ -56,11 +62,10 @@ function sanitizedPayload(value: unknown): unknown {
   return value;
 }
 
-function readableToolName(name: string) {
+export function readableToolName(name: string) {
   const known = PHASE_2_CURATED_TOOLS.find((tool) => name === tool || name.endsWith(`_${tool}`));
-  return (known ?? name)
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+  if (!known) return "Unrecognized tool request";
+  return known.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function semanticToolFailure(value: unknown): boolean {
@@ -104,6 +109,7 @@ export function executionTrace(message: UIMessage): TraceStep[] {
   const hasCompletedText = message.parts.some(
     (part) => part.type === "text" && part.state !== "streaming" && part.text.trim(),
   );
+  if (toolSteps.length === 0 && !hasCompletedText) return [];
   const assistantText = messageText(message);
   return [
     {
