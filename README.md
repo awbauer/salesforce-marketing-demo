@@ -20,6 +20,8 @@ Open `http://127.0.0.1:5173`. Local mode contains fictional sample data and a lo
 
 - `pnpm verify:fast`: formatting, lint, types, unit contracts, documentation, and invariants.
 - `pnpm verify`: generated Worker types, all fast gates, Workers-runtime tests, 20-case evaluation, and production build.
+- `pnpm deploy:dry-run`: rebuilds and packages the exact production Worker without changing Cloudflare.
+- `pnpm deploy`: rebuilds and deploys the configured Worker; intended for the reviewed `main` branch or an explicit operator deployment.
 - `pnpm test:e2e`: Chrome and Edge-equivalent UI/reconnect proof with screenshots.
 - `pnpm sf:metadata:check`: validates the local Phase 2 Agent Script, Apex/action, permission, catalog, Postman, and audit-migration contract.
 - `SF_TARGET_ORG=<northstar-sandbox-alias> SF_APPROVED_PROOF_ORG_ID=<approved-org-id> pnpm sf:validate`: fails closed unless the explicit target is a Salesforce sandbox or exactly matches the separately approved proof-org ID, then checks API level, representative CRM/marketing records, consent access, and Agent Script metadata availability.

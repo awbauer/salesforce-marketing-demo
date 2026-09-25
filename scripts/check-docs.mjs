@@ -11,6 +11,7 @@ const required = [
   "docs/work-units/WU-004-blocked-word-delivery-gate.md",
   "docs/work-units/WU-005-phase-3-readiness-hxl.md",
   "docs/work-units/WU-006-demo-quickstart-record-links.md",
+  "docs/work-units/WU-007-worker-build-config.md",
   "docs/security/phase-1-threat-model.md",
   "docs/demo/phase-2-evaluator-guide.md",
   "infra/cloudflare/pot/README.md",
@@ -27,6 +28,7 @@ const units = await Promise.all([
   readFile(required[6], "utf8"),
   readFile(required[7], "utf8"),
   readFile(required[8], "utf8"),
+  readFile(required[9], "utf8"),
 ]);
 for (const heading of [
   "## Acceptance criteria",

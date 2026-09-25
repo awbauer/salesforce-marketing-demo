@@ -8,7 +8,7 @@ This directory records the Phase 1 deployment gate. `wrangler.jsonc` is the exec
 2. Confirm `wrangler whoami` names the isolated proof account. A login or MFA prompt is the human authorization boundary.
 3. Configure one Access application for the Worker URL, email one-time PIN, and an explicit evaluator allowlist. A pre-existing reusable policy may be attached when its rule is verified; treat that shared policy as external infrastructure and do not rename, edit, or delete it from this repository. Record application identifiers outside Git when they are account-specific.
 4. The committed deployment configuration is fail-closed with `ENVIRONMENT=proof` and `AUTH_MODE=access`. Set the Access team domain and audience as account-specific variables before the authenticated live test. The Worker must reject an unsigned `/api/session` request; never deploy the local E2E configuration.
-5. Run `pnpm exec wrangler deploy --dry-run`, deploy, then record the version ID and provisioned D1/R2 identifiers written by Wrangler.
+5. Run `pnpm deploy:dry-run`, then deploy with `pnpm deploy`. The checked-in configuration binds the existing D1 database and R2 bucket by immutable ID/name; never remove those fields or allow CI to auto-provision replacements. Record the resulting Worker version ID.
 6. Read back `/api/health`, `/api/ready`, an authorized session, an unauthorized session, and the three binding dashboards. Confirm logs/traces contain correlation IDs without PII.
 7. Run `PROOF_BASE_URL=https://<worker-host> pnpm test:e2e:live` to prove the
    unsigned edge boundary. After a human completes the email one-time-PIN flow,
@@ -28,6 +28,22 @@ The Phase 2 portal is a browser-user integration, not a service-token integratio
 6. As the evaluator, connect from the workbench, complete portal OAuth and per-user Salesforce OAuth, then read back connection state, namespaced tools, readiness output, a confirmed draft save, and a confirmed review task. Both writes must show the same idempotency key in D1 audit and Salesforce authoritative read-back.
 
 Service tokens are intentionally excluded: Cloudflare documents that per-user upstream OAuth requires `on_behalf=true`, while service-token sessions require it to be false and use the admin credential. That would violate the proof's identity model.
+
+## Workers Builds configuration
+
+Connect the existing `northstar-marketing-workbench-pot` Worker to this repository under **Settings > Builds**. Use:
+
+- Production branch: `main`
+- Root directory: `/`
+- Build command: `pnpm verify`
+- Deploy command: `pnpm exec wrangler deploy --config wrangler.jsonc`
+- Build cache: enabled
+- Build variable `NODE_VERSION`: `26`
+- Build variable `PNPM_VERSION`: `11.22.0`
+
+Keep preview builds disabled until separate preview D1, R2, Access, and Salesforce OAuth resources are configured. A branch preview must never share the production proof database, bucket, secrets, or upstream writes.
+
+The three runtime secrets `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, and `CONFIRMATION_SIGNING_KEY` already belong to the Worker and must remain runtime secrets. Do not copy their values into repository settings, build variables, source control, or build logs. The non-secret runtime values and all resource bindings are owned by `wrangler.jsonc`; do not duplicate them in the dashboard.
 
 ## Rollback and teardown
 
