@@ -143,3 +143,25 @@ test("offers a quickstart with supported prompts and honest roadmap boundaries",
   await dialog.getByRole("button", { name: prompt }).click();
   await expect(page.getByLabel("Message the orchestrator")).toHaveValue(prompt);
 });
+
+test("routes chat write requests to the confirmation flow without claiming a write", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "New chat" }).click();
+  await page.getByLabel("Message the orchestrator").fill("Save this campaign now");
+  await page.getByRole("button", { name: "Send message" }).click();
+  const reply = page.locator(".message.assistant").last();
+  await expect(reply).toContainText("nothing has been saved or created");
+  await expect(reply).not.toContainText(/has been saved and/i);
+  const trace = reply.locator(".execution-trace");
+  await trace.getByText("Behind the scenes · technical trace").click();
+  await expect(trace.getByText(/policy router without a model call/i)).toBeVisible();
+  await page.getByLabel("Message the orchestrator").fill("Publish and send the campaign");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.locator(".message.assistant").last()).toContainText("I didn't take it");
+  await page.screenshot({
+    path: `artifacts/evidence/WU-019/policy-route-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+});

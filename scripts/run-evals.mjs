@@ -1,11 +1,11 @@
+import { classifyPolicyIntent } from "../packages/contracts/src/index.ts";
 import { routingCases } from "../packages/evals/src/cases.ts";
 import { report } from "./lib/report.mjs";
 
 function route(prompt) {
-  const requestedActions = prompt.replace(/do not publish/gi, "");
-  if (/publish|send|add these contacts|reveal every audience|ignore policy/i.test(requestedActions))
-    return "unsupported";
-  if (/save this campaign|create a review task/i.test(prompt)) return "confirmation_required";
+  const policyIntent = classifyPolicyIntent(prompt);
+  if (policyIntent === "unsupported") return "unsupported";
+  if (policyIntent === "confirmation-required") return "confirmation_required";
   if (/readiness|blocker|consent coverage|dates and brief/i.test(prompt))
     return "check_campaign_readiness";
   if (/draft a campaign brief/i.test(prompt)) return "draft_campaign_brief";
@@ -31,7 +31,7 @@ await report("evaluation", {
   score,
   threshold: 0.9,
   total: results.length,
-  mode: "deterministic-contract-router",
+  mode: "deterministic-contract-router-with-shared-policy-intent",
   results,
 });
 console.log(

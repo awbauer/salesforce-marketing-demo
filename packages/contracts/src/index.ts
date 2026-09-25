@@ -145,6 +145,52 @@ export const OrchestratorStateSchema = z.object({
 });
 export type OrchestratorState = z.infer<typeof OrchestratorStateSchema>;
 
+/**
+ * Chat requests that must never reach the model. Writes need the server-side confirmation flow,
+ * and forbidden actions are refused outright. Negated requests such as "do not publish" are
+ * ignored so drafting prompts still reach the model.
+ */
+export function classifyPolicyIntent(
+  prompt: string,
+): "confirmation-required" | "unsupported" | null {
+  const affirmative = prompt.replace(
+    /\b(?:do not|don't|dont|never|without|no)\s+(?:\w+\s+){0,2}?(?:publish|send|activate|delete|suppress|save|create|add|remove)(?:ing|s)?\b/gi,
+    " ",
+  );
+  // Describing a future send ("an email to send next week") is drafting, not a request to act.
+  const actionVerb =
+    /(?<!\b(?:to|before|after|when|once|until|ready to|how to|plan to)\s)\b(?:publish|send|activate|delete|suppress|unsubscribe)\b/i;
+  // Advisory questions ("When should we send it?") ask for guidance; "Can you send it?" is a request.
+  const advisoryQuestion = /^\s*(?:when|how|what|why|which|should)\b[^.!]*\?\s*$/i.test(
+    affirmative,
+  );
+  if (
+    (actionVerb.test(affirmative) && !advisoryQuestion) ||
+    /\b(?:add|remove|move)\b[^.?!]*\bbuyer group\b/i.test(affirmative) ||
+    /\breveal\b|\bignore (?:the |all |any )?(?:policy|policies|rules|instructions)\b/i.test(
+      affirmative,
+    ) ||
+    /\b(?:list|show|export|give me|share)\b[^.?!]*\b(?:email addresses|emails|phone numbers|contact details)\b/i.test(
+      affirmative,
+    )
+  )
+    return "unsupported";
+  if (
+    /\bsave\b[^.?!]*\b(?:campaign|brief|draft|this|it)\b|\bcreate\b[^.?!]*\breview (?:task|request)\b|\b(?:update|edit|change)\b[^.?!]*\b(?:salesforce|record)\b/i.test(
+      affirmative,
+    )
+  )
+    return "confirmation-required";
+  return null;
+}
+
+export const POLICY_RESPONSES = Object.freeze({
+  "confirmation-required":
+    "I can't save or change Salesforce records from chat, and nothing has been saved or created. Writes go through a confirmation step: use Create review request in the Insights panel, check the confirmation card, and confirm it yourself. Salesforce then returns the created record for you to review.",
+  unsupported:
+    "That action isn't available in this workbench, and I didn't take it. Publishing, sending, activating, deleting, suppressing, changing buyer groups, and revealing audience contact details are all blocked. I can summarize the campaign, draft content for review, or check readiness instead.",
+} as const);
+
 export const TURN_TRACE_PART_TYPE = "data-turn-trace" as const;
 export const TURN_TRACE_PART_ID = "turn-trace" as const;
 
@@ -155,6 +201,9 @@ export const TurnTraceEventSchema = z.discriminatedUnion("kind", [
     model: z.string(),
     toolCount: z.number().int().nonnegative(),
     requiredTool: z.string().optional(),
+    route: z
+      .enum(["model", "confirmation-required", "unsupported", "catalog-unavailable"])
+      .optional(),
   }),
   z.object({ kind: z.literal("step-start"), at: z.number(), step: z.number().int() }),
   z.object({
