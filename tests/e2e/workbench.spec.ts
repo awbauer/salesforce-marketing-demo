@@ -264,7 +264,10 @@ test("attaches a selected image draft only after an explicit confirmation", asyn
 });
 
 test("shows an honest empty state before any evaluation run is published", async ({ page }) => {
-  await page.route("**/evals/latest.json", (route) => route.fulfill({ status: 404, body: "" }));
+  // Production serves the app shell for unknown paths, so a missing report arrives as HTML.
+  await page.route("**/evals/latest.json", (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><html></html>" }),
+  );
   await page.goto("/");
   await page.getByRole("button", { name: "Evaluations" }).first().click();
   await expect(page.getByRole("heading", { name: "Evaluations" })).toBeVisible();

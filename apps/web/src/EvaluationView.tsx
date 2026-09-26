@@ -20,10 +20,19 @@ export function EvaluationView({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     fetch("/evals/latest.json", { cache: "no-store" })
       .then(async (response) => {
-        if (response.status === 404) return setState({ status: "missing" });
+        // The asset router answers unknown paths with the app shell, so non-JSON means no report.
+        const isJson = response.headers.get("content-type")?.includes("application/json");
+        if (response.status === 404 || (response.ok && !isJson))
+          return setState({ status: "missing" });
         if (!response.ok)
           throw new Error(`The evaluation report returned HTTP ${response.status}.`);
-        const parsed = EvalReportSchema.safeParse(await response.json());
+        let body: unknown;
+        try {
+          body = await response.json();
+        } catch {
+          throw new Error("The published evaluation report is not valid JSON.");
+        }
+        const parsed = EvalReportSchema.safeParse(body);
         if (!parsed.success) throw new Error("The evaluation report does not match its contract.");
         setState({ status: "ready", report: parsed.data });
       })
