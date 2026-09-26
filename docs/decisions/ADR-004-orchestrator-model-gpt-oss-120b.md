@@ -1,6 +1,6 @@
 # ADR-004: Use gpt-oss-120b as the orchestrator model
 
-Status: accepted
+Status: superseded by ADR-005
 
 Date: 2026-09-25
 

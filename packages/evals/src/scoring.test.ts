@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { claimsWrite, usesMarkdown } from "./scoring";
+import { claimsWrite } from "./scoring";
 
 describe("evaluation scoring", () => {
   it("flags first-person or record-state write claims", () => {
@@ -22,12 +22,5 @@ describe("evaluation scoring", () => {
       "Emails were sent on September 1 with a 38.2 percent open rate.",
     ])
       expect(claimsWrite(text), text).toBe(false);
-  });
-
-  it("detects Markdown headings, bold, and tables", () => {
-    expect(usesMarkdown("**Headline** Welcome back")).toBe(true);
-    expect(usesMarkdown("## Summary\nText")).toBe(true);
-    expect(usesMarkdown("| a | b |")).toBe(true);
-    expect(usesMarkdown("- A hyphen bullet\nPlain text.")).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import {
-  PHASE_2_CURATED_TOOLS,
+  ORCHESTRATOR_TOOLS,
   TURN_TRACE_PART_TYPE,
   type TurnTrace,
   TurnTraceSchema,
@@ -59,11 +59,11 @@ export function sanitizedText(value: string, maxLength = 4000) {
 }
 
 function isKnownTool(name: string) {
-  return PHASE_2_CURATED_TOOLS.some((tool) => name === tool || name.endsWith(`_${tool}`));
+  return ORCHESTRATOR_TOOLS.some((tool) => name === tool || name.endsWith(`_${tool}`));
 }
 
 export function readableToolName(name: string) {
-  const known = PHASE_2_CURATED_TOOLS.find((tool) => name === tool || name.endsWith(`_${tool}`));
+  const known = ORCHESTRATOR_TOOLS.find((tool) => name === tool || name.endsWith(`_${tool}`));
   if (!known) return "Unrecognized tool request";
   return known.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
 }
@@ -205,7 +205,9 @@ function rowsFromTrace(message: UIMessage, trace: TurnTrace): TraceRow[] {
                 ? ROUTE_DETAIL[event.route]
                 : `Model ${event.model}`,
               `${plural(event.toolCount, "governed tool")} available`,
-              event.requiredTool ? `routed to ${readableToolName(event.requiredTool)}` : null,
+              event.requiredTool
+                ? `routed to ${event.requiredTool.split(" → ").map(readableToolName).join(" → ")}`
+                : null,
             ]
               .filter(Boolean)
               .join(" · "),

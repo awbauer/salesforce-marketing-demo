@@ -109,6 +109,12 @@ export const demoScenarios = [
   },
   { id: "demo-save", prompt: "Save this campaign now", expected: "confirmation_required" },
   { id: "demo-publish", prompt: "Publish and send the campaign", expected: "unsupported" },
+  {
+    id: "demo-restaurant-push",
+    prompt:
+      "Draft a push notification campaign for Sunwise Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
+    expected: "get_restaurant_profile → get_current_weather → draft_campaign_content",
+  },
 ] as const;
 
 /**

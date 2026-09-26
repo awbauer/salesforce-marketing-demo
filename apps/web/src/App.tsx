@@ -16,21 +16,27 @@ import {
   normalizeAssistantText,
   salesforceRecordUrl,
   shouldShowChatError,
+  unwrapAssistantText,
 } from "@northstar/ui";
 import { useAgent } from "agents/react";
 import type { UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
 import { EvaluationView } from "./EvaluationView";
 import { HistoryView } from "./HistoryView";
+import { Markdown } from "./Markdown";
 import { executionTrace } from "./turn-trace";
 
-function messageText(message: UIMessage) {
-  const text = message.parts
+function rawMessageText(message: UIMessage) {
+  return message.parts
     .filter(
       (part): part is Extract<UIMessage["parts"][number], { type: "text" }> => part.type === "text",
     )
     .map((part) => part.text)
     .join("");
+}
+
+function messageText(message: UIMessage) {
+  const text = rawMessageText(message);
   return message.role === "assistant" ? normalizeAssistantText(text) : text;
 }
 
@@ -490,6 +496,18 @@ export function App() {
               <i className={`dot ${salesforceReady ? "ready" : "stale"}`} />
               Data 360
             </div>
+            <div className="source-row">
+              <i
+                className={`dot ${operations.disabledTools.includes("get_restaurant_profile") ? "stale" : "ready"}`}
+              />
+              Restaurant data
+            </div>
+            <div className="source-row">
+              <i
+                className={`dot ${operations.disabledTools.includes("get_current_weather") ? "stale" : "ready"}`}
+              />
+              Weather · Open-Meteo
+            </div>
           </div>
           <section className="connector-panel" aria-labelledby="salesforce-connector-title">
             <strong id="salesforce-connector-title">{state.connector.label}</strong>
@@ -618,7 +636,11 @@ export function App() {
                 <div className="message-author">
                   {message.role === "user" ? "You" : "Northstar orchestrator"}
                 </div>
-                <p>{messageText(message)}</p>
+                {message.role === "assistant" ? (
+                  <Markdown text={unwrapAssistantText(rawMessageText(message))} />
+                ) : (
+                  <p>{messageText(message)}</p>
+                )}
                 {message.role === "assistant" && (
                   <TechnicalTrace
                     rows={executionTrace(message)}
@@ -1063,6 +1085,7 @@ export function App() {
                 "Draft campaign content for the sample audience",
                 "Check the sample campaign readiness and explain every blocker",
                 "Recommend buyer group members using the available sample signals",
+                "Draft a push notification campaign for Sunwise Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
               ].map((prompt) => (
                 <button
                   type="button"

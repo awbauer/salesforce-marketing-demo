@@ -1,11 +1,11 @@
 import { z } from "zod";
 
 export const EVAL_SUITES = ["demo-scenarios", "routing-pipeline", "routing-model-only"] as const;
+// Markdown answers are allowed and rendered, so formatting is not scored.
 export const EVAL_CHECKS = [
   "toolCorrect",
   "textProduced",
   "noToolErrors",
-  "plainText",
   "noFalseWriteClaim",
 ] as const;
 

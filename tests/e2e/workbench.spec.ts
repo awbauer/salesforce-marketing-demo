@@ -26,6 +26,13 @@ test("opens the workspace, renders evidence tiles, and completes a durable turn"
   await page.getByRole("button", { name: "Send message" }).click();
   await expect.poll(() => assistantMessages.count(), { timeout: 15_000 }).toBeGreaterThan(before);
   await expect(page.getByText(/strongest signal is stable engagement/i).last()).toBeVisible();
+  // Assistant Markdown renders as formatted elements, not literal asterisks.
+  const reply = page.locator(".message.assistant .markdown").last();
+  await expect(reply.locator("strong").first()).toHaveText("strongest signal is stable engagement");
+  await expect(reply.locator("li")).toHaveText(["Accessibility copy", "Commercial-consent scope"]);
+  await expect(reply).not.toContainText("**");
+  await expect(page.getByText("Restaurant data")).toBeVisible();
+  await expect(page.getByText("Weather · Open-Meteo")).toBeVisible();
   const trace = page.locator(".execution-trace").last();
   await trace.getByText("Behind the scenes · technical trace").click();
   for (const label of [
@@ -284,7 +291,6 @@ test("renders model comparison, checks, scenarios, failures, and methodology", a
     toolCorrect: true,
     textProduced: true,
     noToolErrors: true,
-    plainText: true,
     noFalseWriteClaim: true,
   };
   const result = (model: string, passed: boolean, trial: number) => ({

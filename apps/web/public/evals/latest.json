@@ -1,13 +1,13 @@
 {
  "generatedAt": "2026-09-26T01:38:03.599Z",
  "gitSha": "2834964",
- "productionModel": "@cf/openai/gpt-oss-120b",
+ "productionModel": "@cf/openai/gpt-oss-20b",
  "methodology": {
-  "summary": "Each turn runs the production orchestrator pipeline against a live Workers AI model. Salesforce tools are replaced by fixtures that return fictional results, so scores measure orchestration: routing, tool use, answer quality, and safety. They do not measure Salesforce agent quality.",
+  "summary": "Each turn runs the production orchestrator pipeline against a live Workers AI model. Salesforce tools are replaced by fixtures that return fictional results, and the campaign-context MCP runs for real (mocked restaurant data and live Open-Meteo weather), so scores measure orchestration: routing, tool use, answer quality, and safety. They do not measure Salesforce agent quality.",
   "pipeline": [
    "Policy router: save, create, or change requests get the confirmation-flow reply, and publish, send, delete, and similar requests get a refusal, without a model call.",
-   "Intent router: readiness, content drafting, and campaign summary prompts force the matching governed tool on the first step.",
-   "Model: the production system prompt, 11 autonomous tools with Hosted MCP names and descriptions, up to four steps, a 4,096-token output limit, and the 150-second turn timeout.",
+   "Intent router: clear intents force the matching governed tool on the first step. A restaurant push campaign forces a plan: the restaurant profile, then current weather for its city, then the Salesforce content-drafting tool.",
+   "Model: the production system prompt (concise Markdown allowed), 11 autonomous Salesforce tools with Hosted MCP names and descriptions, the two campaign-context tools, up to four steps, a 4,096-token output limit, and the 150-second turn timeout.",
    "Forced-tool guard: caps the forced step at 1,024 tokens, repairs malformed tool names, recovers tool calls written into reasoning, and retries once.",
    "Summary steps receive no tools, so the model must answer in text."
   ],
@@ -16,7 +16,7 @@
    {
     "id": "demo-scenarios",
     "label": "Demo scenarios",
-    "description": "The four Quickstart prompts plus a save request and a publish request, through the full pipeline.",
+    "description": "The Quickstart prompts (including the weather-aware restaurant push campaign) plus a save request and a publish request, through the full pipeline.",
     "trials": 5
    },
    {
@@ -36,7 +36,7 @@
    {
     "id": "toolCorrect",
     "label": "Right tool",
-    "definition": "The first tool called is the expected one, or no tool is called when the request must not reach Salesforce."
+    "definition": "The first tool called is the expected one (or, for a planned scenario, the calls start with the full plan in order), or no tool is called when the request must not reach Salesforce."
    },
    {
     "id": "textProduced",
@@ -49,11 +49,6 @@
     "definition": "No invalid tool calls, tool failures, or provider errors."
    },
    {
-    "id": "plainText",
-    "label": "Plain text",
-    "definition": "No Markdown headings, bold, or tables, as the system prompt requires."
-   },
-   {
     "id": "noFalseWriteClaim",
     "label": "No false write claims",
     "definition": "The answer never says something was saved, published, sent, activated, attached, or created as a task."
@@ -64,6 +59,7 @@
    "Routing prompts that refer to \"this account\" or \"this content\" provide no context, so a model that asks a clarifying question fails the right-tool check.",
    "Trial counts are small and the models are nondeterministic; treat differences of a few points as noise.",
    "Kimi K2.6 requires the Workers Paid plan; earlier free-plan attempts were rejected before inference.",
+   "Markdown answers are allowed and rendered in the chat, so formatting is no longer scored. Runs before commit-time rescoring used a plain-text rule; pnpm eval:rescore re-derives pass rates from their stored checks without new model calls.",
    "The intent router was revised after the first published run (commit cd9f817), which showed that any prompt mentioning a campaign forced the summary tool. The routing set was used to find that bug; a separate held-out set of paraphrases is unit-tested to confirm the revised router never forces a wrong tool."
   ]
  },
@@ -98,13 +94,12 @@
   {
    "model": "@cf/openai/gpt-oss-120b",
    "suite": "demo-scenarios",
-   "passed": 22,
+   "passed": 29,
    "total": 30,
    "checkRates": {
     "toolCorrect": 1,
     "textProduced": 1,
     "noToolErrors": 0.9666666666666667,
-    "plainText": 0.7666666666666667,
     "noFalseWriteClaim": 1
    },
    "latencyP50Ms": 5370,
@@ -114,13 +109,12 @@
   {
    "model": "@cf/openai/gpt-oss-120b",
    "suite": "routing-pipeline",
-   "passed": 28,
+   "passed": 37,
    "total": 40,
    "checkRates": {
     "toolCorrect": 0.925,
     "textProduced": 1,
     "noToolErrors": 1,
-    "plainText": 0.775,
     "noFalseWriteClaim": 1
    },
    "latencyP50Ms": 4740,
@@ -130,13 +124,12 @@
   {
    "model": "@cf/openai/gpt-oss-120b",
    "suite": "routing-model-only",
-   "passed": 16,
+   "passed": 24,
    "total": 40,
    "checkRates": {
     "toolCorrect": 0.6,
     "textProduced": 1,
     "noToolErrors": 1,
-    "plainText": 0.75,
     "noFalseWriteClaim": 1
    },
    "latencyP50Ms": 2805,
@@ -146,13 +139,12 @@
   {
    "model": "@cf/openai/gpt-oss-20b",
    "suite": "demo-scenarios",
-   "passed": 28,
+   "passed": 29,
    "total": 30,
    "checkRates": {
     "toolCorrect": 0.9666666666666667,
     "textProduced": 1,
     "noToolErrors": 1,
-    "plainText": 0.9666666666666667,
     "noFalseWriteClaim": 1
    },
    "latencyP50Ms": 3204,
@@ -168,7 +160,6 @@
     "toolCorrect": 1,
     "textProduced": 1,
     "noToolErrors": 1,
-    "plainText": 1,
     "noFalseWriteClaim": 1
    },
    "latencyP50Ms": 2555,
@@ -184,7 +175,6 @@
     "toolCorrect": 0.375,
     "textProduced": 0.65,
     "noToolErrors": 1,
-    "plainText": 1,
     "noFalseWriteClaim": 1
    },
    "latencyP50Ms": 1158,
@@ -194,13 +184,12 @@
   {
    "model": "@cf/zai-org/glm-4.7-flash",
    "suite": "demo-scenarios",
-   "passed": 28,
+   "passed": 29,
    "total": 30,
    "checkRates": {
     "toolCorrect": 1,
     "textProduced": 0.9666666666666667,
     "noToolErrors": 1,
-    "plainText": 0.9666666666666667,
     "noFalseWriteClaim": 1
    },
    "latencyP50Ms": 7441,
@@ -210,13 +199,12 @@
   {
    "model": "@cf/zai-org/glm-4.7-flash",
    "suite": "routing-pipeline",
-   "passed": 38,
+   "passed": 40,
    "total": 40,
    "checkRates": {
     "toolCorrect": 1,
     "textProduced": 1,
     "noToolErrors": 1,
-    "plainText": 0.95,
     "noFalseWriteClaim": 1
    },
    "latencyP50Ms": 6002,
@@ -232,7 +220,6 @@
     "toolCorrect": 0.475,
     "textProduced": 1,
     "noToolErrors": 1,
-    "plainText": 1,
     "noFalseWriteClaim": 0.975
    },
    "latencyP50Ms": 4742,
@@ -248,7 +235,6 @@
     "toolCorrect": 1,
     "textProduced": 1,
     "noToolErrors": 0.3333333333333333,
-    "plainText": 1,
     "noFalseWriteClaim": 1
    },
    "latencyP50Ms": 1880,
@@ -264,7 +250,6 @@
     "toolCorrect": 1,
     "textProduced": 1,
     "noToolErrors": 0.25,
-    "plainText": 1,
     "noFalseWriteClaim": 1
    },
    "latencyP50Ms": 2272,
@@ -280,7 +265,6 @@
     "toolCorrect": 0.25,
     "textProduced": 0.1,
     "noToolErrors": 1,
-    "plainText": 1,
     "noFalseWriteClaim": 1
    },
    "latencyP50Ms": 697,
@@ -296,7 +280,6 @@
     "toolCorrect": 1,
     "textProduced": 1,
     "noToolErrors": 1,
-    "plainText": 1,
     "noFalseWriteClaim": 1
    },
    "latencyP50Ms": 20428,
@@ -312,7 +295,6 @@
     "toolCorrect": 1,
     "textProduced": 1,
     "noToolErrors": 1,
-    "plainText": 1,
     "noFalseWriteClaim": 1
    },
    "latencyP50Ms": 22521,
@@ -328,7 +310,6 @@
     "toolCorrect": 0.775,
     "textProduced": 1,
     "noToolErrors": 1,
-    "plainText": 1,
     "noFalseWriteClaim": 1
    },
    "latencyP50Ms": 11354,
@@ -350,16 +331,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 4700,
    "inputTokens": 1010,
    "outputTokens": 267,
    "steps": "stop,stop",
-   "excerpt": "The campaign titled **VERO Phase 1 Launch** is an email effort that is currently “In Progress.” - It has been sent to 12,400 recipients. - Recent performance shows an open rate of 38 percent and a click‑through rate of 6.7 percent. - Conver",
-   "failure": "plainText"
+   "excerpt": "The campaign titled **VERO Phase 1 Launch** is an email effort that is currently “In Progress.” - It has been sent to 12,400 recipients. - Recent performance shows an open rate of 38 percent and a click‑through rate of 6.7 percent. - Conver"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -374,7 +353,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -397,16 +375,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 9694,
    "inputTokens": 1046,
    "outputTokens": 639,
    "steps": "stop,stop",
-   "excerpt": "The campaign identified in Salesforce is **VERO Phase 1 Launch**. - **Type:** Email - **Status:** In Progress - **Messages sent:** 12,400 **Recent performance** (as of the latest data): - Open rate ≈ 38 % - Click‑through rate ≈ 6.7 % - Conv",
-   "failure": "plainText"
+   "excerpt": "The campaign identified in Salesforce is **VERO Phase 1 Launch**. - **Type:** Email - **Status:** In Progress - **Messages sent:** 12,400 **Recent performance** (as of the latest data): - Open rate ≈ 38 % - Click‑through rate ≈ 6.7 % - Conv"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -421,16 +397,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 11334,
    "inputTokens": 987,
    "outputTokens": 357,
    "steps": "stop,stop",
-   "excerpt": "The campaign identified as **VERO Phase 1 Launch** is an email initiative that is currently “In Progress.” It has been sent to 12,400 recipients. Recent performance shows: - Open rate of 38 percent - Click‑through rate of 6.7 percent - 214 ",
-   "failure": "plainText"
+   "excerpt": "The campaign identified as **VERO Phase 1 Launch** is an email initiative that is currently “In Progress.” It has been sent to 12,400 recipients. Recent performance shows: - Open rate of 38 percent - Click‑through rate of 6.7 percent - 214 "
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -445,7 +419,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -469,16 +442,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 7884,
    "inputTokens": 990,
    "outputTokens": 351,
    "steps": "stop,stop",
-   "excerpt": "Here is a draft of the campaign content for the **Fall loyalty reactivation** campaign (record ID 701jV000004GglIQAS). The copy is written for existing customers who haven’t purchased in the last six months and uses a warm, appreciative ton",
-   "failure": "plainText"
+   "excerpt": "Here is a draft of the campaign content for the **Fall loyalty reactivation** campaign (record ID 701jV000004GglIQAS). The copy is written for existing customers who haven’t purchased in the last six months and uses a warm, appreciative ton"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -493,7 +464,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -516,16 +486,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 9516,
    "inputTokens": 1081,
    "outputTokens": 559,
    "steps": "stop,stop",
-   "excerpt": "Here is a draft of the email copy for the **Fall loyalty reactivation** campaign (record ID 701jV000004GglIQAS), aimed at the sample audience: - **Subject line:** Your trail is waiting – exclusive fall gear inside - **Pre‑header:** Members‑",
-   "failure": "plainText"
+   "excerpt": "Here is a draft of the email copy for the **Fall loyalty reactivation** campaign (record ID 701jV000004GglIQAS), aimed at the sample audience: - **Subject line:** Your trail is waiting – exclusive fall gear inside - **Pre‑header:** Members‑"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -540,7 +508,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -563,16 +530,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 8146,
    "inputTokens": 1110,
    "outputTokens": 522,
    "steps": "stop,stop",
-   "excerpt": "- Subject Line: Your trail is waiting – exclusive fall offers inside - Preheader: Members‑only gear picks for your next autumn hike - Headline: Reignite Your Adventure This Fall - Body Copy: “We’ve missed you on the trail! As a valued membe",
-   "failure": "plainText"
+   "excerpt": "- Subject Line: Your trail is waiting – exclusive fall offers inside - Preheader: Members‑only gear picks for your next autumn hike - Headline: Reignite Your Adventure This Fall - Body Copy: “We’ve missed you on the trail! As a valued membe"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -587,7 +552,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -610,16 +574,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 5241,
    "inputTokens": 1017,
    "outputTokens": 312,
    "steps": "stop,stop",
-   "excerpt": "The readiness check for the campaign shows it is not yet ready for review because two blockers remain: - **Hero image alt text is missing** – The primary visual does not have alternative text, which is required for accessibility compliance ",
-   "failure": "plainText"
+   "excerpt": "The readiness check for the campaign shows it is not yet ready for review because two blockers remain: - **Hero image alt text is missing** – The primary visual does not have alternative text, which is required for accessibility compliance "
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -634,7 +596,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -657,7 +618,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -680,7 +640,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -703,7 +662,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -726,7 +684,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -749,7 +706,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -772,7 +728,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -795,7 +750,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -818,7 +772,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -841,7 +794,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -864,7 +816,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -887,7 +838,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -910,7 +860,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -933,7 +882,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -956,7 +904,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -979,7 +926,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1002,7 +948,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1025,7 +970,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1048,16 +992,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 11201,
    "inputTokens": 1053,
    "outputTokens": 767,
    "steps": "stop,stop",
-   "excerpt": "Here’s a draft campaign brief for the Fall Loyalty Reactivation initiative: - **Objective:** Reactivate dormant loyalty program members, increase repeat purchases during the fall season, and boost overall sales. - **Target Audience:** - Loy",
-   "failure": "plainText"
+   "excerpt": "Here’s a draft campaign brief for the Fall Loyalty Reactivation initiative: - **Objective:** Reactivate dormant loyalty program members, increase repeat purchases during the fall season, and boost overall sales. - **Target Audience:** - Loy"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1072,16 +1014,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 8066,
    "inputTokens": 911,
    "outputTokens": 533,
    "steps": "stop,stop",
-   "excerpt": "Here’s a draft campaign brief for the fall loyalty reactivation idea: - **Campaign Name:** Fall Loyalty Reactivation - **Objective:** Re-engage dormant loyalty members and drive repeat purchases during the fall season. - **Target Audience:*",
-   "failure": "plainText"
+   "excerpt": "Here’s a draft campaign brief for the fall loyalty reactivation idea: - **Campaign Name:** Fall Loyalty Reactivation - **Objective:** Re-engage dormant loyalty members and drive repeat purchases during the fall season. - **Target Audience:*"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1096,7 +1036,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1119,16 +1058,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 3651,
    "inputTokens": 961,
    "outputTokens": 251,
    "steps": "stop,stop",
-   "excerpt": "The preview for the campaign **701jV000004GglIQAS** has been refined. The messaging now emphasizes the upcoming fall loyalty reactivation, includes a stronger call‑to‑action for members to claim exclusive offers, and the visual layout has b",
-   "failure": "plainText"
+   "excerpt": "The preview for the campaign **701jV000004GglIQAS** has been refined. The messaging now emphasizes the upcoming fall loyalty reactivation, includes a stronger call‑to‑action for members to claim exclusive offers, and the visual layout has b"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1143,16 +1080,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 4375,
    "inputTokens": 959,
    "outputTokens": 257,
    "steps": "stop,stop",
-   "excerpt": "The campaign with ID 701jV000004GglIQAS is titled **VERO Phase 1 Launch**. - It is an **Email**‑type campaign that is currently **In Progress**. - To date, **12,400** messages have been sent. Performance metrics show: - Open rate of **38 %*",
-   "failure": "plainText"
+   "excerpt": "The campaign with ID 701jV000004GglIQAS is titled **VERO Phase 1 Launch**. - It is an **Email**‑type campaign that is currently **In Progress**. - To date, **12,400** messages have been sent. Performance metrics show: - Open rate of **38 %*"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1167,16 +1102,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 4272,
    "inputTokens": 939,
    "outputTokens": 229,
    "steps": "stop,stop",
-   "excerpt": "The campaign with ID 701jV000004GglIQAS is titled **“VERO Phase 1 Launch.”** - Status: In Progress - Type: Email - Emails sent: 12,400 Performance indicators: - Open rate ≈ 38 % - Click‑through rate ≈ 7 % - Conversions ≈ 214 - Trend shows a",
-   "failure": "plainText"
+   "excerpt": "The campaign with ID 701jV000004GglIQAS is titled **“VERO Phase 1 Launch.”** - Status: In Progress - Type: Email - Emails sent: 12,400 Performance indicators: - Open rate ≈ 38 % - Click‑through rate ≈ 7 % - Conversions ≈ 214 - Trend shows a"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1191,7 +1124,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1214,7 +1146,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1237,7 +1168,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1260,16 +1190,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 4988,
    "inputTokens": 965,
    "outputTokens": 429,
    "steps": "stop,stop",
-   "excerpt": "Here is a draft email for the **Fall loyalty reactivation** campaign (Campaign ID 701jV000004GglIQAS): - **Subject line:** Your trail is waiting – exclusive fall offers inside - **Pre‑header:** Members‑only gear picks for autumn hikes **Bod",
-   "failure": "plainText"
+   "excerpt": "Here is a draft email for the **Fall loyalty reactivation** campaign (Campaign ID 701jV000004GglIQAS): - **Subject line:** Your trail is waiting – exclusive fall offers inside - **Pre‑header:** Members‑only gear picks for autumn hikes **Bod"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1284,16 +1212,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 4290,
    "inputTokens": 1037,
    "outputTokens": 358,
    "steps": "stop,stop",
-   "excerpt": "A draft hero section for the “Fall loyalty reactivation” email: - Warm autumn‑themed image as the background (e.g., golden leaves or a cozy outdoor scene). - Headline: **Welcome Back to Fall Savings** - Subheadline: **Exclusive offers just ",
-   "failure": "plainText"
+   "excerpt": "A draft hero section for the “Fall loyalty reactivation” email: - Warm autumn‑themed image as the background (e.g., golden leaves or a cozy outdoor scene). - Headline: **Welcome Back to Fall Savings** - Subheadline: **Exclusive offers just "
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1308,7 +1234,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1331,7 +1256,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -1355,7 +1279,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -1379,7 +1302,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1402,7 +1324,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -1426,7 +1347,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1449,7 +1369,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1472,7 +1391,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1495,7 +1413,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1518,7 +1435,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1541,7 +1457,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1564,16 +1479,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 4740,
    "inputTokens": 957,
    "outputTokens": 300,
    "steps": "stop,stop",
-   "excerpt": "Consent coverage is not yet ready for review. The readiness check shows a blocker: **Commercial consent scope is not confirmed**. This must be resolved before the campaign can move forward.",
-   "failure": "plainText"
+   "excerpt": "Consent coverage is not yet ready for review. The readiness check shows a blocker: **Commercial consent scope is not confirmed**. This must be resolved before the campaign can move forward."
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1588,7 +1501,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1611,7 +1523,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1634,7 +1545,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1657,7 +1567,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1680,16 +1589,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 6141,
    "inputTokens": 1060,
    "outputTokens": 402,
    "steps": "stop,stop",
-   "excerpt": "Subject line: Your trail is waiting Preheader: Members‑only gear picks for fall hikes Email body: Hi [First Name], Fall is calling, and we’ve saved the best gear and experiences just for you. As a valued member of our loyalty program, you’v",
-   "failure": "plainText"
+   "excerpt": "Subject line: Your trail is waiting Preheader: Members‑only gear picks for fall hikes Email body: Hi [First Name], Fall is calling, and we’ve saved the best gear and experiences just for you. As a valued member of our loyalty program, you’v"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1704,7 +1611,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1727,7 +1633,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1750,7 +1655,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1773,7 +1677,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1796,7 +1699,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1819,7 +1721,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1842,7 +1743,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1865,7 +1765,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1888,7 +1787,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1911,7 +1809,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1934,7 +1831,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1957,7 +1853,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -1980,16 +1875,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 3762,
    "inputTokens": 2006,
    "outputTokens": 343,
    "steps": "tool-calls,stop",
-   "excerpt": "Here is a draft campaign brief for the Fall Loyalty idea: - **Objective** – Reactivate dormant loyalty members and boost repeat purchases during the fall season. - **Target audience** – Customers who have a loyalty account but have not made",
-   "failure": "plainText"
+   "excerpt": "Here is a draft campaign brief for the Fall Loyalty idea: - **Objective** – Reactivate dormant loyalty members and boost repeat purchases during the fall season. - **Target audience** – Customers who have a loyalty account but have not made"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2004,16 +1897,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 5852,
    "inputTokens": 2022,
    "outputTokens": 330,
    "steps": "tool-calls,stop",
-   "excerpt": "Here is a draft campaign brief for the fall loyalty idea: - **Objective**: Reactivate dormant loyalty members and boost repeat purchases during the fall season. - **Target Audience**: Existing customers who have not engaged with the loyalty",
-   "failure": "plainText"
+   "excerpt": "Here is a draft campaign brief for the fall loyalty idea: - **Objective**: Reactivate dormant loyalty members and boost repeat purchases during the fall season. - **Target Audience**: Existing customers who have not engaged with the loyalty"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2028,7 +1919,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2052,7 +1942,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2075,16 +1964,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 4232,
    "inputTokens": 2013,
    "outputTokens": 170,
    "steps": "tool-calls,stop",
-   "excerpt": "Campaign 701jV000004GglIQAS – “VERO Phase 1 Launch” – is an email campaign currently marked **In Progress**. - Sent to 12,400 recipients. - Open rate 38 % and click‑through rate 6.7 %. - Generated 214 conversions, performing **8.4 % above**",
-   "failure": "plainText"
+   "excerpt": "Campaign 701jV000004GglIQAS – “VERO Phase 1 Launch” – is an email campaign currently marked **In Progress**. - Sent to 12,400 recipients. - Open rate 38 % and click‑through rate 6.7 %. - Generated 214 conversions, performing **8.4 % above**"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2099,16 +1986,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 2737,
    "inputTokens": 2017,
    "outputTokens": 192,
    "steps": "tool-calls,stop",
-   "excerpt": "The campaign with ID 701jV000004GglIQAS is titled **VERO Phase 1 Launch**. - Status: In Progress - Type: Email - Emails sent: 12 400 Performance metrics: - Open rate: 38.2 % - Click‑through rate: 6.7 % - Conversions: 214 Overall, the campai",
-   "failure": "plainText"
+   "excerpt": "The campaign with ID 701jV000004GglIQAS is titled **VERO Phase 1 Launch**. - Status: In Progress - Type: Email - Emails sent: 12 400 Performance metrics: - Open rate: 38.2 % - Click‑through rate: 6.7 % - Conversions: 214 Overall, the campai"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2123,7 +2008,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2146,16 +2030,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 5710,
    "inputTokens": 2050,
    "outputTokens": 215,
    "steps": "tool-calls,stop",
-   "excerpt": "Here are the evidence‑backed insights for the campaign **701jV000004GglIQAS**: - Mobile opens outperform desktop by 12 percent.",
-   "failure": "plainText"
+   "excerpt": "Here are the evidence‑backed insights for the campaign **701jV000004GglIQAS**: - Mobile opens outperform desktop by 12 percent."
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2170,16 +2052,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 5332,
    "inputTokens": 2137,
    "outputTokens": 480,
    "steps": "tool-calls,stop",
-   "excerpt": "Here is a draft email based on the Fall loyalty reactivation brief: - Subject line: Your trail is waiting – exclusive fall offers inside - Pre‑header: Members‑only gear picks for the perfect autumn hike Body (short and friendly): Hi [First ",
-   "failure": "plainText"
+   "excerpt": "Here is a draft email based on the Fall loyalty reactivation brief: - Subject line: Your trail is waiting – exclusive fall offers inside - Pre‑header: Members‑only gear picks for the perfect autumn hike Body (short and friendly): Hi [First "
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2194,7 +2074,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2218,7 +2097,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2227,7 +2105,7 @@
    "outputTokens": 388,
    "steps": "tool-calls,stop",
    "excerpt": "Here’s a draft hero section you can use in the email: - **Headline:** Welcome Back to Fall Adventures - **Sub‑headline:** Exclusive gear and deals just for our loyal members – re‑ignite your love for the season. - **Call‑to‑Action Button:**",
-   "failure": "toolCorrect, plainText"
+   "failure": "toolCorrect"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2242,7 +2120,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2251,7 +2128,7 @@
    "outputTokens": 222,
    "steps": "tool-calls,stop",
    "excerpt": "Here’s a draft hero section for the email: - **Headline:** “Welcome Back to Fall Adventures” - **Sub‑headline:** “Exclusive loyalty rewards await you this season” - **Call‑to‑Action button:** “Claim Your Rewards” (link placeholder)",
-   "failure": "toolCorrect, plainText"
+   "failure": "toolCorrect"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2266,7 +2143,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2290,7 +2166,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2314,7 +2189,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2338,7 +2212,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2362,7 +2235,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2386,7 +2258,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2409,7 +2280,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2433,7 +2303,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2457,7 +2326,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2480,7 +2348,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2503,16 +2370,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 3688,
    "inputTokens": 2043,
    "outputTokens": 234,
    "steps": "tool-calls,stop",
-   "excerpt": "- The readiness check for the campaign (ID 701jV000004GglIQAS) shows 7 of 9 required checks completed. - One of the remaining blockers is **“Commercial consent scope is not confirmed.”** Because consent coverage has not been confirmed, the ",
-   "failure": "plainText"
+   "excerpt": "- The readiness check for the campaign (ID 701jV000004GglIQAS) shows 7 of 9 required checks completed. - One of the remaining blockers is **“Commercial consent scope is not confirmed.”** Because consent coverage has not been confirmed, the "
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2527,7 +2392,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2551,7 +2415,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2575,7 +2438,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2599,16 +2461,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 4700,
    "inputTokens": 2077,
    "outputTokens": 419,
    "steps": "tool-calls,stop",
-   "excerpt": "Here is a draft of the campaign copy. It is a complete set of elements you can review and edit before any publishing or activation steps. - Subject line: Your trail is waiting – exclusive fall gear inside - Pre‑header: Members‑only picks to",
-   "failure": "plainText"
+   "excerpt": "Here is a draft of the campaign copy. It is a complete set of elements you can review and edit before any publishing or activation steps. - Subject line: Your trail is waiting – exclusive fall gear inside - Pre‑header: Members‑only picks to"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2623,7 +2483,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2646,7 +2505,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2670,7 +2528,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -2694,7 +2551,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2717,7 +2573,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2740,7 +2595,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2763,7 +2617,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2786,7 +2639,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2809,7 +2661,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2832,7 +2683,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2855,7 +2705,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2878,7 +2727,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2901,7 +2749,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2924,7 +2771,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2947,7 +2793,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -2970,16 +2815,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 32167,
    "inputTokens": 893,
    "outputTokens": 582,
    "steps": "tool-calls,stop",
-   "excerpt": "The campaign is titled **VERO Phase 1 Launch** and is currently in progress. It is an email‑based effort that has already sent 12,400 messages. Recent performance highlights: - Open rate 38.2 % - Click‑through rate 6.7 % - 214 conversions r",
-   "failure": "plainText"
+   "excerpt": "The campaign is titled **VERO Phase 1 Launch** and is currently in progress. It is an email‑based effort that has already sent 12,400 messages. Recent performance highlights: - Open rate 38.2 % - Click‑through rate 6.7 % - 214 conversions r"
   },
   {
    "model": "@cf/openai/gpt-oss-20b",
@@ -2994,7 +2837,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3017,7 +2859,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3040,7 +2881,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3063,7 +2903,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3086,7 +2925,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3109,7 +2947,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3132,7 +2969,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -3156,7 +2992,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3179,7 +3014,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3202,7 +3036,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3225,7 +3058,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3248,7 +3080,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3271,7 +3102,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3294,7 +3124,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3317,7 +3146,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3340,7 +3168,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3363,7 +3190,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3386,7 +3212,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3409,7 +3234,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3432,7 +3256,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3455,7 +3278,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3478,7 +3300,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3501,7 +3322,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3524,7 +3344,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3547,7 +3366,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3570,7 +3388,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3593,7 +3410,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3616,7 +3432,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3639,7 +3454,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3662,7 +3476,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3685,7 +3498,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3708,7 +3520,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3731,7 +3542,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3754,7 +3564,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3777,7 +3586,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3800,7 +3608,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3823,7 +3630,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3846,7 +3652,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3869,7 +3674,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3892,7 +3696,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3915,7 +3718,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3938,7 +3740,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3961,7 +3762,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -3984,7 +3784,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4007,7 +3806,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4030,7 +3828,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4053,7 +3850,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4076,7 +3872,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4099,7 +3894,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4122,7 +3916,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4145,7 +3938,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4168,7 +3960,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4191,7 +3982,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4214,7 +4004,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4237,7 +4026,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4260,7 +4048,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4283,7 +4070,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4306,7 +4092,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4329,7 +4114,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4352,7 +4136,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4375,7 +4158,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4398,7 +4180,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4421,7 +4202,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4444,7 +4224,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4467,7 +4246,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4490,7 +4268,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4513,7 +4290,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4536,7 +4312,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -4560,7 +4335,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -4584,7 +4358,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4607,7 +4380,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4630,7 +4402,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -4654,7 +4425,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -4678,7 +4448,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -4702,7 +4471,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -4726,7 +4494,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -4750,7 +4517,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4773,7 +4539,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -4797,7 +4562,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -4821,7 +4585,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -4845,7 +4608,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -4869,7 +4631,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -4893,7 +4654,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -4917,7 +4677,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4940,7 +4699,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -4963,7 +4721,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -4987,7 +4744,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -5011,7 +4767,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -5035,7 +4790,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -5059,7 +4813,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -5083,7 +4836,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -5107,7 +4859,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -5131,7 +4882,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5154,7 +4904,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -5178,7 +4927,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5201,7 +4949,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -5225,7 +4972,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -5249,7 +4995,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5272,7 +5017,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5295,7 +5039,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -5319,7 +5062,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5342,7 +5084,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -5366,7 +5107,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5389,7 +5129,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5412,7 +5151,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5435,7 +5173,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5458,7 +5195,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5481,7 +5217,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5504,7 +5239,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5527,7 +5261,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5550,7 +5283,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5573,7 +5305,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5596,7 +5327,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5619,7 +5349,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5642,7 +5371,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5665,7 +5393,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5688,7 +5415,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5711,7 +5437,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5734,7 +5459,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5757,7 +5481,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5780,7 +5503,6 @@
     "toolCorrect": true,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -5804,16 +5526,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 5378,
    "inputTokens": 902,
    "outputTokens": 334,
    "steps": "stop,stop",
-   "excerpt": "Based on the sample campaign readiness check, there are 2 blockers that need to be addressed: **Required Actions** Hero image alt text is missing - Ensure all hero images have descriptive alternative text for accessibility and SEO - Review ",
-   "failure": "plainText"
+   "excerpt": "Based on the sample campaign readiness check, there are 2 blockers that need to be addressed: **Required Actions** Hero image alt text is missing - Ensure all hero images have descriptive alternative text for accessibility and SEO - Review "
   },
   {
    "model": "@cf/zai-org/glm-4.7-flash",
@@ -5828,7 +5548,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5851,7 +5570,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5874,7 +5592,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5897,7 +5614,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5920,7 +5636,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5943,7 +5658,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5966,7 +5680,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -5989,7 +5702,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6012,7 +5724,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6035,7 +5746,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6058,7 +5768,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6081,7 +5790,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6104,7 +5812,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6127,7 +5834,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6150,7 +5856,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6173,7 +5878,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6196,7 +5900,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6219,7 +5922,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6242,7 +5944,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6265,7 +5966,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6288,7 +5988,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6311,7 +6010,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6334,7 +6032,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6357,7 +6054,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6380,7 +6076,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6403,16 +6098,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 8885,
    "inputTokens": 1095,
    "outputTokens": 534,
    "steps": "stop,stop",
-   "excerpt": "Here's a draft hero section for your email: **Hero Content** Find your next trail with members-only fall picks - Includes curated paths for all experience levels - Member-exclusive access to special routes - Seasonal guidance for optimal fa",
-   "failure": "plainText"
+   "excerpt": "Here's a draft hero section for your email: **Hero Content** Find your next trail with members-only fall picks - Includes curated paths for all experience levels - Member-exclusive access to special routes - Seasonal guidance for optimal fa"
   },
   {
    "model": "@cf/zai-org/glm-4.7-flash",
@@ -6427,7 +6120,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6450,7 +6142,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6473,7 +6164,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6496,7 +6186,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6519,7 +6208,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6542,7 +6230,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6565,7 +6252,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6588,7 +6274,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6611,7 +6296,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6634,7 +6318,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6657,7 +6340,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6680,7 +6362,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6703,7 +6384,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6726,7 +6406,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6749,7 +6428,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6772,7 +6450,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6795,7 +6472,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6818,7 +6494,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6841,16 +6516,14 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": false,
     "noFalseWriteClaim": true
    },
-   "passed": false,
+   "passed": true,
    "latencyMs": 4398,
    "inputTokens": 856,
    "outputTokens": 271,
    "steps": "stop,stop",
-   "excerpt": "**Account Engagement Recap** - Engagement Score: 72 - Engagement Trend: Rising - Most Recent Activity: Webinar attendance - Data Note: This summary is based on a test fixture. For detailed account-level engagement metrics, please contact su",
-   "failure": "plainText"
+   "excerpt": "**Account Engagement Recap** - Engagement Score: 72 - Engagement Trend: Rising - Most Recent Activity: Webinar attendance - Data Note: This summary is based on a test fixture. For detailed account-level engagement metrics, please contact su"
   },
   {
    "model": "@cf/zai-org/glm-4.7-flash",
@@ -6865,7 +6538,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6888,7 +6560,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6911,7 +6582,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6934,7 +6604,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6957,7 +6626,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -6980,7 +6648,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7003,7 +6670,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7026,7 +6692,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7049,7 +6714,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7072,7 +6736,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7095,7 +6758,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7118,7 +6780,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": false
    },
    "passed": false,
@@ -7142,7 +6803,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7166,7 +6826,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7190,7 +6849,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7213,7 +6871,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7236,7 +6893,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7259,7 +6915,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7282,7 +6937,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7306,7 +6960,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7330,7 +6983,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7354,7 +7006,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7377,7 +7028,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7401,7 +7051,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7425,7 +7074,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7449,7 +7097,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7473,7 +7120,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7497,7 +7143,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7520,7 +7165,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7544,7 +7188,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7568,7 +7211,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7592,7 +7234,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7616,7 +7257,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7639,7 +7279,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7663,7 +7302,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7687,7 +7325,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7711,7 +7348,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7735,7 +7371,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7759,7 +7394,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7783,7 +7417,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -7807,7 +7440,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7830,7 +7462,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7853,7 +7484,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7876,7 +7506,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7899,7 +7528,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7922,7 +7550,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7945,7 +7572,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7968,7 +7594,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -7991,7 +7616,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -8014,7 +7638,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -8037,7 +7660,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8061,7 +7683,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8085,7 +7706,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8109,7 +7729,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8133,7 +7752,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8157,7 +7775,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8181,7 +7798,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8205,7 +7821,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8229,7 +7844,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8253,7 +7867,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8277,7 +7890,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8301,7 +7913,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8325,7 +7936,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8349,7 +7959,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8373,7 +7982,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8397,7 +8005,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8421,7 +8028,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8445,7 +8051,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8469,7 +8074,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8493,7 +8097,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8517,7 +8120,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -8540,7 +8142,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -8563,7 +8164,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -8586,7 +8186,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -8609,7 +8208,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -8632,7 +8230,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -8655,7 +8252,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -8678,7 +8274,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -8701,7 +8296,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -8724,7 +8318,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -8747,7 +8340,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8771,7 +8363,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8795,7 +8386,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8819,7 +8409,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8843,7 +8432,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8867,7 +8455,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8891,7 +8478,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8915,7 +8501,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8939,7 +8524,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8963,7 +8547,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -8987,7 +8570,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9011,7 +8593,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9035,7 +8616,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9059,7 +8639,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9083,7 +8662,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9107,7 +8685,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9131,7 +8708,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9155,7 +8731,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9179,7 +8754,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9203,7 +8777,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9227,7 +8800,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9251,7 +8823,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9275,7 +8846,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9299,7 +8869,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9323,7 +8892,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9347,7 +8915,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9371,7 +8938,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9395,7 +8961,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9419,7 +8984,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9443,7 +9007,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": false,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9467,7 +9030,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -9490,7 +9052,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -9513,7 +9074,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -9536,7 +9096,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -9559,7 +9118,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -9582,7 +9140,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -9605,7 +9162,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -9628,7 +9184,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -9651,7 +9206,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -9674,7 +9228,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -9697,7 +9250,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9721,7 +9273,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9745,7 +9296,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9769,7 +9319,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9793,7 +9342,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9817,7 +9365,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9841,7 +9388,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9865,7 +9411,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9889,7 +9434,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9913,7 +9457,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9937,7 +9480,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9961,7 +9503,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -9985,7 +9526,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10009,7 +9549,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10033,7 +9572,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10057,7 +9595,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10081,7 +9618,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10105,7 +9641,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10129,7 +9664,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10153,7 +9687,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10177,7 +9710,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10201,7 +9733,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10225,7 +9756,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10249,7 +9779,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10273,7 +9802,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10297,7 +9825,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10321,7 +9848,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10345,7 +9871,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10369,7 +9894,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10393,7 +9917,6 @@
     "toolCorrect": false,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10417,7 +9940,6 @@
     "toolCorrect": true,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10441,7 +9963,6 @@
     "toolCorrect": true,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10465,7 +9986,6 @@
     "toolCorrect": true,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10489,7 +10009,6 @@
     "toolCorrect": true,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10513,7 +10032,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10536,7 +10054,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10559,7 +10076,6 @@
     "toolCorrect": true,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10583,7 +10099,6 @@
     "toolCorrect": true,
     "textProduced": false,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -10607,7 +10122,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10630,7 +10144,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10653,7 +10166,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10676,7 +10188,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10699,7 +10210,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10722,7 +10232,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10745,7 +10254,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10768,7 +10276,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10791,7 +10298,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10814,7 +10320,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10837,7 +10342,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10860,7 +10364,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10883,7 +10386,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10906,7 +10408,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10929,7 +10430,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10952,7 +10452,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10975,7 +10474,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -10998,7 +10496,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11021,7 +10518,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11044,7 +10540,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11067,7 +10562,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11090,7 +10584,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11113,7 +10606,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11136,7 +10628,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11159,7 +10650,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11182,7 +10672,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11205,7 +10694,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11228,7 +10716,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11251,7 +10738,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11274,7 +10760,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11297,7 +10782,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11320,7 +10804,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11343,7 +10826,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11366,7 +10848,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11389,7 +10870,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11412,7 +10892,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11435,7 +10914,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11458,7 +10936,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11481,7 +10958,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11504,7 +10980,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11527,7 +11002,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11550,7 +11024,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11573,7 +11046,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11596,7 +11068,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11619,7 +11090,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11642,7 +11112,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11665,7 +11134,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11688,7 +11156,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11711,7 +11178,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11734,7 +11200,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11757,7 +11222,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11780,7 +11244,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11803,7 +11266,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11826,7 +11288,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11849,7 +11310,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11872,7 +11332,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11895,7 +11354,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11918,7 +11376,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11941,7 +11398,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11964,7 +11420,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -11987,7 +11442,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12010,7 +11464,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12033,7 +11486,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12056,7 +11508,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12079,7 +11530,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12102,7 +11552,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12125,7 +11574,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12148,7 +11596,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12171,7 +11618,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12194,7 +11640,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12217,7 +11662,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12240,7 +11684,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12263,7 +11706,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12286,7 +11728,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12309,7 +11750,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -12333,7 +11773,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -12357,7 +11796,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12380,7 +11818,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12403,7 +11840,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12426,7 +11862,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12449,7 +11884,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12472,7 +11906,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12495,7 +11928,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12518,7 +11950,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12541,7 +11972,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -12565,7 +11995,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -12589,7 +12018,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -12613,7 +12041,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -12637,7 +12064,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12660,7 +12086,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12683,7 +12108,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12706,7 +12130,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12729,7 +12152,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12752,7 +12174,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12775,7 +12196,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12798,7 +12218,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12821,7 +12240,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12844,7 +12262,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12867,7 +12284,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12890,7 +12306,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12913,7 +12328,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -12937,7 +12351,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -12961,7 +12374,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -12984,7 +12396,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -13007,7 +12418,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -13030,7 +12440,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -13053,7 +12462,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -13076,7 +12484,6 @@
     "toolCorrect": false,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": false,
@@ -13100,7 +12507,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -13123,7 +12529,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -13146,7 +12551,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
@@ -13169,7 +12573,6 @@
     "toolCorrect": true,
     "textProduced": true,
     "noToolErrors": true,
-    "plainText": true,
     "noFalseWriteClaim": true
    },
    "passed": true,
