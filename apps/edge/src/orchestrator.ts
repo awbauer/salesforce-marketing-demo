@@ -9,6 +9,8 @@ import {
   PHASE_2_CURATED_TOOLS,
   POLICY_RESPONSES,
   PROOF_DEFAULTS,
+  parseOperationControls,
+  WRITE_TOOL_BY_ACTION,
   TURN_HISTORY_RETENTION_DAYS,
   type TurnRecord,
   TurnRecordSchema,
@@ -51,6 +53,9 @@ export type AgentProps = { principalSubject: string; workspaceId: string };
 type OrchestratorBindings = CloudflareBindings & {
   SALESFORCE_MCP_URL?: string;
   CONFIRMATION_SIGNING_KEY?: string;
+  // Operator kill switches, set as Worker secrets so deploys do not reset them.
+  WRITES_ENABLED?: string;
+  DISABLED_TOOLS?: string;
 };
 
 const IMAGE_PROMPT_VERSION = "campaign-image-v1";
@@ -390,6 +395,17 @@ function scriptedResponse(
   return createUIMessageStreamResponse({ stream });
 }
 
+export function writeBlockReason(
+  controls: ReturnType<typeof parseOperationControls>,
+  action: keyof typeof WRITE_TOOL_BY_ACTION,
+) {
+  if (!controls.writesEnabled)
+    return "Salesforce writes are paused by an operator. Nothing was changed.";
+  if ((controls.disabledTools as readonly string[]).includes(WRITE_TOOL_BY_ACTION[action]))
+    return "This Salesforce write is turned off by an operator. Nothing was changed.";
+  return null;
+}
+
 export class MarketingOrchestrator extends AIChatAgent<
   OrchestratorBindings,
   OrchestratorState,
@@ -409,10 +425,13 @@ export class MarketingOrchestrator extends AIChatAgent<
     const turnMessages = evidenceTurnMessages(messages);
     await this.mcp.waitForConnections({ timeout: 10_000 });
     const discoveredTools = this.mcp.getAITools();
+    const { disabledTools } = parseOperationControls(this.env);
     const tools = guardToolResults(
       Object.fromEntries(
         Object.entries(discoveredTools).filter(([key]) =>
-          PHASE_2_AUTONOMOUS_TOOLS.some((name) => key.endsWith(`_${name}`)),
+          PHASE_2_AUTONOMOUS_TOOLS.some(
+            (name) => key.endsWith(`_${name}`) && !disabledTools.includes(name),
+          ),
         ),
       ),
     );
@@ -432,7 +451,9 @@ export class MarketingOrchestrator extends AIChatAgent<
     if (requestedTool && !requiredTool)
       return scriptedResponse(
         [
-          "Salesforce is connected, but the governed tool catalog is not ready for this request. Check the Salesforce connection status and retry. I did not substitute demo data.",
+          (disabledTools as readonly string[]).includes(requestedTool)
+            ? `The ${requestedTool.replaceAll("_", " ")} tool is turned off by an operator right now, so I did not call it or substitute demo data.`
+            : "Salesforce is connected, but the governed tool catalog is not ready for this request. Check the Salesforce connection status and retry. I did not substitute demo data.",
         ],
         {
           model: POLICY_ROUTER,
@@ -501,6 +522,12 @@ export class MarketingOrchestrator extends AIChatAgent<
     return createUIMessageStreamResponse({ stream });
   }
 
+  /** Returns a 503 response when operators have paused writes or turned off this write tool. */
+  private writeBlocked(action: keyof typeof WRITE_TOOL_BY_ACTION) {
+    const message = writeBlockReason(parseOperationControls(this.env), action);
+    return message ? json({ error: { code: "WRITES_DISABLED", message } }, { status: 503 }) : null;
+  }
+
   private ensureTurnHistory() {
     this.sql`CREATE TABLE IF NOT EXISTS northstar_turn_history (
       id TEXT PRIMARY KEY,
@@ -528,6 +555,57 @@ export class MarketingOrchestrator extends AIChatAgent<
     } catch (error) {
       console.error("[orchestrator] could not record turn history", error);
     }
+  }
+
+  /** A compact, per-user export of confirmed-write audit rows and turn summaries in retention. */
+  private async exportAudit() {
+    const cutoff = new Date(Date.now() - TURN_HISTORY_RETENTION_DAYS * 86_400_000).toISOString();
+    let confirmations: Record<string, unknown>[] = [];
+    try {
+      const rows = await this.env.APP_DB.prepare(
+        `SELECT confirmation_id, action, record_id, status, source_record_id, expires_at, created_at, updated_at
+         FROM confirmation_audit
+         WHERE workspace_id = ? AND principal_subject = ? AND created_at >= ?
+         ORDER BY created_at DESC LIMIT 500`,
+      )
+        .bind(this.state.workspaceId, this.principalSubject, cutoff)
+        .all<Record<string, unknown>>();
+      confirmations = rows.results;
+    } catch {
+      // The audit table is created on first write; no rows means no confirmed writes yet.
+    }
+    const exportedAt = new Date().toISOString();
+    return new Response(
+      JSON.stringify(
+        {
+          exportedAt,
+          workspaceId: this.state.workspaceId,
+          retentionDays: TURN_HISTORY_RETENTION_DAYS,
+          operations: parseOperationControls(this.env),
+          confirmations,
+          turns: this.listTurns().map((turn) => ({
+            id: turn.id,
+            startedAt: turn.startedAt,
+            utterance: turn.utterance,
+            route: turn.route,
+            requiredTool: turn.requiredTool,
+            outcome: turn.outcome,
+            fallback: turn.fallback,
+            durationMs: turn.durationMs,
+            tools: turn.tools.map((tool) => ({ toolName: tool.toolName, status: tool.status })),
+          })),
+        },
+        null,
+        2,
+      ),
+      {
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
+          "content-disposition": `attachment; filename="northstar-audit-${exportedAt.slice(0, 10)}.json"`,
+        },
+      },
+    );
   }
 
   private listTurns(): TurnRecord[] {
@@ -893,6 +971,10 @@ export class MarketingOrchestrator extends AIChatAgent<
         request.signal,
       );
     }
+    if (url.pathname.endsWith("/operations") && request.method === "GET")
+      return json(parseOperationControls(this.env));
+    if (url.pathname.endsWith("/audit/export") && request.method === "GET")
+      return this.exportAudit();
     if (url.pathname.endsWith("/turns") && request.method === "GET")
       return json({ retentionDays: TURN_HISTORY_RETENTION_DAYS, turns: this.listTurns() });
     if (url.pathname.endsWith("/images/generate") && request.method === "POST")
@@ -945,6 +1027,8 @@ export class MarketingOrchestrator extends AIChatAgent<
           { error: { code: "VALIDATION_FAILED", message: "The confirmation request is invalid." } },
           { status: 400 },
         );
+      const preflightBlocked = this.writeBlocked(action);
+      if (preflightBlocked) return preflightBlocked;
       let summary = typeof body.summary === "string" ? body.summary.trim() : "";
       let image: { imageId: string; contentHash: string } | undefined;
       if (action === "attach-generated-image") {
@@ -1019,6 +1103,8 @@ export class MarketingOrchestrator extends AIChatAgent<
           { error: { code: "CONFLICT", message: "No confirmation is pending." } },
           { status: 409 },
         );
+      const executeBlocked = this.writeBlocked(current.action);
+      if (executeBlocked) return executeBlocked;
       if (current.principalSubject !== this.principalSubject)
         return json(
           {

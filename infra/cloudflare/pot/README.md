@@ -45,6 +45,20 @@ Keep preview builds disabled until separate preview D1, R2, Access, and Salesfor
 
 The three runtime secrets `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, and `CONFIRMATION_SIGNING_KEY` already belong to the Worker and must remain runtime secrets. Do not copy their values into repository settings, build variables, source control, or build logs. The non-secret runtime values and all resource bindings are owned by `wrangler.jsonc`; do not duplicate them in the dashboard.
 
+## Operator kill switches
+
+Two optional runtime switches pause risky behavior without a code change. They are Worker secrets rather than `wrangler.jsonc` variables because Workers Builds redeploys `vars` from source on every merge, which would reset them. When unset, everything is enabled.
+
+- `WRITES_ENABLED`: set it to `false` to pause every confirmed Salesforce write (save brief, review task, image attach). Preflight and execute return `503 WRITES_DISABLED`, and the UI shows a paused notice and disables the write buttons.
+- `DISABLED_TOOLS`: a comma-separated list of curated tool names, for example `attach_campaign_image,summarize_campaign`. Disabled read tools are removed from the model's tool set, and a routed request explains that an operator turned the tool off. Disabled write tools are blocked like paused writes. Unknown names are ignored.
+
+```bash
+printf 'false' | pnpm exec wrangler secret put WRITES_ENABLED --config wrangler.jsonc
+pnpm exec wrangler secret delete WRITES_ENABLED --config wrangler.jsonc
+```
+
+`GET /agent/operations` reports the active controls. `GET /agent/audit/export` downloads the caller's confirmed-write audit rows and turn summaries from the 14-day retention window.
+
 ## Rollback and teardown
 
 Delete only the IDs recorded by this work unit: the proof Worker, Access application/policy, D1 database, R2 bucket, and Durable Object namespace/migration associated with the proof Worker. Export no data. Read back the resource lists after deletion and attach the results to the work unit. Never use a broad account cleanup command.

@@ -3,6 +3,9 @@ import {
   type Confirmation,
   type GeneratedCampaignImage,
   initialOrchestratorState,
+  type OperationControls,
+  OperationControlsSchema,
+  WRITE_TOOL_BY_ACTION,
   type OrchestratorState,
   OrchestratorStateSchema,
   PHASE_2_CURATED_TOOLS,
@@ -114,6 +117,10 @@ export function App() {
   const [generatedImage, setGeneratedImage] = useState<GeneratedCampaignImage | null>(null);
   const [imageBusy, setImageBusy] = useState(false);
   const [quickstartOpen, setQuickstartOpen] = useState(false);
+  const [operations, setOperations] = useState<OperationControls>({
+    writesEnabled: true,
+    disabledTools: [],
+  });
   const [view, setView] = useState<"overview" | "history" | "evaluations">("overview");
   const confirmationRef = useRef<HTMLElement>(null);
   const quickstartCloseRef = useRef<HTMLButtonElement>(null);
@@ -148,6 +155,13 @@ export function App() {
       })
       .then(() => setSessionState("ready"))
       .catch(() => setSessionState("error"));
+    fetch("/agent/operations")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        const parsed = OperationControlsSchema.safeParse(body);
+        if (parsed.success) setOperations(parsed.data);
+      })
+      .catch(() => undefined);
     loadConnector().catch(() => {
       connectorStatusLoaded.current = true;
       setState((current) => ({
@@ -194,6 +208,13 @@ export function App() {
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [quickstartOpen]);
+
+  function writeBlock(action: keyof typeof WRITE_TOOL_BY_ACTION) {
+    if (!operations.writesEnabled) return "Writes paused by an operator";
+    return (operations.disabledTools as readonly string[]).includes(WRITE_TOOL_BY_ACTION[action])
+      ? "Turned off by an operator"
+      : null;
+  }
 
   async function agentAction<T>(path: string, body?: unknown) {
     setActionError("");
@@ -513,10 +534,18 @@ export function App() {
               <button type="button" className="text-button" onClick={() => clearHistory()}>
                 New chat
               </button>
-              <button type="button" className="text-button" onClick={() => setView("history")}>
+              <button
+                type="button"
+                className="text-button compact-nav"
+                onClick={() => setView("history")}
+              >
                 History
               </button>
-              <button type="button" className="text-button" onClick={() => setView("evaluations")}>
+              <button
+                type="button"
+                className="text-button compact-nav"
+                onClick={() => setView("evaluations")}
+              >
                 Evaluations
               </button>
               <button
@@ -791,6 +820,12 @@ export function App() {
             </div>
             <span className="count">{state.tiles.length}</span>
           </div>
+          {!operations.writesEnabled && (
+            <div className="operations-notice" role="status">
+              Salesforce writes are paused by an operator. Reading and drafting still work; nothing
+              can be saved, created, or attached until writes are resumed.
+            </div>
+          )}
           <InsightBoard tiles={state.tiles} />
           <section className="image-workflow" aria-labelledby="image-workflow-title">
             <div>
@@ -847,7 +882,10 @@ export function App() {
                       type="button"
                       className="secondary-button attach-image-button"
                       onClick={() => void requestImageAttachment()}
-                      disabled={pendingConfirmation !== null}
+                      disabled={
+                        pendingConfirmation !== null ||
+                        writeBlock("attach-generated-image") !== null
+                      }
                     >
                       Attach to campaign
                     </button>
@@ -885,10 +923,14 @@ export function App() {
             )}
           </section>
           <div className="insight-action">
-            <button type="button" onClick={() => void requestReview()}>
+            <button
+              type="button"
+              onClick={() => void requestReview()}
+              disabled={writeBlock("create-review-task") !== null}
+            >
               Create review request
             </button>
-            <span>Requires confirmation</span>
+            <span>{writeBlock("create-review-task") ?? "Requires confirmation"}</span>
           </div>
           <section className="activity">
             <h3>Activity</h3>

@@ -84,7 +84,10 @@ export function HistoryView({ refreshKey, onClose }: { refreshKey: number; onClo
           <p className="kicker">Audit</p>
           <h2 id="history-title">Turn history</h2>
         </div>
-        <button type="button" className="text-button evaluations-back" onClick={onClose}>
+        <a className="text-button evaluations-back" href="/agent/audit/export" download>
+          Export audit (JSON)
+        </a>
+        <button type="button" className="text-button" onClick={onClose}>
           Back to workspace
         </button>
       </div>

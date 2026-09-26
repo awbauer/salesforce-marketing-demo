@@ -420,3 +420,22 @@ test("records each turn with its interpretation, reasoning, and outcome in histo
     fullPage: true,
   });
 });
+
+test("reflects operator kill switches and offers the audit export", async ({ page }, testInfo) => {
+  await page.route("**/agent/operations", (route) =>
+    route.fulfill({ json: { writesEnabled: false, disabledTools: [] } }),
+  );
+  await page.goto("/");
+  await expect(page.getByText(/Salesforce writes are paused by an operator/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create review request" })).toBeDisabled();
+  await expect(page.getByText("Writes paused by an operator")).toBeVisible();
+  await page.screenshot({
+    path: `artifacts/evidence/WU-023/writes-paused-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "History" }).first().click();
+  await expect(page.getByRole("link", { name: "Export audit (JSON)" })).toHaveAttribute(
+    "href",
+    "/agent/audit/export",
+  );
+});
