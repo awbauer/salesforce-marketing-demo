@@ -9,6 +9,9 @@ import {
   PHASE_2_CURATED_TOOLS,
   POLICY_RESPONSES,
   PROOF_DEFAULTS,
+  TURN_HISTORY_RETENTION_DAYS,
+  type TurnRecord,
+  TurnRecordSchema,
   classifyPolicyIntent,
 } from "@northstar/contracts";
 import {
@@ -34,6 +37,7 @@ import {
   stepToolChoice,
   TURN_TIMEOUT,
 } from "./turn-policy";
+import { buildTurnRecord } from "./turn-history";
 import { createTurnTracer, describeTurnError, type TurnRoute } from "./turn-trace";
 
 export {
@@ -351,6 +355,8 @@ function scriptedTurnStream(
 }
 
 const POLICY_ROUTER = "Northstar policy router";
+const TURN_HISTORY_LIMIT = 200;
+type TurnPipeResult = Awaited<ReturnType<ReturnType<typeof createTurnTracer>["pipe"]>>;
 
 function scriptedResponse(
   texts: string[],
@@ -359,6 +365,7 @@ function scriptedResponse(
     route?: TurnRoute;
     reasoning?: string;
     abortSignal?: AbortSignal;
+    onComplete?: (result: TurnPipeResult) => Promise<void>;
   },
 ) {
   const stream = createUIMessageStream({
@@ -370,12 +377,13 @@ function scriptedResponse(
         userAbortSignal: options.abortSignal,
         ...(options.route ? { route: options.route } : {}),
       });
-      await tracer.pipe(
+      const result = await tracer.pipe(
         scriptedTurnStream(texts, {
           reasoning: options.reasoning,
           abortSignal: options.abortSignal,
         }),
       );
+      await options.onComplete?.(result);
     },
     onError: describeTurnError,
   });
@@ -426,7 +434,13 @@ export class MarketingOrchestrator extends AIChatAgent<
         [
           "Salesforce is connected, but the governed tool catalog is not ready for this request. Check the Salesforce connection status and retry. I did not substitute demo data.",
         ],
-        { model: POLICY_ROUTER, route: "catalog-unavailable", abortSignal },
+        {
+          model: POLICY_ROUTER,
+          route: "catalog-unavailable",
+          abortSignal,
+          onComplete: (result) =>
+            this.recordTurn(prompt, { model: POLICY_ROUTER, route: "catalog-unavailable" }, result),
+        },
       );
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
@@ -456,25 +470,76 @@ export class MarketingOrchestrator extends AIChatAgent<
             onStepFinish: (step) => tracer.recordStepFinish(step),
             onError: ({ error }) => console.error("[orchestrator] turn stream error", error),
           });
-          const { outcome } = await tracer.pipe(
+          const turn = await tracer.pipe(
             result.toUIMessageStream({ sendReasoning: true, onError: describeTurnError }),
           );
-          if (outcome !== "completed")
-            console.warn(`[orchestrator] turn ended with outcome ${outcome}`);
+          if (turn.outcome !== "completed")
+            console.warn(`[orchestrator] turn ended with outcome ${turn.outcome}`);
+          await this.recordTurn(
+            prompt,
+            { model: PROOF_DEFAULTS.orchestratorModel, route: "model", requiredTool },
+            turn,
+          );
         } catch (error) {
           console.error("[orchestrator] turn setup failed", error);
-          await tracer.pipe(
+          const turn = await tracer.pipe(
             new ReadableStream({
               start(controller) {
                 controller.error(error);
               },
             }),
           );
+          await this.recordTurn(
+            prompt,
+            { model: PROOF_DEFAULTS.orchestratorModel, route: "model", requiredTool },
+            turn,
+          );
         }
       },
       onError: describeTurnError,
     });
     return createUIMessageStreamResponse({ stream });
+  }
+
+  private ensureTurnHistory() {
+    this.sql`CREATE TABLE IF NOT EXISTS northstar_turn_history (
+      id TEXT PRIMARY KEY,
+      started_at INTEGER NOT NULL,
+      record TEXT NOT NULL
+    )`;
+  }
+
+  /** Stores one turn in this user's agent storage; history never blocks or fails the turn. */
+  private async recordTurn(
+    utterance: string,
+    context: { model: string; route: TurnRecord["route"]; requiredTool?: string },
+    result: TurnPipeResult,
+  ) {
+    try {
+      const record = TurnRecordSchema.parse(buildTurnRecord({ utterance, ...context, result }));
+      this.ensureTurnHistory();
+      this.sql`INSERT INTO northstar_turn_history (id, started_at, record)
+        VALUES (${record.id}, ${Date.parse(record.startedAt)}, ${JSON.stringify(record)})`;
+      const cutoff = Date.now() - TURN_HISTORY_RETENTION_DAYS * 86_400_000;
+      this.sql`DELETE FROM northstar_turn_history WHERE started_at < ${cutoff}`;
+      this.sql`DELETE FROM northstar_turn_history WHERE id NOT IN (
+        SELECT id FROM northstar_turn_history ORDER BY started_at DESC LIMIT ${TURN_HISTORY_LIMIT}
+      )`;
+    } catch (error) {
+      console.error("[orchestrator] could not record turn history", error);
+    }
+  }
+
+  private listTurns(): TurnRecord[] {
+    this.ensureTurnHistory();
+    const cutoff = Date.now() - TURN_HISTORY_RETENTION_DAYS * 86_400_000;
+    return this.sql<{ record: string }>`SELECT record FROM northstar_turn_history
+      WHERE started_at >= ${cutoff} ORDER BY started_at DESC LIMIT ${TURN_HISTORY_LIMIT}`.flatMap(
+      (row) => {
+        const parsed = TurnRecordSchema.safeParse(JSON.parse(row.record));
+        return parsed.success ? [parsed.data] : [];
+      },
+    );
   }
 
   private async ensureImageDraftTable() {
@@ -828,6 +893,8 @@ export class MarketingOrchestrator extends AIChatAgent<
         request.signal,
       );
     }
+    if (url.pathname.endsWith("/turns") && request.method === "GET")
+      return json({ retentionDays: TURN_HISTORY_RETENTION_DAYS, turns: this.listTurns() });
     if (url.pathname.endsWith("/images/generate") && request.method === "POST")
       return this.generateCampaignImage(request);
     const imageMatch = url.pathname.match(/\/images\/([a-f0-9-]{36})$/);
@@ -1215,12 +1282,15 @@ export class MarketingOrchestrator extends AIChatAgent<
     if (options?.abortSignal?.aborted) return new Response(null, { status: 499 });
     const abortSignal = options?.abortSignal;
     // Writes and forbidden actions never reach the model, so it cannot claim they happened.
-    const policyIntent = classifyPolicyIntent(latestUserText(evidenceTurnMessages(this.messages)));
+    const utterance = latestUserText(evidenceTurnMessages(this.messages));
+    const policyIntent = classifyPolicyIntent(utterance);
     if (policyIntent)
       return scriptedResponse([POLICY_RESPONSES[policyIntent]], {
         model: POLICY_ROUTER,
         route: policyIntent,
         abortSignal,
+        onComplete: (result) =>
+          this.recordTurn(utterance, { model: POLICY_ROUTER, route: policyIntent }, result),
       });
     if ((this.env.ENVIRONMENT as string) !== "local")
       return this.productionChatResponse(this.messages, abortSignal);
@@ -1234,6 +1304,8 @@ export class MarketingOrchestrator extends AIChatAgent<
         model: "local-fixture",
         reasoning: "The request needs no Salesforce tool; answer from the fictional local fixture.",
         abortSignal,
+        onComplete: (result) =>
+          this.recordTurn(utterance, { model: "local-fixture", route: "local-fixture" }, result),
       },
     );
   }

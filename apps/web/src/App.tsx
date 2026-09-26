@@ -17,6 +17,7 @@ import { useAgent } from "agents/react";
 import type { UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
 import { EvaluationView } from "./EvaluationView";
+import { HistoryView } from "./HistoryView";
 import { executionTrace } from "./turn-trace";
 
 function messageText(message: UIMessage) {
@@ -113,7 +114,7 @@ export function App() {
   const [generatedImage, setGeneratedImage] = useState<GeneratedCampaignImage | null>(null);
   const [imageBusy, setImageBusy] = useState(false);
   const [quickstartOpen, setQuickstartOpen] = useState(false);
-  const [view, setView] = useState<"overview" | "evaluations">("overview");
+  const [view, setView] = useState<"overview" | "history" | "evaluations">("overview");
   const confirmationRef = useRef<HTMLElement>(null);
   const quickstartCloseRef = useRef<HTMLButtonElement>(null);
   const connectorStatusLoaded = useRef(false);
@@ -393,6 +394,14 @@ export function App() {
             </button>
             <button
               type="button"
+              className={`nav-item ${view === "history" ? "active" : ""}`}
+              aria-current={view === "history" ? "page" : undefined}
+              onClick={() => setView("history")}
+            >
+              <span>≡</span>History
+            </button>
+            <button
+              type="button"
               className={`nav-item ${view === "evaluations" ? "active" : ""}`}
               aria-current={view === "evaluations" ? "page" : undefined}
               onClick={() => setView("evaluations")}
@@ -488,6 +497,12 @@ export function App() {
           </div>
         </nav>
         {view === "evaluations" && <EvaluationView onClose={() => setView("overview")} />}
+        {view === "history" && (
+          <HistoryView
+            refreshKey={busy ? -1 : messages.length}
+            onClose={() => setView("overview")}
+          />
+        )}
         <section className="conversation" aria-labelledby="chat-title" hidden={view !== "overview"}>
           <div className="section-header">
             <div>
@@ -497,6 +512,9 @@ export function App() {
             <div className="chat-actions">
               <button type="button" className="text-button" onClick={() => clearHistory()}>
                 New chat
+              </button>
+              <button type="button" className="text-button" onClick={() => setView("history")}>
+                History
               </button>
               <button type="button" className="text-button" onClick={() => setView("evaluations")}>
                 Evaluations
