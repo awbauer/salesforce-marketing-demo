@@ -12,6 +12,11 @@ type TraceInput = DistributiveOmit<TurnTraceEvent, "at">;
 const SECRET_PATTERN = /\bBearer\s+[^\s"']+|\beyJ[\w-]{12,}\.[\w-]{12,}\.[\w-]{8,}/gi;
 
 /** Converts any thrown value into a short, credential-free message that is safe to show. */
+// Workers AI answers HTTP 429 with this wording once a free-plan account's daily neurons run out.
+const WORKERS_AI_CAPACITY_PATTERN = /daily free allocation|used up your .*neurons/i;
+export const WORKERS_AI_CAPACITY_MESSAGE =
+  "Workers AI has reached this account's daily capacity (HTTP 429). It resets at 00:00 UTC; moving the account to Workers Paid removes the daily limit";
+
 export function describeTurnError(error: unknown): string {
   const raw =
     error instanceof Error
@@ -19,6 +24,7 @@ export function describeTurnError(error: unknown): string {
       : typeof error === "string"
         ? error
         : "Unknown error";
+  if (WORKERS_AI_CAPACITY_PATTERN.test(raw)) return WORKERS_AI_CAPACITY_MESSAGE;
   const cleaned = raw.replace(SECRET_PATTERN, "[redacted]").replace(/\s+/g, " ").trim();
   return (cleaned || "Unknown error").slice(0, 240);
 }
