@@ -59,6 +59,16 @@ pnpm exec wrangler secret delete WRITES_ENABLED --config wrangler.jsonc
 
 `GET /agent/operations` reports the active controls. `GET /agent/audit/export` downloads the caller's confirmed-write audit rows and turn summaries from the 14-day retention window.
 
+## Neo4j knowledge graph
+
+The knowledge graph (ADR-006) reads from Neo4j AuraDB through the Query API.
+
+- **Secrets:** set `NEO4J_QUERY_URL` (`https://<instance>.databases.neo4j.io/db/<database>/query/v2`), `NEO4J_USERNAME`, and `NEO4J_PASSWORD` as Worker secrets with `wrangler secret put`. Without them, the tools use the in-memory demo copy and the rail says so.
+- **Seed or rebuild:** export the same three variables locally, then run `pnpm kg:seed --confirm --reset`. It is idempotent and ends with a count read-back.
+- **Check parity:** `pnpm kg:parity` confirms Neo4j matches the in-memory copy for every tool.
+- **Keep-alive:** the Worker's daily cron (`17 9 * * *` UTC) runs one read query so Aura Free doesn't pause. A paused instance returns a "may be paused" tool error; resume it in the Aura console.
+- **Teardown:** delete the Aura instance in the console, and remove the three secrets with `wrangler secret delete`.
+
 ## Rollback and teardown
 
 Delete only the IDs recorded by this work unit: the proof Worker, Access application/policy, D1 database, R2 bucket, and Durable Object namespace/migration associated with the proof Worker. Export no data. Read back the resource lists after deletion and attach the results to the work unit. Never use a broad account cleanup command.

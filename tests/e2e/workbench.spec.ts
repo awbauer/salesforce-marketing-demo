@@ -33,6 +33,8 @@ test("opens the workspace, renders evidence tiles, and completes a durable turn"
   await expect(reply).not.toContainText("**");
   await expect(page.getByText("Restaurant data")).toBeVisible();
   await expect(page.getByText("Weather · Open-Meteo")).toBeVisible();
+  // Locally there are no Neo4j secrets, so the rail reports the in-memory demo copy.
+  await expect(page.getByText("Knowledge graph · demo copy")).toBeVisible();
   const trace = page.locator(".execution-trace").last();
   await trace.getByText("Behind the scenes · technical trace").click();
   for (const label of [

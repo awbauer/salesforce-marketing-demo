@@ -3,6 +3,7 @@ import { HealthSchema, PROOF_DEFAULTS } from "@northstar/contracts";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { AuthError, deriveAgentKey, resolvePrincipal, type AuthBindings } from "./auth";
 import { createCampaignContextMcpServer } from "./campaign-context/server";
+import { createKnowledgeGraphMcpServer, knowledgeGraphBackend } from "./knowledge-graph/server";
 export { MarketingOrchestrator } from "./orchestrator";
 
 type Env = CloudflareBindings & AuthBindings;
@@ -77,6 +78,11 @@ export default {
         const agentKey = await deriveAgentKey(principal, PROOF_DEFAULTS.workspaceId);
         return json({ workspaceId: PROOF_DEFAULTS.workspaceId, principal, agentKey });
       }
+      if (url.pathname === "/mcp/knowledge-graph") {
+        await resolvePrincipal(request, env);
+        const backend = knowledgeGraphBackend(env as Parameters<typeof knowledgeGraphBackend>[0]);
+        return createMcpHandler(() => createKnowledgeGraphMcpServer(backend)).fetch(request);
+      }
       if (url.pathname === "/mcp/campaign-context") {
         // Same Access-authenticated principal requirement as the rest of the API.
         await resolvePrincipal(request, env);
@@ -98,6 +104,19 @@ export default {
       return env.ASSETS.fetch(request);
     } catch (error) {
       return errorResponse(error, id);
+    }
+  },
+  // Daily read keeps an Aura Free instance from pausing after three idle days.
+  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+    const backend = knowledgeGraphBackend(env as Parameters<typeof knowledgeGraphBackend>[0]);
+    if (backend.kind !== "neo4j") return;
+    try {
+      await backend.query("RETURN 1 AS ok", {});
+    } catch (error) {
+      console.warn(
+        "[knowledge-graph] keep-alive query failed",
+        error instanceof Error ? error.message : error,
+      );
     }
   },
 } satisfies ExportedHandler<Env>;

@@ -120,10 +120,21 @@ export const CAMPAIGN_CONTEXT_TOOLS = Object.freeze([
   "get_current_weather",
 ] as const);
 
+/** Read-only tools served by the knowledge-graph MCP (Neo4j, or its fictional local copy). */
+export const KNOWLEDGE_GRAPH_TOOLS = Object.freeze([
+  "get_graph_overview",
+  "explain_buyer_group",
+  "find_audience_overlap",
+  "check_consent_coverage",
+  "find_similar_past_pushes",
+  "trace_content_lineage",
+] as const);
+
 /** Every tool the orchestrator may call, for display names and operator kill switches. */
 export const ORCHESTRATOR_TOOLS = Object.freeze([
   ...PHASE_2_CURATED_TOOLS,
   ...CAMPAIGN_CONTEXT_TOOLS,
+  ...KNOWLEDGE_GRAPH_TOOLS,
 ] as const);
 
 export const InsightTileSchema = z.object({
@@ -299,6 +310,8 @@ export const WRITE_TOOL_BY_ACTION = Object.freeze({
 export const OperationControlsSchema = z.object({
   writesEnabled: z.boolean(),
   disabledTools: z.array(z.enum(ORCHESTRATOR_TOOLS as unknown as [string, ...string[]])),
+  /** Where knowledge-graph answers come from: live Neo4j or the fictional local copy. */
+  knowledgeGraph: z.enum(["neo4j", "fixture"]).optional(),
 });
 export type OperationControls = z.infer<typeof OperationControlsSchema>;
 

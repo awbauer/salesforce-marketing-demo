@@ -1435,3 +1435,81 @@ a {
 .markdown .markdown-table th {
   background: #f4f7f1;
 }
+
+.graph-evidence {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #cfdbcf;
+  border-radius: 10px;
+  background: #f7faf5;
+  font-size: 11px;
+}
+.graph-evidence h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--forest);
+}
+.graph-evidence h4 span {
+  color: var(--muted);
+  font-weight: 500;
+}
+.graph-evidence-label {
+  margin: 6px 0 4px;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+.graph-evidence .graph-paths {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.graph-paths > .graph-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.graph-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.graph-node {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  line-height: 1.3;
+}
+.graph-node small {
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.graph-node.node-persona,
+.graph-node.node-account {
+  border-color: #b9d5bf;
+}
+.graph-node.node-campaign,
+.graph-node.node-brief {
+  border-color: #e7cf9f;
+}
+.graph-node.node-brandrule,
+.graph-node.node-consentscope {
+  border-color: #efc4ba;
+}
+.graph-edge {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.graph-edge em {
+  font-style: normal;
+  font-size: 9px;
+  margin: 0 2px;
+}

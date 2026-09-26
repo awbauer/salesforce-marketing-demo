@@ -27,7 +27,11 @@ describe("operator controls", () => {
 
   it("reports the active controls", async () => {
     const response = await SELF.fetch("https://example.test/agent/operations");
-    await expect(response.json()).resolves.toEqual({ writesEnabled: true, disabledTools: [] });
+    await expect(response.json()).resolves.toEqual({
+      writesEnabled: true,
+      disabledTools: [],
+      knowledgeGraph: "fixture",
+    });
   });
 
   it("exports this user's confirmed-write audit and turn summaries as a download", async () => {

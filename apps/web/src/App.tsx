@@ -22,6 +22,7 @@ import { useAgent } from "agents/react";
 import type { UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
 import { EvaluationView } from "./EvaluationView";
+import { GraphEvidencePanel } from "./GraphEvidence";
 import { HistoryView } from "./HistoryView";
 import { Markdown } from "./Markdown";
 import { executionTrace } from "./turn-trace";
@@ -508,6 +509,14 @@ export function App() {
               />
               Weather · Open-Meteo
             </div>
+            <div className="source-row">
+              <i
+                className={`dot ${operations.knowledgeGraph === "neo4j" && !operations.disabledTools.includes("get_graph_overview") ? "ready" : "stale"}`}
+              />
+              {operations.knowledgeGraph === "fixture"
+                ? "Knowledge graph · demo copy"
+                : "Knowledge graph · Neo4j"}
+            </div>
           </div>
           <section className="connector-panel" aria-labelledby="salesforce-connector-title">
             <strong id="salesforce-connector-title">{state.connector.label}</strong>
@@ -641,6 +650,7 @@ export function App() {
                 ) : (
                   <p>{messageText(message)}</p>
                 )}
+                {message.role === "assistant" && <GraphEvidencePanel message={message} />}
                 {message.role === "assistant" && (
                   <TechnicalTrace
                     rows={executionTrace(message)}
@@ -1086,6 +1096,10 @@ export function App() {
                 "Check the sample campaign readiness and explain every blocker",
                 "Recommend buyer group members using the available sample signals",
                 "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
+                "Who should be in the buyer group for Acme Outfitters, and why?",
+                "Is the fall campaign audience covered for commercial email consent?",
+                "Which members of the fall loyalty audience overlap with other active campaigns?",
+                "What content was built from the fall brief, and what are its brand rule results?",
               ].map((prompt) => (
                 <button
                   type="button"

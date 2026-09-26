@@ -8,6 +8,9 @@ export default defineConfig({
       "@northstar/contracts": fileURLToPath(
         new URL("./packages/contracts/src/index.ts", import.meta.url),
       ),
+      "@northstar/knowledge-graph": fileURLToPath(
+        new URL("./packages/knowledge-graph/src/index.ts", import.meta.url),
+      ),
     },
   },
   plugins: [

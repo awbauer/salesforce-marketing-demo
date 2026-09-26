@@ -111,10 +111,11 @@ describe("campaign-context MCP", () => {
     expect(text).toContain("get_current_weather");
   });
 
-  it("plans a push campaign as profile, then weather, then the Salesforce content tool", () => {
+  it("plans a push campaign as profile, weather, past pushes, then the Salesforce content tool", () => {
     const names = [
       "context_get_restaurant_profile",
       "context_get_current_weather",
+      "graph_find_similar_past_pushes",
       "tool_salesforce_ns_draft_campaign_content",
     ];
     const plan = selectToolPlan(PUSH_PROMPT, names);
@@ -122,8 +123,9 @@ describe("campaign-context MCP", () => {
     expect(stepToolChoice(plan, 0)).toMatchObject({ activeTools: [names[0]] });
     expect(stepToolChoice(plan, 1)).toMatchObject({ activeTools: [names[1]] });
     expect(stepToolChoice(plan, 2)).toMatchObject({ activeTools: [names[2]] });
-    expect(stepToolChoice(plan, 3)).toEqual({ toolChoice: "none", activeTools: [] });
-    expect(missingPlannedTool(PUSH_PROMPT, names.slice(0, 2))).toBe("draft_campaign_content");
+    expect(stepToolChoice(plan, 3)).toMatchObject({ activeTools: [names[3]] });
+    expect(stepToolChoice(plan, 4)).toEqual({ toolChoice: "none", activeTools: [] });
+    expect(missingPlannedTool(PUSH_PROMPT, names.slice(0, 2))).toBe("find_similar_past_pushes");
     expect(selectToolPlan(PUSH_PROMPT, names.slice(0, 2))).toBeUndefined();
   });
 });

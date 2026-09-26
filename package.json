@@ -18,6 +18,8 @@
     "eval": "node scripts/run-evals.mjs",
     "eval:live": "node scripts/run-live-evals.mjs",
     "eval:rescore": "node scripts/rescore-evals.mjs",
+    "kg:seed": "node scripts/seed-knowledge-graph.mjs",
+    "kg:parity": "node scripts/check-knowledge-graph.mjs",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "hxl:check": "node scripts/check-hxl.mjs",

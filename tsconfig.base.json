@@ -6,7 +6,8 @@
     "paths": {
       "@northstar/contracts": ["./packages/contracts/src/index.ts"],
       "@northstar/ui": ["./packages/ui/src/index.tsx"],
-      "@northstar/evals/report": ["./packages/evals/src/report.ts"]
+      "@northstar/evals/report": ["./packages/evals/src/report.ts"],
+      "@northstar/knowledge-graph": ["./packages/knowledge-graph/src/index.ts"]
     },
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,

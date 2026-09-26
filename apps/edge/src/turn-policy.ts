@@ -3,7 +3,8 @@
  * Keep this module free of Workers runtime imports so the evaluation runs exactly this logic.
  */
 
-export const MAX_TURN_STEPS = 4;
+// Room for the longest tool plan (four tools) plus the written answer.
+export const MAX_TURN_STEPS = 6;
 // Salesforce agent calls can take tens of seconds, so the budget covers model steps plus tool time.
 export const TURN_TIMEOUT = { totalMs: 150_000, chunkMs: 60_000, toolMs: 120_000 } as const;
 // Workers AI defaults to 256 output tokens, which gpt-oss reasoning can exhaust before any text.
@@ -15,6 +16,7 @@ export function orchestratorSystemPrompt(
 ) {
   // Scenario guidance is added only when its plan is active, so it cannot steer other requests.
   const restaurantPlan = toolPlan?.some((name) => name.endsWith("get_restaurant_profile"));
+  const graphPlan = toolPlan?.some((name) => name.startsWith("graph_"));
   return [
     "You are the Northstar marketing proof orchestrator.",
     "Salesforce tool results are the only authority for Salesforce facts. Protocol success does not mean that a business result exists.",
@@ -24,7 +26,12 @@ export function orchestratorSystemPrompt(
     "Format answers in concise Markdown: short paragraphs, bold labels, bullet lists, and small tables when they help. Never use raw HTML.",
     ...(restaurantPlan
       ? [
-          "For this restaurant push campaign, read the restaurant profile, then the current weather for its city, then ask the campaign content tool for a draft that uses the menu, favorites, local time of day, and weather. Present the featured items, two or three notification variants, a send time, and why each fits. It is a draft; never say it was scheduled or sent.",
+          "For this restaurant push campaign, read the restaurant profile, then the current weather for its city, then look up similar past pushes in the knowledge graph for that location, daypart, and weather bucket, then ask the campaign content tool for a draft that uses the menu, favorites, local time of day, weather, and what performed best before. Present the featured items, two or three notification variants, a send time, and why each fits, citing past performance. It is a draft; never say it was scheduled or sent.",
+        ]
+      : []),
+    ...(graphPlan
+      ? [
+          "Knowledge-graph results are fictional demo data with evidence paths. Explain the answer from those paths, name only entities that appear in the results, and never suggest that the graph or Salesforce was changed.",
         ]
       : []),
     `Non-authoritative workspace record references: ${JSON.stringify(workspaceReferences)}`,
@@ -35,6 +42,29 @@ export function orchestratorSystemPrompt(
 // a tool; when no rule matches, the model chooses. Precision matters more than coverage here,
 // because a forced wrong tool cannot be recovered within the turn.
 const INTENT_RULES: ReadonlyArray<readonly [string, (prompt: string) => boolean]> = [
+  // Knowledge-graph intents come first; each needs a signal the Salesforce tools cannot answer.
+  [
+    "check_consent_coverage",
+    (p) =>
+      /\bconsent\b/i.test(p) &&
+      /\b(?:email|sms|push)\b/i.test(p) &&
+      /\b(?:cover(?:ed|age)?|missing|lacks?|without)\b/i.test(p),
+  ],
+  [
+    "explain_buyer_group",
+    (p) => /\bbuyer group\b/i.test(p) && /\b(?:why|explain|evidence|reasons?|justify)\b/i.test(p),
+  ],
+  [
+    "find_audience_overlap",
+    (p) =>
+      /\b(?:overlap(?:s|ping)?|fatigue|also (?:in|targeted))\b/i.test(p) &&
+      /\b(?:campaigns?|audiences?)\b/i.test(p),
+  ],
+  [
+    "trace_content_lineage",
+    (p) => /\b(?:lineage|built from|brand[- ]rule(?:s)? (?:results|checks))\b/i.test(p),
+  ],
+  ["get_graph_overview", (p) => /\bknowledge graph\b/i.test(p)],
   [
     "check_campaign_readiness",
     (p) =>
@@ -78,7 +108,12 @@ const INTENT_RULES: ReadonlyArray<readonly [string, (prompt: string) => boolean]
 // Multi-tool plans for requests that need context before drafting. Each step forces one tool.
 const TOOL_PLANS: ReadonlyArray<readonly [readonly string[], (prompt: string) => boolean]> = [
   [
-    ["get_restaurant_profile", "get_current_weather", "draft_campaign_content"],
+    [
+      "get_restaurant_profile",
+      "get_current_weather",
+      "find_similar_past_pushes",
+      "draft_campaign_content",
+    ],
     (p) => /\bpush\b/i.test(p) && /\b(?:notifications?|campaigns?|messages?|alerts?)\b/i.test(p),
   ],
 ];
