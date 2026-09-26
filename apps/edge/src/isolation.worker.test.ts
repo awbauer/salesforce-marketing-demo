@@ -3,6 +3,7 @@ import { PROOF_DEFAULTS } from "@northstar/contracts";
 import { getAgentByName } from "agents";
 import { describe, expect, it } from "vitest";
 import { deriveAgentKey } from "./auth";
+import { openCatalogCampaign } from "./worker.test-helpers";
 
 const CAMPAIGN_ID = "701jV000004GglIQAS";
 const PNG = Uint8Array.from(
@@ -60,6 +61,7 @@ async function seedDraftFor(subject: string) {
 describe("cross-user isolation", () => {
   it("never exposes another user's image drafts through list, serve, reject, or attach", async () => {
     const alice = await agentFor("evaluator-alice");
+    await openCatalogCampaign("evaluator-alice");
     const bobImage = await seedDraftFor("evaluator-bob");
 
     const listed = (await (await alice(`images?campaignId=${CAMPAIGN_ID}`)).json()) as {
@@ -85,6 +87,7 @@ describe("cross-user isolation", () => {
 
   it("keeps pending confirmations, turn history, and audit exports per user", async () => {
     const alice = await agentFor("evaluator-carol");
+    await openCatalogCampaign("evaluator-carol");
     const bob = await agentFor("evaluator-dave");
     const preflight = await alice("confirmations", {
       method: "POST",

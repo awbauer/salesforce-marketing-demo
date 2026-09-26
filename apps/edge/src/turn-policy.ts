@@ -10,10 +10,11 @@ export const TURN_TIMEOUT = { totalMs: 150_000, chunkMs: 60_000, toolMs: 120_000
 // Workers AI defaults to 256 output tokens, which gpt-oss reasoning can exhaust before any text.
 export const MAX_OUTPUT_TOKENS = 4096;
 
-export function orchestratorSystemPrompt(
-  workspaceReferences: unknown,
-  toolPlan?: readonly string[],
-) {
+/**
+ * The system prompt. `workspace` describes the chat's working set (records opened or created
+ * and context gathered) and, separately, the catalog of records the chat has not opened.
+ */
+export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly string[]) {
   // Scenario guidance is added only when its plan is active, so it cannot steer other requests.
   const restaurantPlan = toolPlan?.some((name) => name.endsWith("get_restaurant_profile"));
   const graphPlan = toolPlan?.some((name) => name.startsWith("graph_"));
@@ -35,7 +36,7 @@ export function orchestratorSystemPrompt(
           "Knowledge-graph results are fictional demo data with evidence paths. Explain the answer from those paths, name only entities that appear in the results, and never suggest that the graph or Salesforce was changed.",
         ]
       : []),
-    `Non-authoritative workspace record references: ${JSON.stringify(workspaceReferences)}`,
+    `Workspace (built from tool results in this chat): ${workspace}`,
   ].join(" ");
 }
 

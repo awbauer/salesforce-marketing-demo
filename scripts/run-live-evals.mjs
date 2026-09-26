@@ -14,12 +14,12 @@ import {
   CAMPAIGN_CONTEXT_TOOL_PREFIX,
   connectCampaignContextTools,
 } from "../apps/edge/src/campaign-context/server.ts";
+import { forcedToolCallMiddleware } from "../apps/edge/src/forced-tool-middleware.ts";
 import {
   connectKnowledgeGraphTools,
   KNOWLEDGE_GRAPH_TOOL_PREFIX,
   knowledgeGraphBackend,
 } from "../apps/edge/src/knowledge-graph/server.ts";
-import { forcedToolCallMiddleware } from "../apps/edge/src/forced-tool-middleware.ts";
 import {
   MAX_OUTPUT_TOKENS,
   MAX_TURN_STEPS,
@@ -28,9 +28,10 @@ import {
   stepToolChoice,
   TURN_TIMEOUT,
 } from "../apps/edge/src/turn-policy.ts";
+import { workingSetPrompt } from "../apps/edge/src/working-set.ts";
 import {
   classifyPolicyIntent,
-  initialOrchestratorState,
+  emptyWorkingSet,
   PHASE_2_AUTONOMOUS_TOOLS,
   POLICY_RESPONSES,
   PROOF_DEFAULTS,
@@ -172,12 +173,8 @@ function fixtureTools() {
   );
 }
 
-const WORKSPACE_REFERENCES = initialOrchestratorState.tiles.map((tile) => ({
-  kind: tile.kind,
-  title: tile.title,
-  recordRef: tile.recordRef,
-  presentationStatus: tile.presentation?.sourceStatus,
-}));
+// Each evaluation turn is a fresh chat, so its working set is empty and only the catalog is listed.
+const WORKSPACE = workingSetPrompt(emptyWorkingSet());
 function shortName(name) {
   if (!name) return null;
   if (name.startsWith(TOOL_PREFIX)) return name.slice(TOOL_PREFIX.length);
@@ -223,7 +220,7 @@ async function runCase(model, tools, suite, testCase, trial) {
           model: model.provider(model.id),
           middleware: forcedToolCallMiddleware,
         }),
-        system: orchestratorSystemPrompt(WORKSPACE_REFERENCES, toolPlan),
+        system: orchestratorSystemPrompt(WORKSPACE, toolPlan),
         prompt: testCase.prompt,
         tools,
         prepareStep: ({ stepNumber }) => stepToolChoice(toolPlan, stepNumber),

@@ -1,8 +1,10 @@
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import {
+  type Confirmation,
   ConfirmationSchema,
   type ConnectorState,
   classifyPolicyIntent,
+  emptyWorkingSet,
   GeneratedCampaignImageSchema,
   initialOrchestratorState,
   type OrchestratorState,
@@ -51,6 +53,7 @@ import {
   TURN_TIMEOUT,
 } from "./turn-policy";
 import { createTurnTracer, describeTurnError, type TurnRoute } from "./turn-trace";
+import { addCreatedRecord, ingestToolResult, openCampaign, workingSetPrompt } from "./working-set";
 
 export {
   requestedToolName,
@@ -162,7 +165,47 @@ export function conversationWindow(
   });
 }
 
-function guardToolResults(tools: ToolSet): ToolSet {
+/** Fixture tool results for local development, shaped like Salesforce agent replies. */
+const LOCAL_FIXTURE_RESULTS: Array<[string, unknown]> = [
+  [
+    "summarize_campaign",
+    {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            source: "local-fixture",
+            campaignId: "701jV000004GglIQAS",
+            summary:
+              "Fall Loyalty Reactivation is in progress; engagement is 8.4 percent above its four-week baseline.",
+            openRate: "38.2%",
+            clickRate: "6.7%",
+          }),
+        },
+      ],
+    },
+  ],
+  [
+    "check_campaign_readiness",
+    {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            source: "local-fixture",
+            campaignId: "701jV000004GglIQAS",
+            summary: "7 of 9 readiness checks pass; 2 blockers remain before review.",
+            blockers: "Accessibility copy; commercial-consent scope",
+          }),
+        },
+      ],
+    },
+  ],
+];
+
+type ToolResultListener = (toolName: string, input: unknown, output: unknown) => void;
+
+function guardToolResults(tools: ToolSet, onResult?: ToolResultListener): ToolSet {
   return Object.fromEntries(
     Object.entries(tools).map(([name, definition]) => {
       if (!("execute" in definition) || typeof definition.execute !== "function")
@@ -175,6 +218,13 @@ function guardToolResults(tools: ToolSet): ToolSet {
           execute: async (...args: Parameters<typeof execute>) => {
             const upstream = await resolveToolResult(execute(...args));
             const semanticStatus = classifyToolResult(upstream);
+            // Successful results feed the chat's working set; a listener error never fails the tool.
+            if (semanticStatus === "success")
+              try {
+                onResult?.(name, args[0], upstream);
+              } catch (error) {
+                console.error("[orchestrator] working-set ingestion failed", error);
+              }
             return semanticStatus === "success"
               ? upstream
               : {
@@ -474,41 +524,39 @@ export class MarketingOrchestrator extends AIChatAgent<
     // The campaign-context and knowledge-graph MCPs run in-process; both close when the turn ends.
     const context = await connectCampaignContextTools();
     const graph = await connectKnowledgeGraphTools(knowledgeGraphBackend(this.env));
-    const tools = guardToolResults({
-      ...Object.fromEntries(
-        Object.entries(discoveredTools).filter(([key]) =>
-          PHASE_2_AUTONOMOUS_TOOLS.some(
-            (name) => key.endsWith(`_${name}`) && !disabledTools.includes(name),
+    const tools = guardToolResults(
+      {
+        ...Object.fromEntries(
+          Object.entries(discoveredTools).filter(([key]) =>
+            PHASE_2_AUTONOMOUS_TOOLS.some(
+              (name) => key.endsWith(`_${name}`) && !disabledTools.includes(name),
+            ),
           ),
         ),
-      ),
-      ...Object.fromEntries(
-        Object.entries(graph.tools).filter(
-          ([key]) =>
-            !(disabledTools as readonly string[]).includes(
-              key.slice(KNOWLEDGE_GRAPH_TOOL_PREFIX.length),
-            ),
+        ...Object.fromEntries(
+          Object.entries(graph.tools).filter(
+            ([key]) =>
+              !(disabledTools as readonly string[]).includes(
+                key.slice(KNOWLEDGE_GRAPH_TOOL_PREFIX.length),
+              ),
+          ),
         ),
-      ),
-      ...Object.fromEntries(
-        Object.entries(context.tools).filter(
-          ([key]) =>
-            !(disabledTools as readonly string[]).includes(
-              key.slice(CAMPAIGN_CONTEXT_TOOL_PREFIX.length),
-            ),
+        ...Object.fromEntries(
+          Object.entries(context.tools).filter(
+            ([key]) =>
+              !(disabledTools as readonly string[]).includes(
+                key.slice(CAMPAIGN_CONTEXT_TOOL_PREFIX.length),
+              ),
+          ),
         ),
-      ),
-    });
+      },
+      (name, input, output) => this.ingestToolResult(name, input, output),
+    );
     const workersAI = createWorkersAI({
       binding: this.env.AI,
       gateway: { id: this.env.AI_GATEWAY_ID },
     });
-    const workspaceReferences = this.state.tiles.map((tile) => ({
-      kind: tile.kind,
-      title: tile.title,
-      recordRef: tile.recordRef,
-      presentationStatus: tile.presentation?.sourceStatus,
-    }));
+    const workspace = workingSetPrompt(this.state.workingSet);
     const prompt = latestUserText(turnMessages);
     const toolPlan = selectToolPlan(prompt, Object.keys(tools));
     // Readable plan for the trace and history, such as "a → b → c".
@@ -548,7 +596,7 @@ export class MarketingOrchestrator extends AIChatAgent<
               model: workersAI(PROOF_DEFAULTS.orchestratorModel),
               middleware: forcedToolCallMiddleware,
             }),
-            system: orchestratorSystemPrompt(workspaceReferences, toolPlan),
+            system: orchestratorSystemPrompt(workspace, toolPlan),
             messages: await convertToModelMessages(turnMessages),
             tools,
             prepareStep: ({ stepNumber }: { stepNumber: number }) =>
@@ -1025,32 +1073,55 @@ export class MarketingOrchestrator extends AIChatAgent<
   override async onStart(props?: AgentProps) {
     await super.onStart(props);
     if (props?.principalSubject) this.principalSubject = props.principalSubject;
-    const defaultTiles = new Map(initialOrchestratorState.tiles.map((tile) => [tile.id, tile]));
-    const tiles = this.state.tiles.map((tile) => {
-      const defaultTile = defaultTiles.get(tile.id);
-      if (!defaultTile) return tile;
-      const recordRef = defaultTile.recordRef ?? tile.recordRef;
-      const presentation = defaultTile.presentation ?? tile.presentation;
-      if (
-        tile.recordRef?.recordId === recordRef?.recordId &&
-        tile.presentation?.resourceUri === presentation?.resourceUri &&
-        tile.presentation?.sourceStatus === presentation?.sourceStatus
-      )
-        return tile;
-      return { ...tile, recordRef, presentation };
-    });
-    const liveCampaignId = initialOrchestratorState.tiles.find((tile) => tile.kind === "readiness")
-      ?.recordRef?.recordId;
-    const pendingConfirmation =
-      this.state.pendingConfirmation?.recordId === liveCampaignId
-        ? this.state.pendingConfirmation
-        : null;
-    if (
-      tiles.some((tile, index) => tile !== this.state.tiles[index]) ||
-      pendingConfirmation !== this.state.pendingConfirmation
-    ) {
-      this.setState({ ...this.state, tiles, pendingConfirmation });
+    // State saved before the working set existed carries static tiles; start it fresh instead.
+    const saved = this.state as OrchestratorState & { tiles?: unknown };
+    if (!saved.workingSet || "tiles" in saved) {
+      const { tiles: _tiles, ...rest } = saved;
+      this.setState({ ...rest, workingSet: emptyWorkingSet(), pendingConfirmation: null });
     }
+  }
+
+  /** Adds what a tool returned to the chat's working set. */
+  private ingestToolResult(toolName: string, input: unknown, output: unknown) {
+    const next = ingestToolResult(this.state.workingSet, {
+      toolName,
+      input,
+      output,
+      at: new Date(),
+    });
+    if (next !== this.state.workingSet) this.setState({ ...this.state, workingSet: next });
+  }
+
+  /** The working set with the record a confirmed write created. */
+  private withCreatedRecord(action: Confirmation["action"], recordId: string, title?: string) {
+    const objectType =
+      action === "create-review-task"
+        ? "Task"
+        : action === "attach-generated-image"
+          ? "ContentDocument"
+          : "Campaign";
+    return addCreatedRecord(
+      this.state.workingSet,
+      {
+        system: "salesforce",
+        objectType,
+        recordId,
+        title: title ?? `${ACTIVITY_LABELS[action]} ${recordId}`,
+      },
+      WRITE_TOOL_BY_ACTION[action],
+      new Date(),
+    );
+  }
+
+  /** A new chat starts with an empty workspace; a pending confirmation belongs to the old one. */
+  private resetWorkingSet() {
+    // Activity belongs to the chat too; the History view and audit export keep the full record.
+    this.setState({
+      ...this.state,
+      workingSet: emptyWorkingSet(),
+      pendingConfirmation: null,
+      activity: [],
+    });
   }
 
   private syncConnector() {
@@ -1169,6 +1240,10 @@ export class MarketingOrchestrator extends AIChatAgent<
       if (this.getMcpServers().servers.salesforce) await this.removeMcpServer("salesforce");
       return json(this.syncConnector());
     }
+    if (url.pathname.endsWith("/working-set/reset") && request.method === "POST") {
+      this.resetWorkingSet();
+      return json(this.state.workingSet);
+    }
     if (url.pathname.endsWith("/confirmations") && request.method === "POST") {
       const body = (await request.json()) as {
         action?: unknown;
@@ -1191,6 +1266,17 @@ export class MarketingOrchestrator extends AIChatAgent<
         );
       const preflightBlocked = this.writeBlocked(action);
       if (preflightBlocked) return preflightBlocked;
+      // Writes act on the campaign this chat has open, never on a record it hasn't seen.
+      if (openCampaign(this.state.workingSet)?.recordId !== recordId)
+        return json(
+          {
+            error: {
+              code: "CONFIRMATION_REQUIRED",
+              message: "Open this campaign in the chat first, then confirm the action.",
+            },
+          },
+          { status: 409 },
+        );
       let summary = typeof body.summary === "string" ? body.summary.trim() : "";
       let image: { imageId: string; contentHash: string } | undefined;
       if (action === "attach-generated-image") {
@@ -1432,6 +1518,15 @@ export class MarketingOrchestrator extends AIChatAgent<
         this.setState({
           ...this.state,
           pendingConfirmation: null,
+          workingSet: this.withCreatedRecord(
+            current.action,
+            sourceRecordId,
+            typeof taskDetails.subject === "string"
+              ? taskDetails.subject
+              : typeof imageDetails.title === "string"
+                ? imageDetails.title
+                : undefined,
+          ),
           activity: [
             {
               id: `${current.action}-${sourceRecordId}`,
@@ -1476,6 +1571,13 @@ export class MarketingOrchestrator extends AIChatAgent<
       this.setState({
         ...this.state,
         pendingConfirmation: null,
+        workingSet: this.withCreatedRecord(
+          current.action,
+          fixtureRecordId,
+          current.action === "create-review-task"
+            ? "Review campaign readiness: VERO Phase 1 Launch"
+            : fixtureImage?.title,
+        ),
         activity: [
           {
             id: `${current.action}-${current.id}`,
@@ -1540,8 +1642,14 @@ export class MarketingOrchestrator extends AIChatAgent<
         onComplete: (result) =>
           this.recordTurn(utterance, { model: POLICY_ROUTER, route: policyIntent }, result),
       });
+    // The first message of a conversation starts a fresh working set, whatever cleared the chat.
+    if (!this.messages.some((message) => message.role === "assistant")) this.resetWorkingSet();
     if ((this.env.ENVIRONMENT as string) !== "local")
       return this.productionChatResponse(this.messages, abortSignal);
+    // Local development has no Salesforce: fixture results go through the same ingestion path
+    // as real tool results, so the workspace behaves the same way.
+    for (const [toolName, result] of LOCAL_FIXTURE_RESULTS)
+      this.ingestToolResult(toolName, { message: "Review the sample campaign" }, result);
     return scriptedResponse(
       [
         "I reviewed the fictional Northstar sample campaign. The **strongest signal is stable engagement**.\n\n",
@@ -1550,7 +1658,8 @@ export class MarketingOrchestrator extends AIChatAgent<
       ],
       {
         model: "local-fixture",
-        reasoning: "The request needs no Salesforce tool; answer from the fictional local fixture.",
+        reasoning:
+          "Local development has no Salesforce connection: answer from the fictional local fixture, whose results also fill the workspace.",
         abortSignal,
         onComplete: (result) =>
           this.recordTurn(utterance, { model: "local-fixture", route: "local-fixture" }, result),

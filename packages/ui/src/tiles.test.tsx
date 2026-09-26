@@ -1,9 +1,11 @@
+import { type InsightTile, READINESS_PRESENTATION } from "@northstar/contracts";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { initialOrchestratorState } from "@northstar/contracts";
 import {
   InsightBoard,
   normalizeAssistantText,
+  recordUrl,
+  relativeTime,
   resolveTileRenderMode,
   salesforceRecordUrl,
   shouldShowChatError,
@@ -11,6 +13,30 @@ import {
 } from "./index";
 
 afterEach(cleanup);
+
+const campaignCard: InsightTile = {
+  id: "salesforce:summarize_campaign:701jV000004GglIQAS",
+  kind: "campaign-summary",
+  eyebrow: "Campaign summary",
+  title: "Fall Loyalty Reactivation",
+  summary: "Engagement is holding.",
+  state: "ready",
+  source: {
+    system: "salesforce",
+    label: "Salesforce agent",
+    freshness: "just now",
+    status: "ready",
+  },
+  details: ["Open rate 38.2%"],
+  recordRef: { system: "salesforce", objectType: "Campaign", recordId: "701jV000004GglIQAS" },
+};
+const readinessCard: InsightTile = {
+  ...campaignCard,
+  id: "readiness",
+  kind: "readiness",
+  state: "stale",
+  presentation: READINESS_PRESENTATION,
+};
 
 describe("InsightBoard", () => {
   it("renders model formatting as safe readable plain text", () => {
@@ -67,8 +93,8 @@ describe("InsightBoard", () => {
   });
 
   it("renders typed source and freshness evidence", () => {
-    render(<InsightBoard tiles={initialOrchestratorState.tiles} />);
-    expect(screen.getByText("Campaign · sample data")).toBeInTheDocument();
+    render(<InsightBoard tiles={[campaignCard, readinessCard]} />);
+    expect(screen.getAllByText("Salesforce agent")[0]).toBeInTheDocument();
     expect(screen.getByText("Needs refresh")).toBeInTheDocument();
     expect(screen.getByText("Native fallback")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /Open in Salesforce/ })[0]).toHaveAttribute(
@@ -76,11 +102,39 @@ describe("InsightBoard", () => {
       "https://pu1788182184076.my.salesforce.com/lightning/r/Campaign/701jV000004GglIQAS/view",
     );
   });
+  it("links records in any system only when that system has a link", () => {
+    expect(recordUrl({ system: "restaurant-data", objectType: "Restaurant", recordId: "x" })).toBe(
+      undefined,
+    );
+    expect(
+      recordUrl({
+        system: "some-system",
+        objectType: "Order",
+        recordId: "1",
+        url: "https://example.test/orders/1",
+      }),
+    ).toBe("https://example.test/orders/1");
+    render(
+      <InsightBoard
+        tiles={[
+          {
+            ...campaignCard,
+            recordRef: { system: "restaurant-data", objectType: "Restaurant", recordId: "x" },
+          },
+        ]}
+      />,
+    );
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+  it("shows fetched times relative to now", () => {
+    const now = Date.parse("2026-09-26T18:00:00Z");
+    expect(relativeTime("2026-09-26T17:59:40Z", now)).toBe("just now");
+    expect(relativeTime("2026-09-26T17:52:00Z", now)).toBe("8 min ago");
+    expect(relativeTime("2026-09-26T15:00:00Z", now)).toBe("3 h ago");
+  });
   it("selects HXL only when the deployed resource is available", () => {
-    const readiness = initialOrchestratorState.tiles.find((tile) => tile.kind === "readiness");
-    if (!readiness?.presentation) throw new Error("Expected the readiness presentation contract.");
-    expect(resolveTileRenderMode(readiness)).toBe("native");
-    expect(resolveTileRenderMode(readiness, [readiness.presentation.resourceUri])).toBe("hxl");
+    expect(resolveTileRenderMode(readinessCard)).toBe("native");
+    expect(resolveTileRenderMode(readinessCard, [READINESS_PRESENTATION.resourceUri])).toBe("hxl");
   });
   it("builds an encoded Salesforce sandbox record link", () => {
     expect(salesforceRecordUrl("Campaign Member", "record/id")).toBe(
@@ -89,16 +143,14 @@ describe("InsightBoard", () => {
   });
   it("renders the empty recovery state", () => {
     render(<InsightBoard tiles={[]} />);
-    expect(screen.getByText("No insights yet")).toBeInTheDocument();
+    expect(screen.getByText("No context yet")).toBeInTheDocument();
   });
   it.each(["loading", "error", "stale", "permission-denied"] as const)(
     "renders the %s state without a one-off card schema",
     (state) => {
-      const base = initialOrchestratorState.tiles[0];
-      if (!base) throw new Error("Expected the campaign brief fixture.");
-      const tile = { ...base, id: state, state };
+      const tile = { ...campaignCard, id: state, state };
       render(<InsightBoard tiles={[tile]} />);
-      expect(screen.getByTestId("tile-campaign-brief")).toHaveClass(`state-${state}`);
+      expect(screen.getByTestId("tile-campaign-summary")).toHaveClass(`state-${state}`);
     },
   );
 });

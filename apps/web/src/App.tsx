@@ -12,7 +12,6 @@ import {
   WRITE_TOOL_BY_ACTION,
 } from "@northstar/contracts";
 import {
-  InsightBoard,
   normalizeAssistantText,
   salesforceRecordUrl,
   shouldShowChatError,
@@ -28,6 +27,7 @@ import { HistoryView } from "./HistoryView";
 import { LearnView } from "./learn/LearnView";
 import { Markdown } from "./Markdown";
 import { executionTrace } from "./turn-trace";
+import { WorkspacePanel } from "./WorkspacePanel";
 
 function rawMessageText(message: UIMessage) {
   return message.parts
@@ -130,8 +130,11 @@ export function App() {
     images.find((image) => image.id === selectedImageId) ??
     images.find((image) => image.lifecycle !== "rejected") ??
     null;
-  const briefCampaignId = state.tiles.find((tile) => tile.kind === "campaign-brief")?.recordRef
-    ?.recordId;
+  // Writes act on the Salesforce campaign this chat has open, if any.
+  const openCampaign = state.workingSet.records.find(
+    (record) => record.system === "salesforce" && record.objectType === "Campaign",
+  );
+  const briefCampaignId = openCampaign?.recordId;
   const [imageBusy, setImageBusy] = useState(false);
   const [quickstartOpen, setQuickstartOpen] = useState(false);
   const [operations, setOperations] = useState<OperationControls>({
@@ -291,8 +294,29 @@ export function App() {
     }
   }
 
+  /** Clears the conversation and its working set together. */
+  function startNewChat() {
+    clearHistory();
+    setImages([]);
+    setSelectedImageId(null);
+    agentAction<OrchestratorState["workingSet"]>("working-set/reset")
+      .then((workingSet) =>
+        setState((current) => ({
+          ...current,
+          workingSet,
+          activity: [],
+          pendingConfirmation: null,
+        })),
+      )
+      .catch((resetError: unknown) =>
+        setActionError(
+          resetError instanceof Error ? resetError.message : "The workspace could not be cleared.",
+        ),
+      );
+  }
+
   async function requestReview() {
-    const campaign = state.tiles.find((tile) => tile.kind === "readiness")?.recordRef;
+    const campaign = openCampaign;
     if (!campaign) return;
     try {
       const confirmation = await agentAction<Confirmation>("confirmations", {
@@ -309,7 +333,7 @@ export function App() {
   }
 
   async function generateCampaignImage() {
-    const campaign = state.tiles.find((tile) => tile.kind === "campaign-brief")?.recordRef;
+    const campaign = openCampaign;
     if (!campaign) return;
     setImageBusy(true);
     try {
@@ -632,7 +656,7 @@ export function App() {
               <h2 id="chat-title">Campaign intelligence</h2>
             </div>
             <div className="chat-actions">
-              <button type="button" className="text-button" onClick={() => clearHistory()}>
+              <button type="button" className="text-button" onClick={() => startNewChat()}>
                 New chat
               </button>
               <button
@@ -935,10 +959,12 @@ export function App() {
         <aside className="insights" aria-labelledby="insights-title" hidden={view !== "overview"}>
           <div className="section-header">
             <div>
-              <p className="kicker">Live context</p>
-              <h2 id="insights-title">Insights</h2>
+              <p className="kicker">This chat</p>
+              <h2 id="insights-title">Workspace</h2>
             </div>
-            <span className="count">{state.tiles.length}</span>
+            <span className="count">
+              {state.workingSet.records.length + state.workingSet.cards.length}
+            </span>
           </div>
           {!operations.writesEnabled && (
             <div className="operations-notice" role="status">
@@ -946,12 +972,16 @@ export function App() {
               can be saved, created, or attached until writes are resumed.
             </div>
           )}
-          <InsightBoard tiles={state.tiles} />
+          <WorkspacePanel workingSet={state.workingSet} />
           <section className="image-workflow" aria-labelledby="image-workflow-title">
             <div>
               <p className="kicker">External creative workflow</p>
               <h3 id="image-workflow-title">Generate campaign visual</h3>
-              <p>Workers AI creates a private seven-day draft. Nothing is attached or published.</p>
+              <p>
+                {openCampaign
+                  ? `For ${openCampaign.title}. Workers AI creates a private seven-day draft; nothing is attached or published.`
+                  : "Open a campaign in the chat to create a visual for it. Drafts stay private for seven days."}
+              </p>
             </div>
             <label htmlFor="image-concept">Creative concept</label>
             <textarea
@@ -964,7 +994,7 @@ export function App() {
             <button
               type="button"
               onClick={() => void generateCampaignImage()}
-              disabled={imageBusy || imageConcept.trim().length < 8}
+              disabled={!openCampaign || imageBusy || imageConcept.trim().length < 8}
             >
               {imageBusy ? "Generating…" : "Generate draft"}
             </button>
@@ -1078,14 +1108,22 @@ export function App() {
             <button
               type="button"
               onClick={() => void requestReview()}
-              disabled={writeBlock("create-review-task") !== null}
+              disabled={!openCampaign || writeBlock("create-review-task") !== null}
             >
               Create review request
             </button>
-            <span>{writeBlock("create-review-task") ?? "Requires confirmation"}</span>
+            <span>
+              {!openCampaign
+                ? "Open a campaign in the chat first"
+                : (writeBlock("create-review-task") ??
+                  `For ${openCampaign.title} · requires confirmation`)}
+            </span>
           </div>
           <section className="activity">
             <h3>Activity</h3>
+            {state.activity.length === 0 && (
+              <p className="activity-empty">Confirmed actions in this chat appear here.</p>
+            )}
             {state.activity.map((item) => (
               <div className="activity-row" key={item.id}>
                 <i />
@@ -1160,9 +1198,10 @@ export function App() {
               ))}
             </div>
             <p>
-              Use <strong>Generate campaign visual</strong> in the Insights panel to create a
-              governed Workers AI draft, then <strong>Attach to campaign</strong> and confirm to
-              store it on the Salesforce Campaign as a file.
+              Once a campaign is open in the chat, use <strong>Generate campaign visual</strong> in
+              the Workspace panel to create a governed Workers AI draft, then{" "}
+              <strong>Attach to campaign</strong> and confirm to store it on the Salesforce Campaign
+              as a file.
             </p>
             <h3>Coming soon / not yet built</h3>
             <ul className="coming-soon">
