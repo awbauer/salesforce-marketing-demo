@@ -500,6 +500,33 @@ test("reviews persisted image variants and rejects one so it cannot be attached"
   });
 });
 
+test("explains context, GraphRAG, and every demo concept on the Learn page", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Learn" }).first().click();
+  await expect(page.getByRole("heading", { name: /Learn: context, GraphRAG/ })).toBeVisible();
+  const toc = page.getByRole("navigation", { name: "Learn contents" });
+  await toc.getByRole("button", { name: "GraphRAG", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "GraphRAG", exact: true })).toBeInViewport();
+  const graphSection = page.locator("#learn-graphrag-here");
+  await expect(
+    graphSection.getByRole("table").or(graphSection.getByRole("list")).first(),
+  ).toBeVisible();
+  const resource = page.getByRole("link", { name: /From Local to Global/ });
+  await expect(resource).toHaveAttribute("target", "_blank");
+  await expect(resource).toHaveAttribute("rel", "noopener noreferrer");
+  await toc.getByRole("button", { name: "Glossary" }).click();
+  await expect(page.getByText("Tool plan", { exact: true })).toBeVisible();
+  // Jumping scrolls the Learn view, never the page, so the top bar stays visible.
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await expect(page.getByRole("heading", { name: "Marketing workbench" })).toBeInViewport();
+  await toc.getByRole("button", { name: "Primer: RAG and GraphRAG" }).click();
+  await expect(page.getByRole("heading", { name: "RAG in one page" })).toBeInViewport();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `artifacts/evidence/WU-031/learn-${testInfo.project.name}.png` });
+});
+
 test("answers a 'create it' follow-up through the confirmation policy", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "New chat" }).click();

@@ -24,6 +24,7 @@ import { useEffect, useRef, useState } from "react";
 import { EvaluationView } from "./EvaluationView";
 import { GraphEvidencePanel } from "./GraphEvidence";
 import { HistoryView } from "./HistoryView";
+import { LearnView } from "./learn/LearnView";
 import { Markdown } from "./Markdown";
 import { executionTrace } from "./turn-trace";
 
@@ -136,7 +137,7 @@ export function App() {
     writesEnabled: true,
     disabledTools: [],
   });
-  const [view, setView] = useState<"overview" | "history" | "evaluations">("overview");
+  const [view, setView] = useState<"overview" | "history" | "evaluations" | "learn">("overview");
   const confirmationRef = useRef<HTMLElement>(null);
   const quickstartCloseRef = useRef<HTMLButtonElement>(null);
   const connectorStatusLoaded = useRef(false);
@@ -479,6 +480,14 @@ export function App() {
             >
               <span>✓</span>Evaluations
             </button>
+            <button
+              type="button"
+              className={`nav-item ${view === "learn" ? "active" : ""}`}
+              aria-current={view === "learn" ? "page" : undefined}
+              onClick={() => setView("learn")}
+            >
+              <span>◎</span>Learn
+            </button>
             <button type="button" className="nav-item" onClick={() => setQuickstartOpen(true)}>
               <span>?</span>Quickstart
             </button>
@@ -588,6 +597,7 @@ export function App() {
           </div>
         </nav>
         {view === "evaluations" && <EvaluationView onClose={() => setView("overview")} />}
+        {view === "learn" && <LearnView onClose={() => setView("overview")} />}
         {view === "history" && (
           <HistoryView
             refreshKey={busy ? -1 : messages.length}
@@ -617,6 +627,13 @@ export function App() {
                 onClick={() => setView("evaluations")}
               >
                 Evaluations
+              </button>
+              <button
+                type="button"
+                className="text-button compact-nav"
+                onClick={() => setView("learn")}
+              >
+                Learn
               </button>
               <button
                 type="button"
