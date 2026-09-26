@@ -1006,15 +1006,14 @@ export function App() {
             <label htmlFor="prompt" className="sr-only">
               Message the orchestrator
             </label>
-            <textarea
-              id="prompt"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Try: Check the sample campaign readiness"
-              rows={3}
-            />
-            <div className="composer-footer">
-              <span>Fictional data · Confirm before writes · No publish actions</span>
+            <div className="composer-row">
+              <textarea
+                id="prompt"
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder="Try: Check the sample campaign readiness"
+                rows={3}
+              />
               {busy ? (
                 <button type="button" className="send" onClick={() => stop()}>
                   Stop
@@ -1026,9 +1025,12 @@ export function App() {
                   disabled={!input.trim()}
                   aria-label="Send message"
                 >
-                  ↑
+                  <span aria-hidden="true">↑</span>
                 </button>
               )}
+            </div>
+            <div className="composer-footer">
+              <span>Fictional data · Confirm before writes · No publish actions</span>
             </div>
           </form>
         </section>

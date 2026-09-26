@@ -674,7 +674,15 @@ a {
   border-radius: 14px;
   box-shadow: 0 10px 30px #18251b0d;
 }
+.composer-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 6px 6px 6px 0;
+}
 .composer textarea {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   border: 0;
   resize: none;
@@ -696,14 +704,19 @@ a {
   color: #7a857e;
 }
 .send {
-  margin-left: auto;
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--forest);
   color: #fff;
-  min-width: 34px;
-  height: 34px;
-  padding: 0 12px;
+  width: 52px;
+  min-height: 64px;
+  font-size: 20px;
+  line-height: 1;
 }
 .send:disabled {
   opacity: 0.35;
