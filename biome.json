@@ -9,7 +9,8 @@
       "!!artifacts",
       "!!playwright-report",
       "!!test-results",
-      "!!apps/edge/src/worker-configuration.d.ts"
+      "!!apps/edge/src/worker-configuration.d.ts",
+      "!!apps/web/public/evals"
     ]
   },
   "formatter": {
