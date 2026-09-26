@@ -212,4 +212,64 @@
         <toolName>attach_campaign_image</toolName>
         <toolTitle>Attach Confirmed Campaign Image</toolTitle>
     </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>aa:apex-NorthstarSaveCampaign</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>NorthstarSaveCampaign</operation>
+        </apiDefinition>
+        <descriptionOverride>Create or update one Salesforce Campaign using a host-issued confirmation, request hash, and idempotency key; returns authoritative read-back.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>true</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>false</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>save_campaign</toolName>
+        <toolTitle>Save Confirmed Campaign</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>aa:apex-NorthstarSaveBrief</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>NorthstarSaveBrief</operation>
+        </apiDefinition>
+        <descriptionOverride>Create or update one Northstar Brief, and its campaign when needed, using a host-issued confirmation, request hash, and idempotency key; returns authoritative read-back.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>true</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>false</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>save_brief</toolName>
+        <toolTitle>Save Confirmed Brief</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>aa:apex-NorthstarSaveMessage</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>NorthstarSaveMessage</operation>
+        </apiDefinition>
+        <descriptionOverride>Create or update one draft email, push, or SMS message, and its campaign when needed, using a host-issued confirmation, request hash, and idempotency key; nothing is sent or scheduled; returns authoritative read-back.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>true</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>false</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>save_message</toolName>
+        <toolTitle>Save Confirmed Message</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>aa:apex-NorthstarCheckWriteAccess</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>NorthstarCheckWriteAccess</operation>
+        </apiDefinition>
+        <descriptionOverride>Check, as the signed-in user, whether Salesforce permissions allow one workbench write before it is prepared: permission set, Marketing User, object and field access, and record access. Read-only.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>true</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>true</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>check_write_access</toolName>
+        <toolTitle>Check Write Access</toolTitle>
+    </tools>
 </McpServerDefinition>

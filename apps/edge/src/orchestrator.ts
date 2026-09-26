@@ -10,11 +10,13 @@ import {
   GeneratedCampaignImageSchema,
   initialOrchestratorState,
   type OrchestratorState,
+  type PermissionReport,
   PHASE_2_AUTONOMOUS_TOOLS,
   PHASE_2_CURATED_TOOLS,
   PROOF_DEFAULTS,
   parseOperationControls,
   policyResponse,
+  type RecordWrite,
   referentFromReply,
   TURN_HISTORY_RETENTION_DAYS,
   type TurnRecord,
@@ -29,11 +31,13 @@ import {
   stepCountIs,
   streamText,
   type ToolSet,
+  tool,
   type UIMessage,
   type UIMessageChunk,
   wrapLanguageModel,
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
+import { z } from "zod";
 import {
   CAMPAIGN_CONTEXT_TOOL_PREFIX,
   connectCampaignContextTools,
@@ -45,6 +49,12 @@ import {
   KNOWLEDGE_GRAPH_TOOL_PREFIX,
   knowledgeGraphBackend,
 } from "./knowledge-graph/server";
+import {
+  applyRecordWrite,
+  fixturePermissionReport,
+  parsePermissionReport,
+  planFocusWrite,
+} from "./record-writes";
 import { buildTurnRecord } from "./turn-history";
 import {
   isRevisionRequest,
@@ -84,6 +94,9 @@ const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 // Matches the Apex attachment limit, which keeps the decoded image inside the synchronous heap.
 const ATTACH_MAX_BYTES = 3 * 1024 * 1024;
 const ACTIVITY_LABELS = {
+  "save-campaign": "Campaign saved to Salesforce",
+  "save-brief": "Brief saved to Salesforce",
+  "save-message": "Message saved to Salesforce",
   "create-review-task": "Review request created",
   "save-draft-campaign": "Draft campaign brief saved",
   "attach-generated-image": "Campaign image attached",
@@ -207,6 +220,42 @@ const LOCAL_FIXTURE_RESULTS: Array<[string, unknown]> = [
   ],
 ];
 
+/** Apex inputs for a confirmed record write, from the server-authored write plan. */
+function recordWriteInputs(confirmation: Confirmation) {
+  const write = confirmation.write as RecordWrite;
+  const draft = {
+    draftId: confirmation.focus?.id,
+    draftVersion: confirmation.focus?.version,
+    draftFields: write.draftFields,
+  };
+  if (write.objectType === "Campaign")
+    return {
+      campaignId: write.recordId,
+      name: write.title,
+      brand: write.brand,
+      description: write.body,
+    };
+  const shared = {
+    campaignId: write.campaignId,
+    newCampaignName: write.newCampaignName,
+    brand: write.brand,
+    title: write.title,
+    audience: write.audience,
+    body: write.body,
+    ...draft,
+  };
+  return write.objectType === "Northstar_Brief__c"
+    ? { briefId: write.recordId, objective: write.objective, channel: write.channel, ...shared }
+    : {
+        messageId: write.recordId,
+        channel: write.channel,
+        subject: write.subject,
+        preheader: write.preheader,
+        sendTime: write.sendTime,
+        ...shared,
+      };
+}
+
 /**
  * Local development's stand-in for the model's drafting: a fictional push draft for a drafting
  * request, and its next version for a revision of the focus.
@@ -232,6 +281,8 @@ function localFixtureDraft(utterance: string, focus: FocusItem | null): FocusInp
       { label: "Send time", value: "11:15 a.m. local" },
       { label: "Audience", value: "Coastline app · Los Angeles (push opt-ins)" },
       { label: "Channel", value: "Mobile app push" },
+      { label: "Campaign", value: "Coastline Weather Moments" },
+      { label: "Brand", value: "Coastline Kitchen" },
     ],
     changeNote: "First draft from the fixture context",
   };
@@ -607,6 +658,16 @@ export class MarketingOrchestrator extends AIChatAgent<
         tools,
         focusTools((input) => this.updateFocus(input)),
       );
+    // The model can propose saving the draft; the user still confirms every write.
+    if (!(disabledTools as readonly string[]).includes("propose_salesforce_save"))
+      Object.assign(tools, {
+        workspace_propose_salesforce_save: tool({
+          description:
+            "Prepare the workspace draft to be created or updated in Salesforce: a campaign, a brief, or an email, push, or SMS message. It checks the user's Salesforce permissions and puts a confirmation card in front of the user. Nothing is written until the user confirms.",
+          inputSchema: z.object({}),
+          execute: async () => ({ message: await this.proposeFocusSave() }),
+        }),
+      });
     const planContext = { hasFocus: Boolean(this.state.workingSet.focus) };
     const workersAI = createWorkersAI({
       binding: this.env.AI,
@@ -1140,6 +1201,301 @@ export class MarketingOrchestrator extends AIChatAgent<
       this.setState({ ...saved, workingSet: { ...saved.workingSet, focus: null } });
   }
 
+  /**
+   * Prepares a write for human confirmation: validates it, plans record writes from the focus,
+   * checks the user's Salesforce permissions, and binds everything into one pending confirmation.
+   * The HTTP route, the chat's policy router, and the model's proposal tool all come through here.
+   */
+  private async prepareConfirmation(body: {
+    action?: unknown;
+    recordId?: unknown;
+    summary?: unknown;
+    imageId?: unknown;
+  }): Promise<Response> {
+    const action = body.action;
+    const recordAction =
+      action === "save-campaign" || action === "save-brief" || action === "save-message";
+    if (
+      !recordAction &&
+      ((action !== "save-draft-campaign" &&
+        action !== "create-review-task" &&
+        action !== "attach-generated-image") ||
+        typeof body.recordId !== "string" ||
+        !/^[a-zA-Z0-9]{15,18}$/.test(body.recordId))
+    )
+      return json(
+        { error: { code: "VALIDATION_FAILED", message: "The confirmation request is invalid." } },
+        { status: 400 },
+      );
+    const preflightBlocked = this.writeBlocked(action as Confirmation["action"]);
+    if (preflightBlocked) return preflightBlocked;
+    // Record writes are planned from the focus draft; the server authors every value.
+    const plan =
+      recordAction && this.state.workingSet.focus
+        ? planFocusWrite(this.state.workingSet.focus, this.state.workingSet)
+        : null;
+    if (recordAction && (!plan || plan.action !== action))
+      return json(
+        {
+          error: {
+            code: "VALIDATION_FAILED",
+            message: "Draft something in the chat first; saving writes the workspace draft.",
+          },
+        },
+        { status: 400 },
+      );
+    const recordId = plan ? plan.recordId : (body.recordId as string);
+    // Other writes act on the campaign this chat has open, never on a record it hasn't seen.
+    if (!plan && openCampaign(this.state.workingSet)?.recordId !== recordId)
+      return json(
+        {
+          error: {
+            code: "CONFIRMATION_REQUIRED",
+            message: "Open this campaign in the chat first, then confirm the action.",
+          },
+        },
+        { status: 409 },
+      );
+    // Salesforce decides whether this user may write; the card shows each check it ran.
+    const permissions = await this.checkWriteAccess(
+      action as Confirmation["action"],
+      plan?.write,
+      recordId,
+    );
+    if (!permissions)
+      return json(
+        {
+          error: {
+            code: "UPSTREAM_UNAVAILABLE",
+            message:
+              "The Salesforce permission check is unavailable, so nothing was prepared. Reconnect Salesforce and retry.",
+          },
+        },
+        { status: 503 },
+      );
+    if (!permissions.allowed)
+      return json(
+        {
+          error: {
+            code: "PERMISSION_DENIED",
+            message: `Your Salesforce permissions don't allow this: ${permissions.checks
+              .filter((check) => !check.passed)
+              .map((check) => `${check.label} (${check.detail})`)
+              .join("; ")}`,
+          },
+          permissions,
+        },
+        { status: 403 },
+      );
+    let summary = plan?.summary ?? (typeof body.summary === "string" ? body.summary.trim() : "");
+    let image: { imageId: string; contentHash: string } | undefined;
+    if (action === "attach-generated-image") {
+      const draft =
+        typeof body.imageId === "string" ? await this.findImageDraft(body.imageId) : null;
+      if (!draft || draft.campaign_id !== recordId || draft.lifecycle !== "draft")
+        return json(
+          {
+            error: {
+              code: "VALIDATION_FAILED",
+              message: "Choose an unexpired draft image generated for this campaign.",
+            },
+          },
+          { status: 400 },
+        );
+      image = { imageId: draft.image_id, contentHash: draft.content_hash };
+      // The summary is server-authored so the confirmation card states exactly what is attached.
+      summary =
+        `Attach the selected ${draft.channel} image draft to the campaign as a Salesforce file. Concept: ${draft.prompt_summary}`.slice(
+          0,
+          500,
+        );
+    }
+    // Brief saves and review requests act on the focus draft when there is one; the server
+    // writes the summary from the focus so the card states exactly what will be written.
+    const focus = this.state.workingSet.focus;
+    let focusRef: Confirmation["focus"];
+    if (focus && (plan || action === "save-draft-campaign" || action === "create-review-task")) {
+      const current = currentFocusVersion(focus);
+      focusRef = { id: focus.id, version: current.version, title: current.title };
+      if (!plan)
+        summary =
+          action === "save-draft-campaign"
+            ? focusBriefText(focus)
+            : `Review "${current.title}" (version ${current.version}) with current campaign context, readiness findings, a due date, and a human review checklist.`.slice(
+                0,
+                500,
+              );
+    }
+    if (!summary)
+      return json(
+        { error: { code: "VALIDATION_FAILED", message: "The confirmation request is invalid." } },
+        { status: 400 },
+      );
+    const id = crypto.randomUUID();
+    const idempotencyKey = crypto.randomUUID();
+    const requestHash = await sha256(
+      JSON.stringify({
+        action,
+        recordId,
+        summary,
+        principal: this.principalSubject,
+        ...(image ?? {}),
+        ...(focusRef ? { focus: focusRef } : {}),
+        ...(plan ? { write: plan.write } : {}),
+      }),
+    );
+    const confirmation = ConfirmationSchema.parse({
+      id,
+      action,
+      recordId,
+      principalSubject: this.principalSubject,
+      requestHash,
+      idempotencyKey,
+      summary,
+      expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+      status: "pending",
+      ...(image ?? {}),
+      ...(focusRef ? { focus: focusRef } : {}),
+      ...(plan ? { write: plan.write } : {}),
+      permissions,
+    });
+    await this.recordConfirmationAudit(confirmation, "pending");
+    this.setState({ ...this.state, pendingConfirmation: confirmation });
+    return json(confirmation, { status: 201 });
+  }
+
+  /**
+   * Asks Salesforce, as the signed-in user, whether it would allow a write: permission set,
+   * Marketing User, object and field access, and record access. Local development uses a
+   * fixture report. Salesforce enforces the same rules again when the write runs.
+   */
+  private async checkWriteAccess(
+    action: Confirmation["action"],
+    write: RecordWrite | undefined,
+    recordId: string,
+  ): Promise<PermissionReport | null> {
+    if ((this.env.ENVIRONMENT as string) === "local")
+      return fixturePermissionReport(action, write, new Date());
+    await this.mcp.waitForConnections({ timeout: 5_000 });
+    const entry = Object.entries(this.mcp.getAITools()).find(([key]) =>
+      key.endsWith("_check_write_access"),
+    );
+    const tool = entry?.[1];
+    if (!tool || !("execute" in tool) || typeof tool.execute !== "function") return null;
+    const updating = write ? write.recordId : recordId;
+    try {
+      const output = await resolveToolResult(
+        tool.execute(
+          {
+            inputs: [
+              {
+                action,
+                ...(updating ? { recordId: updating } : {}),
+                createsCampaign: Boolean(write?.newCampaignName),
+              },
+            ],
+          },
+          { toolCallId: crypto.randomUUID(), messages: [], context: undefined },
+        ),
+      );
+      return parsePermissionReport(output, new Date());
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Finishes a confirmed record write: checks Salesforce's read-back, links the focus to the
+   * saved record, and adds the created or updated records to the workspace.
+   */
+  private async completeRecordWrite(current: Confirmation, upstream: unknown) {
+    const write = current.write as RecordWrite;
+    const idField =
+      write.objectType === "Campaign"
+        ? "campaignId"
+        : write.objectType === "Northstar_Brief__c"
+          ? "briefId"
+          : "messageId";
+    const local = findToolField(upstream, "source") === "local-fixture";
+    const recordId = local ? findToolField(upstream, "recordId") : findToolField(upstream, idField);
+    const campaignId =
+      write.objectType === "Campaign" ? undefined : findToolField(upstream, "campaignId");
+    if (findToolField(upstream, "readBack") !== true || typeof recordId !== "string")
+      return json(
+        {
+          error: {
+            code: "CONFLICT",
+            message: "Salesforce did not return the required authoritative read-back.",
+          },
+        },
+        { status: 409 },
+      );
+    const result = {
+      recordId,
+      ...(typeof campaignId === "string" ? { campaignId } : {}),
+      created: findToolField(upstream, "created") === true,
+      campaignCreated: findToolField(upstream, "campaignCreated") === true,
+    };
+    await this.recordConfirmationAudit(current, "executed", recordId);
+    const executed = { ...current, status: "executed" as const };
+    this.setState({
+      ...this.state,
+      pendingConfirmation: null,
+      workingSet: applyRecordWrite(this.state.workingSet, current, result, new Date()),
+      activity: [
+        {
+          id: `${current.action}-${current.id}`,
+          label: ACTIVITY_LABELS[current.action],
+          detail: `${local ? "Local fixture" : "Salesforce"} read-back · ${write.objectLabel} ${recordId}`,
+          occurredAt: "Now",
+          status: "complete",
+        },
+        ...this.state.activity,
+      ],
+    });
+    return json({
+      confirmation: executed,
+      result: {
+        source: local ? "local-fixture" : "salesforce",
+        objectType: write.objectType,
+        objectLabel: write.objectLabel,
+        title: write.title,
+        ...result,
+        readBack: true,
+        idempotencyKey: current.idempotencyKey,
+      },
+    });
+  }
+
+  /**
+   * Prepares the focus draft's Salesforce save for confirmation and describes the result in
+   * plain language: what will be written, the permission checks, and that nothing is written yet.
+   */
+  private async proposeFocusSave(): Promise<string> {
+    const focus = this.state.workingSet.focus;
+    if (!focus)
+      return "There's no draft in the workspace yet. Draft something first, then save it.";
+    const plan = planFocusWrite(focus, this.state.workingSet);
+    const response = await this.prepareConfirmation({ action: plan.action });
+    const body = (await response.json()) as Confirmation & {
+      error?: { message?: string };
+      permissions?: PermissionReport;
+    };
+    if (!response.ok)
+      return `I couldn't prepare that save. ${body.error?.message ?? "Try again from the Workspace."} Nothing was written to Salesforce.`;
+    const permissions = body.permissions;
+    const checked = permissions
+      ? `Salesforce checked your permissions${permissions.source === "salesforce" ? ` as ${permissions.user}` : " (local fixture)"}: ${permissions.checks.length} of ${permissions.checks.length} checks passed (${permissions.checks.map((check) => check.label).join(", ")}).`
+      : "";
+    return [
+      `**Ready to confirm:** ${body.summary}`,
+      checked,
+      "Review the confirmation card and confirm it yourself; nothing is written to Salesforce until you do.",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
   /** Saves a draft (or its revision) as the workspace focus. */
   private updateFocus(input: FocusInput) {
     const workingSet = applyFocusUpdate(this.state.workingSet, input, new Date());
@@ -1320,111 +1676,8 @@ export class MarketingOrchestrator extends AIChatAgent<
       this.resetWorkingSet();
       return json(this.state.workingSet);
     }
-    if (url.pathname.endsWith("/confirmations") && request.method === "POST") {
-      const body = (await request.json()) as {
-        action?: unknown;
-        recordId?: unknown;
-        summary?: unknown;
-        imageId?: unknown;
-      };
-      const action = body.action;
-      const recordId = body.recordId;
-      if (
-        (action !== "save-draft-campaign" &&
-          action !== "create-review-task" &&
-          action !== "attach-generated-image") ||
-        typeof recordId !== "string" ||
-        !/^[a-zA-Z0-9]{15,18}$/.test(recordId)
-      )
-        return json(
-          { error: { code: "VALIDATION_FAILED", message: "The confirmation request is invalid." } },
-          { status: 400 },
-        );
-      const preflightBlocked = this.writeBlocked(action);
-      if (preflightBlocked) return preflightBlocked;
-      // Writes act on the campaign this chat has open, never on a record it hasn't seen.
-      if (openCampaign(this.state.workingSet)?.recordId !== recordId)
-        return json(
-          {
-            error: {
-              code: "CONFIRMATION_REQUIRED",
-              message: "Open this campaign in the chat first, then confirm the action.",
-            },
-          },
-          { status: 409 },
-        );
-      let summary = typeof body.summary === "string" ? body.summary.trim() : "";
-      let image: { imageId: string; contentHash: string } | undefined;
-      if (action === "attach-generated-image") {
-        const draft =
-          typeof body.imageId === "string" ? await this.findImageDraft(body.imageId) : null;
-        if (!draft || draft.campaign_id !== recordId || draft.lifecycle !== "draft")
-          return json(
-            {
-              error: {
-                code: "VALIDATION_FAILED",
-                message: "Choose an unexpired draft image generated for this campaign.",
-              },
-            },
-            { status: 400 },
-          );
-        image = { imageId: draft.image_id, contentHash: draft.content_hash };
-        // The summary is server-authored so the confirmation card states exactly what is attached.
-        summary =
-          `Attach the selected ${draft.channel} image draft to the campaign as a Salesforce file. Concept: ${draft.prompt_summary}`.slice(
-            0,
-            500,
-          );
-      }
-      // Brief saves and review requests act on the focus draft when there is one; the server
-      // writes the summary from the focus so the card states exactly what will be written.
-      const focus = this.state.workingSet.focus;
-      let focusRef: Confirmation["focus"];
-      if (focus && (action === "save-draft-campaign" || action === "create-review-task")) {
-        const current = currentFocusVersion(focus);
-        focusRef = { id: focus.id, version: current.version, title: current.title };
-        summary =
-          action === "save-draft-campaign"
-            ? focusBriefText(focus)
-            : `Review "${current.title}" (version ${current.version}) with current campaign context, readiness findings, a due date, and a human review checklist.`.slice(
-                0,
-                500,
-              );
-      }
-      if (!summary)
-        return json(
-          { error: { code: "VALIDATION_FAILED", message: "The confirmation request is invalid." } },
-          { status: 400 },
-        );
-      const id = crypto.randomUUID();
-      const idempotencyKey = crypto.randomUUID();
-      const requestHash = await sha256(
-        JSON.stringify({
-          action,
-          recordId,
-          summary,
-          principal: this.principalSubject,
-          ...(image ?? {}),
-          ...(focusRef ? { focus: focusRef } : {}),
-        }),
-      );
-      const confirmation = ConfirmationSchema.parse({
-        id,
-        action,
-        recordId,
-        principalSubject: this.principalSubject,
-        requestHash,
-        idempotencyKey,
-        summary,
-        expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
-        status: "pending",
-        ...(image ?? {}),
-        ...(focusRef ? { focus: focusRef } : {}),
-      });
-      await this.recordConfirmationAudit(confirmation, "pending");
-      this.setState({ ...this.state, pendingConfirmation: confirmation });
-      return json(confirmation, { status: 201 });
-    }
+    if (url.pathname.endsWith("/confirmations") && request.method === "POST")
+      return this.prepareConfirmation((await request.json()) as Record<string, unknown>);
     if (url.pathname.endsWith("/confirmations/deny") && request.method === "POST") {
       const current = this.state.pendingConfirmation;
       if (!current)
@@ -1475,12 +1728,7 @@ export class MarketingOrchestrator extends AIChatAgent<
           );
         await this.mcp.waitForConnections({ timeout: 5_000 });
         const tools = this.mcp.getAITools();
-        const toolName =
-          current.action === "create-review-task"
-            ? "create_campaign_review_request"
-            : current.action === "attach-generated-image"
-              ? "attach_campaign_image"
-              : "save_campaign_brief";
+        const toolName = WRITE_TOOL_BY_ACTION[current.action];
         const entry = Object.entries(tools).find(([key]) => key.endsWith(`_${toolName}`));
         const tool = entry?.[1];
         if (!tool || !("execute" in tool) || typeof tool.execute !== "function")
@@ -1488,8 +1736,7 @@ export class MarketingOrchestrator extends AIChatAgent<
             {
               error: {
                 code: "UPSTREAM_UNAVAILABLE",
-                message:
-                  "The confirmed Salesforce review tool is unavailable. Reconnect and retry.",
+                message: "The confirmed Salesforce write tool is unavailable. Reconnect and retry.",
               },
             },
             { status: 503 },
@@ -1531,8 +1778,14 @@ export class MarketingOrchestrator extends AIChatAgent<
               {
                 inputs: [
                   {
-                    campaignId: current.recordId,
-                    ...(current.action === "save-draft-campaign" ? { brief: current.summary } : {}),
+                    ...(current.write
+                      ? recordWriteInputs(current)
+                      : {
+                          campaignId: current.recordId,
+                          ...(current.action === "save-draft-campaign"
+                            ? { brief: current.summary }
+                            : {}),
+                        }),
                     ...(imagePayload ?? {}),
                     confirmationId: signedConfirmation,
                     requestHash: current.requestHash,
@@ -1555,6 +1808,7 @@ export class MarketingOrchestrator extends AIChatAgent<
             { status: 502 },
           );
         }
+        if (current.write) return this.completeRecordWrite(current, upstream);
         const campaignId = findToolField(upstream, "campaignId");
         const readBack = findToolField(upstream, "readBack");
         const sourceRecordId =
@@ -1645,6 +1899,26 @@ export class MarketingOrchestrator extends AIChatAgent<
           },
         });
       }
+      if (current.write) {
+        const created = !current.write.recordId;
+        return this.completeRecordWrite(current, {
+          readBack: true,
+          recordId:
+            current.write.recordId ??
+            (current.write.objectType === "Campaign"
+              ? "701000000000NEW"
+              : current.write.objectType === "Northstar_Brief__c"
+                ? "a0B000000000001"
+                : "a0C000000000001"),
+          campaignId:
+            current.write.objectType === "Campaign"
+              ? undefined
+              : (current.write.campaignId ?? "701000000000NEW"),
+          created,
+          campaignCreated: created && Boolean(current.write.newCampaignName),
+          source: "local-fixture",
+        });
+      }
       const executed = { ...current, status: "executed" as const };
       // The local fixture still verifies the confirmed image bytes so the flow is exercised end to end.
       const fixtureImage =
@@ -1727,6 +2001,18 @@ export class MarketingOrchestrator extends AIChatAgent<
     // Writes and forbidden actions never reach the model, so it cannot claim they happened.
     const utterance = latestUserText(evidenceTurnMessages(this.messages));
     const policyIntent = classifyPolicyIntent(utterance);
+    // A request to save or create the draft prepares that write for confirmation, with the
+    // Salesforce permission check, instead of only pointing at a button.
+    if (policyIntent === "confirmation-required" && this.state.workingSet.focus) {
+      const text = await this.proposeFocusSave();
+      return scriptedResponse([text], {
+        model: POLICY_ROUTER,
+        route: policyIntent,
+        abortSignal,
+        onComplete: (result) =>
+          this.recordTurn(utterance, { model: POLICY_ROUTER, route: policyIntent }, result),
+      });
+    }
     if (policyIntent)
       return scriptedResponse(
         [policyResponse(policyIntent, this.focusReferent() ?? this.previousReplyReferent())],

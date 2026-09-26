@@ -326,7 +326,24 @@ const focus = focusTools((input) => {
   evalWorkingSet = applyFocusUpdate(evalWorkingSet, input, new Date());
   return evalWorkingSet.focus;
 });
-const tools = { ...fixtureTools(), ...campaignContext.tools, ...graph.tools, ...focus };
+// Evaluations never write: proposing a save only reports that a confirmation would be prepared.
+const proposeSave = {
+  workspace_propose_salesforce_save: tool({
+    description:
+      "Prepare the workspace draft to be created or updated in Salesforce. It checks the user's Salesforce permissions and puts a confirmation card in front of the user. Nothing is written until the user confirms.",
+    inputSchema: jsonSchema({ type: "object", properties: {} }),
+    execute: async () => ({
+      message: "A confirmation card was prepared (evaluation fixture); nothing was written.",
+    }),
+  }),
+};
+const tools = {
+  ...fixtureTools(),
+  ...campaignContext.tools,
+  ...graph.tools,
+  ...focus,
+  ...proposeSave,
+};
 const suites = [
   { id: "demo-scenarios", cases: demoScenarios, trials: trialsDemo },
   { id: "routing-pipeline", cases: routingCases, trials: trialsRouting },

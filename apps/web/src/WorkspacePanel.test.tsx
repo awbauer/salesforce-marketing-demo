@@ -1,7 +1,7 @@
 import { emptyWorkingSet, type FocusItem, type WorkingRecord } from "@northstar/contracts";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { FocusCard, recordsBySystem, WorkspacePanel } from "./WorkspacePanel";
+import { FocusCard, objectLabel, recordsBySystem, WorkspacePanel } from "./WorkspacePanel";
 
 afterEach(cleanup);
 
@@ -124,5 +124,11 @@ describe("workspace panel", () => {
     fireEvent.click(within(card).getByRole("button", { name: "v1" }));
     expect(within(card).queryByText("Soup's on.")).not.toBeNull();
     expect(within(card).queryByRole("button", { name: "Save to Salesforce as brief" })).toBeNull();
+  });
+
+  it("names Salesforce objects in plain words", () => {
+    expect(objectLabel("Northstar_Message__c")).toBe("Message");
+    expect(objectLabel("Campaign")).toBe("Campaign");
+    expect(objectLabel("Custom_Thing__c")).toBe("Custom Thing");
   });
 });

@@ -629,7 +629,7 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
   salesforce: () => (
     <Figure
       label="Reads and writes in Salesforce"
-      caption="Reads go through agents on Hosted MCP; writes are Apex actions behind a human confirmation."
+      caption="Reads go through agents on Hosted MCP. Writes create or update real records through Apex actions, after a permission check and your confirmation."
     >
       <Lanes
         lanes={[
@@ -645,14 +645,15 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
           {
             label: "Write",
             steps: [
+              { title: "Draft in focus", tone: "person", glyph: "◎" },
+              { title: "Permission check", caption: "as you", tone: "tool", glyph: "⚿" },
+              { title: "You confirm", tone: "person", glyph: "☑" },
               {
-                title: "Confirmation card",
-                caption: "a person approves",
-                tone: "person",
-                glyph: "☑",
+                title: "Apex, user mode",
+                caption: "campaign, brief, message",
+                tone: "guard",
+                glyph: "⚙",
               },
-              { title: "Signed request", tone: "guard", glyph: "⛨" },
-              { title: "Apex action", tone: "tool", glyph: "⚙" },
               { title: "Record read-back", tone: "output", glyph: "✓" },
             ],
           },
@@ -735,30 +736,44 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
   ),
   governance: () => (
     <Figure
-      label="The confirmation flow"
-      caption="The same four steps protect every write; operators can also pause writes or tools without a deploy."
+      label="How a write is checked and confirmed"
+      caption="Every write takes the same five steps. Salesforce checks your permissions before the card appears and again when the write runs; operators can also pause writes or tools without a deploy."
     >
       <Flow
         numbered
         steps={[
+          { title: "Plan", caption: "built from your draft", tone: "edge", glyph: "✎" },
           {
-            title: "Preflight",
-            caption: "hash of the exact arguments, 5-minute expiry",
+            title: "Permission check",
+            caption: "Salesforce, as you",
+            tone: "tool",
+            glyph: "⚿",
+          },
+          { title: "You confirm", caption: "exact values, hashed", tone: "person", glyph: "☑" },
+          { title: "Signed write", caption: "Apex, user mode", tone: "guard", glyph: "⛨" },
+          { title: "Read-back", caption: "created or updated", tone: "output", glyph: "✓" },
+        ]}
+      />
+      <Cards
+        cards={[
+          {
+            title: "Model",
+            caption: "drafts and proposes; holds no write tools",
+            tone: "model",
+            glyph: "◆",
+          },
+          {
+            title: "Workbench",
+            caption: "plans, asks Salesforce, hashes, signs",
             tone: "edge",
-            glyph: "#",
+            glyph: "◎",
           },
+          { title: "You", caption: "review and confirm", tone: "person", glyph: "☑" },
           {
-            title: "Human confirms",
-            caption: "card shows what will change",
-            tone: "person",
-            glyph: "☑",
-          },
-          { title: "Signed execute", caption: "HMAC, verified by Apex", tone: "guard", glyph: "⛨" },
-          {
-            title: "Read-back",
-            caption: "Salesforce returns the record",
-            tone: "output",
-            glyph: "✓",
+            title: "Salesforce",
+            caption: "owns authorization, verifies, writes, reads back",
+            tone: "tool",
+            glyph: "☁",
           },
         ]}
       />

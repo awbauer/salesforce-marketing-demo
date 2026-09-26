@@ -14,6 +14,14 @@ const requiredFiles = [
   "classes/NorthstarAttachCampaignImage.cls",
   "classes/NorthstarConfirmationVerifier.cls",
   "classes/NorthstarCampaignActionsTest.cls",
+  "classes/NorthstarSaveCampaign.cls",
+  "classes/NorthstarSaveBrief.cls",
+  "classes/NorthstarSaveMessage.cls",
+  "classes/NorthstarRecordWrites.cls",
+  "classes/NorthstarCheckWriteAccess.cls",
+  "classes/NorthstarRecordActionsTest.cls",
+  "objects/Northstar_Brief__c/Northstar_Brief__c.object-meta.xml",
+  "objects/Northstar_Message__c/Northstar_Message__c.object-meta.xml",
   "objects/Activity/fields/Northstar_Idempotency_Key__c.field-meta.xml",
   "objects/Campaign/fields/Northstar_Idempotency_Key__c.field-meta.xml",
   "objects/ContentVersion/fields/Northstar_Idempotency_Key__c.field-meta.xml",
@@ -87,6 +95,9 @@ for (const [toolName, apexClass] of [
   ["save_campaign_brief", "NorthstarSaveCampaignBrief"],
   ["create_campaign_review_request", "NorthstarCreateCampaignReviewRequest"],
   ["attach_campaign_image", "NorthstarAttachCampaignImage"],
+  ["save_campaign", "NorthstarSaveCampaign"],
+  ["save_brief", "NorthstarSaveBrief"],
+  ["save_message", "NorthstarSaveMessage"],
 ]) {
   const toolBlock = mcpServer
     .split("<tools>")

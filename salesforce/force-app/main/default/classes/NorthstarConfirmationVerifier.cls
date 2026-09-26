@@ -8,8 +8,25 @@ public without sharing class NorthstarConfirmationVerifier {
         String requestHash,
         String idempotencyKey
     ) {
+        requireValidFor(
+            action, campaignId == null ? null : String.valueOf(campaignId), signedConfirmation,
+            requestHash, idempotencyKey
+        );
+    }
+
+    /**
+     * Verifies a confirmation bound to a subject: the record being updated, the parent record a
+     * new record is created under, or 'new' for a record with no parent yet.
+     */
+    public static void requireValidFor(
+        String action,
+        String subject,
+        String signedConfirmation,
+        String requestHash,
+        String idempotencyKey
+    ) {
         if (
-            String.isBlank(action) || campaignId == null || String.isBlank(signedConfirmation) ||
+            String.isBlank(action) || String.isBlank(subject) || String.isBlank(signedConfirmation) ||
             !isHex(requestHash, 64) || String.isBlank(idempotencyKey)
         ) {
             throw new ConfirmationException('Valid signed confirmation evidence is required.');
@@ -40,7 +57,7 @@ public without sharing class NorthstarConfirmationVerifier {
         }
         String canonical = String.join(new List<String>{
             action,
-            String.valueOf(campaignId),
+            subject,
             token[1],
             requestHash,
             idempotencyKey,

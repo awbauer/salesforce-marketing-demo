@@ -94,16 +94,16 @@ export const PART_LESSONS: Record<string, PartLesson> = {
       "Know where to look when something goes wrong",
     ],
     check: {
-      question: "The user asks the orchestrator to “publish the campaign”. What happens?",
+      question: "Who decides whether you may create a campaign from the workbench?",
       options: [
-        "The model calls a publish tool after the user confirms",
-        "The policy router refuses without calling the model",
-        "The intent router forces the summary tool",
-        "Salesforce rejects it after the model tries",
+        "The model, based on the conversation",
+        "The workbench, from its own list of users",
+        "Salesforce, from your profile, permission sets, and sharing",
+        "Nobody: any signed-in user can write",
       ],
-      answer: 1,
+      answer: 2,
       explain:
-        "Publishing is blocked outright. The policy router answers deterministically before the model runs, so no tool is called and nothing can falsely claim success.",
+        "Salesforce owns authorization. The workbench asks it, as you, before preparing the write and shows each check on the confirmation card; Apex enforces the same permissions again when the write runs. The model only drafts and proposes.",
     },
   },
 };
@@ -186,7 +186,7 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
   salesforce: {
     diagram: "salesforce",
     keyIdea:
-      "Salesforce is the system of record: agents answer through tools, and writes are Apex actions the model can't call.",
+      "Salesforce is the system of record: drafts become real campaigns, briefs, and messages there, through Apex actions the model can't call.",
     tryIt: [
       {
         kind: "prompt",
@@ -209,7 +209,7 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
   governance: {
     diagram: "governance",
     keyIdea:
-      "Every write is previewed, confirmed by a person, signed, verified by Salesforce, and read back.",
+      "Salesforce owns authorization: it checks your permissions before a write is prepared and again when it runs. A person confirms every write.",
   },
   ui: {
     diagram: "ui-layers",

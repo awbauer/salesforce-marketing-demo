@@ -21,7 +21,7 @@ test("builds the workspace from the chat and completes a durable turn", async ({
   await expect(page.getByRole("heading", { name: "Campaign intelligence" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Workspace" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Generate campaign visual" })).toBeVisible();
-  await expect(page.getByText("14 configured tools")).toBeVisible();
+  await expect(page.getByText("18 configured tools")).toBeVisible();
   // A new chat starts with an empty workspace and nothing to write to.
   await page.getByRole("button", { name: "New chat" }).click();
   await expect(page.locator(".messages .message.user")).toHaveCount(0);
@@ -670,28 +670,42 @@ test("builds a versioned focus draft that follow-ups and confirmed saves act on"
   await expect(focus.getByRole("button", { name: "Save to Salesforce as brief" })).toHaveCount(0);
   await focus.getByRole("button", { name: /v2/ }).click();
 
-  // "It" is the focus draft, never another record.
+  // Asking to create it prepares the Salesforce save from the draft, with a permission check.
   await composer.fill("Looks good, create it");
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page.locator(".message.assistant").last()).toContainText(
-    "I can't create “Rainy-day comfort: Spicy Tortilla Soup” in Salesforce from chat",
-  );
-  await page.getByRole("complementary", { name: "Workspace" }).screenshot({
-    path: `artifacts/evidence/WU-036/focus-${testInfo.project.name}.png`,
-  });
-
-  // Saving writes exactly this version to the open campaign's brief, after confirmation.
-  await focus.getByRole("button", { name: "Save to Salesforce as brief" }).click();
+  await expect(page.locator(".message.assistant").last()).toContainText("Ready to confirm");
   const card = page.locator(".confirmation-card");
-  await expect(
-    card.getByRole("heading", { name: "Save draft brief to Salesforce?" }),
-  ).toBeVisible();
-  await expect(card).toContainText("Rainy-day comfort: Spicy Tortilla Soup · version 2");
-  await expect(card).toContainText("Headline: Rain outside? Warm soup is waiting.");
+  await expect(card.getByRole("heading", { name: "Save message to Salesforce?" })).toBeVisible();
+  await expect(card).toContainText("Create message “Rainy-day comfort: Spicy Tortilla Soup”");
+  await expect(card).toContainText("new campaign “Coastline Weather Moments” (Coastline Kitchen)");
+  await expect(card).toContainText("Rain outside? Warm soup is waiting.");
+  const permissions = card.getByRole("region", { name: "Salesforce permission check" });
+  await expect(permissions).toContainText("Create Northstar Message");
+  await expect(permissions).toContainText("Create Campaign");
+  await permissions.getByText("Who checks what").click();
+  await expect(permissions).toContainText("Owns authorization");
+  await card.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `artifacts/evidence/WU-037/confirm-${testInfo.project.name}.png` });
   await card.getByRole("button", { name: "Confirm save" }).click();
-  await expect(page.getByText("Brief saved to the campaign")).toBeVisible();
-  const campaign = page
-    .getByTestId("workspace-record")
-    .filter({ hasText: "Fall Loyalty Reactivation" });
-  await expect(campaign).toContainText("Updated");
+  await expect(
+    page.locator(".success-banner").getByText("Message saved to Salesforce"),
+  ).toBeVisible();
+
+  // The workspace shows what was created, and the draft is linked to its record.
+  const records = page.getByTestId("workspace-record");
+  await expect(records.filter({ hasText: "Coastline Weather Moments" })).toContainText("Created");
+  await expect(records.filter({ hasText: "Rainy-day comfort" })).toContainText("Created");
+  await expect(focus.getByRole("button", { name: "Saved to Salesforce" })).toBeDisabled();
+
+  // A new version updates the same record instead of creating another.
+  await composer.fill("Make it warmer");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(focus).toContainText("Version 3 · current");
+  await focus.getByRole("button", { name: "Update in Salesforce" }).click();
+  await expect(card).toContainText("Update message “Rainy-day comfort: Spicy Tortilla Soup”");
+  await card.getByRole("button", { name: "Confirm save" }).click();
+  await expect(records.filter({ hasText: "Rainy-day comfort" })).toContainText("Updated");
+  await page.getByRole("complementary", { name: "Workspace" }).screenshot({
+    path: `artifacts/evidence/WU-037/saved-${testInfo.project.name}.png`,
+  });
 });

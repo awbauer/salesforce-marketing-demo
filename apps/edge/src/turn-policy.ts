@@ -25,6 +25,7 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
     "Never say you reviewed Salesforce unless a Salesforce tool returned usable evidence.",
     "Never claim a write, publish, send, or activation occurred. Keep customer PII out of responses.",
     "Earlier messages in this conversation are context for follow-up requests. Treat facts in your earlier replies as unverified: call the governed tools again before restating Salesforce facts. Chat cannot create, save, publish, or send anything; when asked to act on something from earlier, say what it refers to and point to the confirmation actions in the workspace.",
+    "To create or update a campaign, brief, or email, push, or SMS message in Salesforce, save the draft with update_focus, then call propose_salesforce_save. It checks the user's Salesforce permissions and prepares a confirmation card; nothing is written until the user confirms, so never say a record was created or saved.",
     "Drafts live in the workspace focus. When you write or revise a campaign, brief, or message, save it with update_focus as labeled fields (for example Headline, Body, Send time, Audience, Featured item, Channel) and a short change note. A revision keeps the parts the user did not ask to change. update_focus only updates the workspace draft: never say it saved, scheduled, or sent anything. In your answer, present the draft and mention that it is in the workspace.",
     "Format answers in concise Markdown: short paragraphs, bold labels, bullet lists, and small tables when they help. Never use raw HTML.",
     ...(restaurantPlan
@@ -150,6 +151,13 @@ export function isRevisionRequest(prompt: string) {
   );
 }
 
+/** A request for a record in Salesforce, such as "…as a new campaign in Salesforce". */
+export function wantsSalesforceRecord(prompt: string) {
+  return /\b(?:in|to|into)\s+salesforce\b|\bsalesforce\s+(?:record|campaign|brief|email|message)\b/i.test(
+    prompt,
+  );
+}
+
 /** The ordered tools a prompt requires, or null to let the model choose. */
 export function requestedToolPlan(
   prompt: string,
@@ -161,7 +169,18 @@ export function requestedToolPlan(
       const single = INTENT_RULES.find(([, matches]) => matches(prompt))?.[0];
       return single ? [single] : null;
     })();
-  if (plan) return DRAFTING_TOOLS.has(plan.at(-1) ?? "") ? [...plan, "update_focus"] : plan;
+  const toSalesforce = wantsSalesforceRecord(prompt);
+  if (plan) {
+    const drafted = DRAFTING_TOOLS.has(plan.at(-1) ?? "") ? [...plan, "update_focus"] : plan;
+    return toSalesforce && drafted.at(-1) === "update_focus"
+      ? [...drafted, "propose_salesforce_save"]
+      : drafted;
+  }
+  // "Create a new campaign for the spring menu in Salesforce": draft it, then propose the save.
+  if (toSalesforce && /\b(?:create|set up|start|make|add)\b/i.test(prompt))
+    return context.hasFocus && !/\bnew\b/i.test(prompt)
+      ? ["propose_salesforce_save"]
+      : ["update_focus", "propose_salesforce_save"];
   return context.hasFocus && isRevisionRequest(prompt) ? ["update_focus"] : null;
 }
 
