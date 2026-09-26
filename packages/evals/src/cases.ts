@@ -113,7 +113,18 @@ export const demoScenarios = [
     id: "demo-restaurant-push",
     prompt:
       "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
-    expected: "get_restaurant_profile → get_current_weather → draft_campaign_content",
+    expected:
+      "get_restaurant_profile → get_current_weather → find_similar_past_pushes → draft_campaign_content",
+  },
+  {
+    id: "demo-graph-buyer-group",
+    prompt: "Who should be in the buyer group for Acme Outfitters, and why?",
+    expected: "explain_buyer_group",
+  },
+  {
+    id: "demo-graph-consent",
+    prompt: "Is the fall campaign audience covered for commercial email consent?",
+    expected: "check_consent_coverage",
   },
 ] as const;
 

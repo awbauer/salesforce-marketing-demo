@@ -35,6 +35,11 @@ import {
   connectCampaignContextTools,
 } from "./campaign-context/server";
 import { forcedToolCallMiddleware } from "./forced-tool-middleware";
+import {
+  connectKnowledgeGraphTools,
+  KNOWLEDGE_GRAPH_TOOL_PREFIX,
+  knowledgeGraphBackend,
+} from "./knowledge-graph/server";
 import { buildTurnRecord } from "./turn-history";
 import {
   MAX_OUTPUT_TOKENS,
@@ -61,6 +66,10 @@ type OrchestratorBindings = CloudflareBindings & {
   // Operator kill switches, set as Worker secrets so deploys do not reset them.
   WRITES_ENABLED?: string;
   DISABLED_TOOLS?: string;
+  // Neo4j Aura Query API credentials (Worker secrets); without them the fixture graph is used.
+  NEO4J_QUERY_URL?: string;
+  NEO4J_USERNAME?: string;
+  NEO4J_PASSWORD?: string;
 };
 
 const IMAGE_PROMPT_VERSION = "campaign-image-v1";
@@ -462,14 +471,23 @@ export class MarketingOrchestrator extends AIChatAgent<
     await this.mcp.waitForConnections({ timeout: 10_000 });
     const discoveredTools = this.mcp.getAITools();
     const { disabledTools } = parseOperationControls(this.env);
-    // The campaign-context MCP runs in-process; it is closed when the turn finishes.
+    // The campaign-context and knowledge-graph MCPs run in-process; both close when the turn ends.
     const context = await connectCampaignContextTools();
+    const graph = await connectKnowledgeGraphTools(knowledgeGraphBackend(this.env));
     const tools = guardToolResults({
       ...Object.fromEntries(
         Object.entries(discoveredTools).filter(([key]) =>
           PHASE_2_AUTONOMOUS_TOOLS.some(
             (name) => key.endsWith(`_${name}`) && !disabledTools.includes(name),
           ),
+        ),
+      ),
+      ...Object.fromEntries(
+        Object.entries(graph.tools).filter(
+          ([key]) =>
+            !(disabledTools as readonly string[]).includes(
+              key.slice(KNOWLEDGE_GRAPH_TOOL_PREFIX.length),
+            ),
         ),
       ),
       ...Object.fromEntries(
@@ -498,6 +516,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     const missingTool = missingPlannedTool(prompt, Object.keys(tools));
     if (missingTool) {
       await context.close();
+      await graph.close();
       return scriptedResponse(
         [
           (disabledTools as readonly string[]).includes(missingTool)
@@ -567,6 +586,7 @@ export class MarketingOrchestrator extends AIChatAgent<
           );
         } finally {
           await context.close();
+          await graph.close();
         }
       },
       onError: describeTurnError,
@@ -1107,7 +1127,10 @@ export class MarketingOrchestrator extends AIChatAgent<
       );
     }
     if (url.pathname.endsWith("/operations") && request.method === "GET")
-      return json(parseOperationControls(this.env));
+      return json({
+        ...parseOperationControls(this.env),
+        knowledgeGraph: knowledgeGraphBackend(this.env).kind,
+      });
     if (url.pathname.endsWith("/audit/export") && request.method === "GET")
       return this.exportAudit();
     if (url.pathname.endsWith("/turns") && request.method === "GET")

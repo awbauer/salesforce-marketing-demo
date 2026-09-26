@@ -2,8 +2,15 @@
   "extends": "agents/tsconfig",
   "compilerOptions": {
     "noEmit": true,
-    "paths": { "@northstar/contracts": ["../../packages/contracts/src/index.ts"] }
+    "paths": {
+      "@northstar/contracts": ["../../packages/contracts/src/index.ts"],
+      "@northstar/knowledge-graph": ["../../packages/knowledge-graph/src/index.ts"]
+    }
   },
-  "include": ["src/**/*.ts", "../../packages/contracts/src/**/*.ts"],
-  "exclude": ["src/**/*.worker.test.ts"]
+  "include": [
+    "src/**/*.ts",
+    "../../packages/contracts/src/**/*.ts",
+    "../../packages/knowledge-graph/src/**/*.ts"
+  ],
+  "exclude": ["src/**/*.worker.test.ts", "../../packages/**/*.test.ts"]
 }

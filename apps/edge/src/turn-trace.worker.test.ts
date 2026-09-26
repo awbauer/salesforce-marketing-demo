@@ -1,6 +1,7 @@
 import type { UIMessageChunk, UIMessageStreamWriter } from "ai";
 import { describe, expect, it } from "vitest";
 import { stepToolChoice } from "./orchestrator";
+import { MAX_TURN_STEPS } from "./turn-policy";
 import { createTurnTracer, describeTurnError } from "./turn-trace";
 
 function harness(options: { userAbortSignal?: AbortSignal } = {}) {
@@ -162,7 +163,10 @@ describe("turn tracer", () => {
 
   it("sends no tools to text-only steps and only the required tool to forced steps", () => {
     expect(stepToolChoice(undefined, 0)).toBeUndefined();
-    expect(stepToolChoice(undefined, 3)).toEqual({ toolChoice: "none", activeTools: [] });
+    expect(stepToolChoice(undefined, MAX_TURN_STEPS - 1)).toEqual({
+      toolChoice: "none",
+      activeTools: [],
+    });
     expect(stepToolChoice("sf_summarize_campaign", 0)).toEqual({
       toolChoice: { type: "tool", toolName: "sf_summarize_campaign" },
       activeTools: ["sf_summarize_campaign"],

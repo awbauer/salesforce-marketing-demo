@@ -2,7 +2,7 @@
 // Runs the production routing, prompt, step settings, and forced-tool middleware against
 // fictional tool fixtures, then writes a typed report that the demo UI renders.
 //
-// Usage: pnpm eval:live [--models id,id] [--trials-demo 5] [--trials-routing 2] [--out path]
+// Usage: pnpm eval:live [--models id,id] [--trials-demo 5] [--trials-routing 2] [--out path] [--live-graph]
 // Cost: a default three-model run is about 550 model calls; check Workers AI usage before adding models.
 // Credentials: CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, or an authenticated wrangler login.
 import { execFileSync } from "node:child_process";
@@ -14,6 +14,11 @@ import {
   CAMPAIGN_CONTEXT_TOOL_PREFIX,
   connectCampaignContextTools,
 } from "../apps/edge/src/campaign-context/server.ts";
+import {
+  connectKnowledgeGraphTools,
+  KNOWLEDGE_GRAPH_TOOL_PREFIX,
+  knowledgeGraphBackend,
+} from "../apps/edge/src/knowledge-graph/server.ts";
 import { forcedToolCallMiddleware } from "../apps/edge/src/forced-tool-middleware.ts";
 import {
   MAX_OUTPUT_TOKENS,
@@ -63,8 +68,14 @@ function credentials() {
       accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
       apiKey: process.env.CLOUDFLARE_API_TOKEN,
     };
-  const wrangler = (args) =>
-    JSON.parse(execFileSync("pnpm", ["exec", "wrangler", ...args, "--json"], { encoding: "utf8" }));
+  // Call the local binary directly: pnpm can print a banner before the JSON.
+  const wrangler = (args) => {
+    const output = execFileSync("node_modules/.bin/wrangler", [...args, "--json"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return JSON.parse(output.slice(output.indexOf("{")));
+  };
   const accounts = wrangler(["whoami"]).accounts ?? [];
   if (accounts.length !== 1)
     throw new Error("Set CLOUDFLARE_ACCOUNT_ID: wrangler reports zero or several accounts.");
@@ -172,6 +183,8 @@ function shortName(name) {
   if (name.startsWith(TOOL_PREFIX)) return name.slice(TOOL_PREFIX.length);
   if (name.startsWith(CAMPAIGN_CONTEXT_TOOL_PREFIX))
     return name.slice(CAMPAIGN_CONTEXT_TOOL_PREFIX.length);
+  if (name.startsWith(KNOWLEDGE_GRAPH_TOOL_PREFIX))
+    return name.slice(KNOWLEDGE_GRAPH_TOOL_PREFIX.length);
   return name;
 }
 
@@ -303,7 +316,13 @@ const provider = createWorkersAI({ accountId, apiKey });
 // Salesforce tools are fixtures; the campaign-context MCP runs for real (mocked restaurant data,
 // live Open-Meteo weather) through the same in-process MCP client as production.
 const campaignContext = await connectCampaignContextTools();
-const tools = { ...fixtureTools(), ...campaignContext.tools };
+// The knowledge graph uses its local fictional copy unless --live-graph points it at Neo4j.
+const graph = await connectKnowledgeGraphTools(
+  process.argv.includes("--live-graph")
+    ? knowledgeGraphBackend(process.env)
+    : knowledgeGraphBackend({}),
+);
+const tools = { ...fixtureTools(), ...campaignContext.tools, ...graph.tools };
 const suites = [
   { id: "demo-scenarios", cases: demoScenarios, trials: trialsDemo },
   { id: "routing-pipeline", cases: routingCases, trials: trialsRouting },
@@ -348,4 +367,5 @@ const report = EvalReportSchema.parse({
 mkdirSync(dirname(REPORT_PATH), { recursive: true });
 writeFileSync(REPORT_PATH, `${JSON.stringify(report, null, 1)}\n`);
 await campaignContext.close();
+await graph.close();
 console.log(`Wrote ${REPORT_PATH} (${results.length} turns).`);

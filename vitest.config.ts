@@ -9,6 +9,9 @@ export default defineConfig({
       "@northstar/contracts": fileURLToPath(
         new URL("./packages/contracts/src/index.ts", import.meta.url),
       ),
+      "@northstar/knowledge-graph": fileURLToPath(
+        new URL("./packages/knowledge-graph/src/index.ts", import.meta.url),
+      ),
       "@northstar/ui": fileURLToPath(new URL("./packages/ui/src/index.tsx", import.meta.url)),
       "@northstar/evals/report": fileURLToPath(
         new URL("./packages/evals/src/report.ts", import.meta.url),

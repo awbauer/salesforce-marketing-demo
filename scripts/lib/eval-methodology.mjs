@@ -2,11 +2,11 @@
 export function buildMethodology({ trialsDemo, trialsRouting }) {
   return {
     summary:
-      "Each turn runs the production orchestrator pipeline against a live Workers AI model. Salesforce tools are replaced by fixtures that return fictional results, and the campaign-context MCP runs for real (mocked restaurant data and live Open-Meteo weather), so scores measure orchestration: routing, tool use, answer quality, and safety. They do not measure Salesforce agent quality.",
+      "Each turn runs the production orchestrator pipeline against a live Workers AI model. Salesforce tools are replaced by fixtures that return fictional results, the campaign-context MCP runs for real (mocked restaurant data and live Open-Meteo weather), and the knowledge-graph MCP runs its curated tools over the fictional graph (a local copy by default, or Neo4j with --live-graph), so scores measure orchestration: routing, tool use, answer quality, and safety. They do not measure Salesforce agent quality.",
     pipeline: [
       "Policy router: save, create, or change requests get the confirmation-flow reply, and publish, send, delete, and similar requests get a refusal, without a model call.",
-      "Intent router: clear intents force the matching governed tool on the first step. A restaurant push campaign forces a plan: the restaurant profile, then current weather for its city, then the Salesforce content-drafting tool.",
-      "Model: the production system prompt (concise Markdown allowed), 11 autonomous Salesforce tools with Hosted MCP names and descriptions, the two campaign-context tools, up to four steps, a 4,096-token output limit, and the 150-second turn timeout.",
+      "Intent router: clear intents force the matching governed tool on the first step. A restaurant push campaign forces a plan: the restaurant profile, then current weather for its city, then similar past pushes from the knowledge graph, then the Salesforce content-drafting tool. Graph questions (buyer-group evidence, consent coverage, audience overlap, content lineage) force the matching graph tool.",
+      "Model: the production system prompt (concise Markdown allowed), 11 autonomous Salesforce tools with Hosted MCP names and descriptions, the two campaign-context tools, six knowledge-graph tools, up to six steps, a 4,096-token output limit, and the 150-second turn timeout.",
       "Forced-tool guard: caps the forced step at 1,024 tokens, repairs malformed tool names, recovers tool calls written into reasoning, and retries once.",
       "Summary steps receive no tools, so the model must answer in text.",
     ],
