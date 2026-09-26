@@ -21,16 +21,52 @@ export function orchestratorSystemPrompt(workspaceReferences: unknown) {
   ].join(" ");
 }
 
+// Ordered intent rules. Each needs a specific signal, so a bare mention of "campaign" never forces
+// a tool; when no rule matches, the model chooses. Precision matters more than coverage here,
+// because a forced wrong tool cannot be recovered within the turn.
+const INTENT_RULES: ReadonlyArray<readonly [string, (prompt: string) => boolean]> = [
+  [
+    "check_campaign_readiness",
+    (p) =>
+      /\b(?:readiness|ready for|blockers?|risks?|consent coverage)\b/i.test(p) ||
+      (/\b(?:complete|missing|incomplete)\b/i.test(p) && /\b(?:dates?|brief)\b/i.test(p)),
+  ],
+  ["refine_campaign_preview", (p) => /\brefine\b/i.test(p) && /\bpreview\b/i.test(p)],
+  [
+    "draft_campaign_brief",
+    // "Draft a campaign brief" asks for a brief; "draft email content from this brief" does not.
+    (p) => /\b(?:draft|create|write)\s+(?:a|an|the|new)?\s*(?:\w+\s+){0,2}brief\b/i.test(p),
+  ],
+  ["generate_campaign_insights", (p) => /\binsights?\b/i.test(p)],
+  [
+    "validate_content_against_brand",
+    (p) => /\bbrand\b/i.test(p) && /\b(?:check|validate|review|against)\b/i.test(p),
+  ],
+  [
+    "create_content_section",
+    (p) =>
+      /\b(?:hero|section|header|footer|module|banner)\b/i.test(p) &&
+      /\b(?:draft|create|write)\b/i.test(p),
+  ],
+  [
+    "draft_campaign_content",
+    (p) =>
+      /\b(?:draft|write|create|generate|prepare)\b/i.test(p) &&
+      /\b(?:content|copy|subject line|preheader|email|sms|landing page)\b/i.test(p),
+  ],
+  ["recommend_buyer_group_members", (p) => /\bbuyer group\b/i.test(p)],
+  ["get_account_marketing_signals", (p) => /\bsignals?\b/i.test(p) && /\baccounts?\b/i.test(p)],
+  ["summarize_account_engagement", (p) => /\bengagement\b/i.test(p) && /\baccount'?s?\b/i.test(p)],
+  [
+    "summarize_campaign",
+    (p) =>
+      /\b(?:summarize|summary|recap|overview|performance|perform)\b/i.test(p) &&
+      /\b(?:campaign|701[a-zA-Z0-9]{12,15})\b/i.test(p),
+  ],
+];
+
 export function requestedToolName(prompt: string) {
-  return /\b(?:readiness|ready|blocker|risk)\b/i.test(prompt)
-    ? "check_campaign_readiness"
-    : /\b(?:draft|write|create|generate)\b/i.test(prompt) &&
-        /\b(?:content|copy|subject line|preheader|email|sms|landing page)\b/i.test(prompt)
-      ? "draft_campaign_content"
-      : /\b(?:summarize|summary|performance|campaign)\b/i.test(prompt) &&
-          /\b(?:salesforce|campaign|701[a-zA-Z0-9]{12,15})\b/i.test(prompt)
-        ? "summarize_campaign"
-        : null;
+  return INTENT_RULES.find(([, matches]) => matches(prompt))?.[0] ?? null;
 }
 
 export function selectRequiredTool(prompt: string, availableNames: string[]) {
