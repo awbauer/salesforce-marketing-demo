@@ -3,6 +3,7 @@
 // fictional tool fixtures, then writes a typed report that the demo UI renders.
 //
 // Usage: pnpm eval:live [--models id,id] [--trials-demo 5] [--trials-routing 2]
+// Cost: a default three-model run is about 550 model calls; check Workers AI usage before adding models.
 // Credentials: CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, or an authenticated wrangler login.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -35,11 +36,14 @@ const REPORT_PATH = "apps/web/public/evals/latest.json";
 const TOOL_PREFIX = "tool_salesforce_northstar-marketing-salesforce_";
 const CONCURRENCY_PER_MODEL = 6;
 
+// Only inexpensive models run by default. Pass --models to include the others; Kimi K2.6 alone
+// cost about 60% of a full five-model run (roughly 27,000 of 45,000 neurons).
 const MODELS = [
-  { id: "@cf/openai/gpt-oss-120b", label: "gpt-oss-120b" },
-  { id: "@cf/openai/gpt-oss-20b", label: "gpt-oss-20b" },
-  { id: "@cf/zai-org/glm-4.7-flash", label: "GLM-4.7-Flash" },
-  { id: "@cf/meta/llama-4-scout-17b-16e-instruct", label: "Llama 4 Scout 17B" },
+  { id: "@cf/openai/gpt-oss-120b", label: "gpt-oss-120b", byDefault: true },
+  { id: "@cf/openai/gpt-oss-20b", label: "gpt-oss-20b", byDefault: true },
+  { id: "@cf/zai-org/glm-4.7-flash", label: "GLM-4.7-Flash", byDefault: true },
+  { id: "@cf/meta/llama-4-scout-17b-16e-instruct", label: "Llama 4 Scout 17B", byDefault: false },
+  { id: "@cf/moonshotai/kimi-k2.6", label: "Kimi K2.6", byDefault: false },
 ];
 
 function argument(name, fallback) {
@@ -313,7 +317,12 @@ function summarize(results) {
 
 const trialsDemo = Number(argument("trials-demo", "5"));
 const trialsRouting = Number(argument("trials-routing", "2"));
-const selected = argument("models", MODELS.map((model) => model.id).join(",")).split(",");
+const selected = argument(
+  "models",
+  MODELS.filter((model) => model.byDefault)
+    .map((model) => model.id)
+    .join(","),
+).split(",");
 const { accountId, apiKey } = credentials();
 const provider = createWorkersAI({ accountId, apiKey });
 const tools = fixtureTools();
@@ -415,7 +424,7 @@ const report = EvalReportSchema.parse({
       "Tool results are fictional fixtures, not live Salesforce responses, so latency excludes Salesforce agent time.",
       'Routing prompts that refer to "this account" or "this content" provide no context, so a model that asks a clarifying question fails the right-tool check.',
       "Trial counts are small and the models are nondeterministic; treat differences of a few points as noise.",
-      "Kimi K2.6 was excluded because every call errored through the Workers AI provider.",
+      "Kimi K2.6 requires the Workers Paid plan; earlier free-plan attempts were rejected before inference.",
       "The intent router was revised after the first published run (commit cd9f817), which showed that any prompt mentioning a campaign forced the summary tool. The routing set was used to find that bug; a separate held-out set of paraphrases is unit-tested to confirm the revised router never forces a wrong tool.",
     ],
   },
@@ -425,12 +434,6 @@ const report = EvalReportSchema.parse({
       label: model.label,
       included: selected.includes(model.id),
     })),
-    {
-      id: "@cf/moonshotai/kimi-k2.6",
-      label: "Kimi K2.6",
-      included: false,
-      note: "Every call errored through the Workers AI provider.",
-    },
   ],
   summaries: summarize(results),
   results,
