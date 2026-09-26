@@ -1,5 +1,5 @@
 import { env, SELF } from "cloudflare:test";
-import { classifyPolicyIntent } from "@northstar/contracts";
+import { PHASE_2_CURATED_TOOLS, classifyPolicyIntent } from "@northstar/contracts";
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { routingCases, routingHoldout } from "../../../packages/evals/src/cases";
@@ -8,6 +8,7 @@ import {
   CONVERSATION_WINDOW,
   classifyMcpFailure,
   classifyToolResult,
+  connectorFromMcp,
   conversationWindow,
   evidenceTurnMessages,
   requestedToolName,
@@ -90,6 +91,43 @@ describe("edge runtime", () => {
       id: "salesforce",
       state: "disconnected",
       toolCount: 0,
+    });
+  });
+  it("fails the connector closed when the portal exposes only part of the governed catalog", () => {
+    const connector = connectorFromMcp(true, {
+      servers: { salesforce: { state: "ready" } },
+      tools: [
+        {
+          serverId: "salesforce",
+          name: "tool_salesforce_summarize_campaign",
+        },
+      ],
+    } as never);
+    expect(connector).toMatchObject({
+      state: "error",
+      errorCode: "UPSTREAM_UNAVAILABLE",
+      toolCount: 1,
+    });
+    expect(connector.message).toContain("1 of 18 governed Salesforce tools");
+  });
+  it("counts governed Salesforce tools once when discovery returns duplicate aliases", () => {
+    const connector = connectorFromMcp(true, {
+      servers: { salesforce: { state: "ready" } },
+      tools: [
+        ...PHASE_2_CURATED_TOOLS.map((name) => ({ serverId: "salesforce", name })),
+        { serverId: "salesforce", name: "tool_salesforce_check_write_access" },
+      ],
+    } as never);
+    expect(connector).toMatchObject({ state: "ready", toolCount: 18 });
+  });
+  it("runs the browserless Salesforce write preflight in local mode", async () => {
+    const response = await SELF.fetch(
+      "https://example.test/agent/diagnostics/salesforce-write-preflight",
+      { method: "POST" },
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      permissions: { source: "local-fixture", allowed: true },
     });
   });
   it("classifies expired and permission-denied MCP recovery states", () => {
