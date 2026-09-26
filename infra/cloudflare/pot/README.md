@@ -27,6 +27,8 @@ The Phase 2 portal is a browser-user integration, not a service-token integratio
 5. Set the Worker's `SALESFORCE_MCP_URL` secret to the portal `/mcp` endpoint and deploy D1 migration `0001_phase2_confirmation_audit.sql` before the Worker. The endpoint is treated as deployment configuration to prevent an unreviewed URL from entering source.
 6. As the evaluator, connect from the workbench, complete portal OAuth and per-user Salesforce OAuth, then read back connection state, namespaced tools, readiness output, a confirmed draft save, and a confirmed review task. Both writes must show the same idempotency key in D1 audit and Salesforce authoritative read-back.
 
+After any `McpServerDefinition` change, the deployed XML is only the first read-back. Refresh the active custom server in Salesforce, use **Sync capabilities** for `northstar-marketing-salesforce`, preserve the portal's fail-closed allowlist, explicitly enable each new approved tool, and run `pnpm test:production:chat` with an ephemeral evaluator Access JWT. That command now fails unless all tools in `PHASE_2_CURATED_TOOLS` are visible and the real read-only `check_write_access` action returns a valid Salesforce permission report.
+
 Service tokens are intentionally excluded: Cloudflare documents that per-user upstream OAuth requires `on_behalf=true`, while service-token sessions require it to be false and use the admin credential. That would violate the proof's identity model.
 
 ## Workers Builds configuration

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-25T14:48:57.369Z",
+  "generatedAt": "2026-09-26T17:46:42.731Z",
   "status": "passed",
   "fixedDefaults": {
     "workspaceId": "northstar-demo",
@@ -8,7 +8,7 @@
     "imageSize": 1024,
     "imageCap": 100,
     "spendCapUsd": 25,
-    "transcriptRetentionDays": 14,
+    "transcriptRetentionHours": 24,
     "imageRetentionDays": 7,
     "roles": [
       "evaluator",
@@ -21,7 +21,10 @@
     "allowedWrites": [
       "save-draft-campaign",
       "create-review-task",
-      "attach-generated-image"
+      "attach-generated-image",
+      "save-campaign",
+      "save-brief",
+      "save-message"
     ]
   },
   "toolCatalog": {
@@ -106,6 +109,40 @@
         "source": "salesforce-apex",
         "autonomous": false,
         "allowedWrite": "create-review-task"
+      },
+      {
+        "name": "attach_campaign_image",
+        "riskClass": "write",
+        "source": "salesforce-apex",
+        "autonomous": false,
+        "allowedWrite": "attach-generated-image"
+      },
+      {
+        "name": "save_campaign",
+        "riskClass": "write",
+        "source": "salesforce-apex",
+        "autonomous": false,
+        "allowedWrite": "save-campaign"
+      },
+      {
+        "name": "save_brief",
+        "riskClass": "write",
+        "source": "salesforce-apex",
+        "autonomous": false,
+        "allowedWrite": "save-brief"
+      },
+      {
+        "name": "save_message",
+        "riskClass": "write",
+        "source": "salesforce-apex",
+        "autonomous": false,
+        "allowedWrite": "save-message"
+      },
+      {
+        "name": "check_write_access",
+        "riskClass": "read",
+        "source": "salesforce-apex",
+        "autonomous": false
       }
     ]
   },

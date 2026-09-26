@@ -62,3 +62,13 @@ Drafts become real Salesforce records (campaigns, briefs, and email, push, or SM
 - Unit tests: confirmation details (record plan, checks, who checks what) and the catalog contract.
 - E2E in Chrome and Edge: draft → revise → "create it" prepares the save with the permission check → confirm → message and new campaign created → revise → update the same record.
 - `pnpm verify` and `pnpm sf:metadata:check` pass.
+
+## Production catalog incident and prevention
+
+- On 2026-09-26, the proof org metadata read-back and active Salesforce custom-server screen contained all 18 approved tools, but Cloudflare's synchronized upstream catalog still exposed the earlier 13. The email-campaign quickstart therefore reached confirmation preparation but could not discover `check_write_access`.
+- The connector now fails closed unless all governed tools are discovered; a partial catalog is no longer labeled ready.
+- The permission preflight distinguishes an incomplete catalog from a failed or malformed Salesforce response and gives the operator the correct recovery action.
+- `pnpm test:production:chat` now verifies the complete catalog and invokes the real, read-only Salesforce permission action through an authenticated HTTP diagnostic endpoint before exercising chat. This covers the production path without UI automation.
+- Salesforce metadata deployment is not sufficient proof of runtime availability. After an MCP definition changes, refresh the active Salesforce Hosted MCP server, synchronize the Cloudflare portal, and run the browserless production test.
+- Live read-back on 2026-09-26 showed the Salesforce custom server active with 18 tools while the Cloudflare upstream remained ready with only 13. Two capability synchronizations completed without changing that count, narrowing the remaining recovery boundary to the Cloudflare server's upstream OAuth/catalog session.
+- `pnpm verify` passed all 12 gates after the incident fix: 70 unit tests, 87 Worker tests, the 18-tool Salesforce metadata contract, documentation and invariant checks, evaluation, typechecking, linting, formatting, and production builds.

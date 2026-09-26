@@ -405,7 +405,7 @@ function json(value: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(value), { ...init, headers });
 }
 
-function connectorFromMcp(
+export function connectorFromMcp(
   configured: boolean,
   mcp: ReturnType<MarketingOrchestrator["getMcpServers"]>,
 ): ConnectorState {
@@ -426,11 +426,25 @@ function connectorFromMcp(
       toolCount: 0,
       message: "Connect Salesforce to use the curated marketing agent catalog.",
     };
-  const toolCount = mcp.tools.filter(
-    (tool) =>
-      tool.serverId === "salesforce" &&
-      PHASE_2_CURATED_TOOLS.some((name) => tool.name === name || tool.name.endsWith(`_${name}`)),
-  ).length;
+  const discoveredTools = new Set(
+    mcp.tools.flatMap((tool) => {
+      if (tool.serverId !== "salesforce") return [];
+      const governedName = PHASE_2_CURATED_TOOLS.find(
+        (name) => tool.name === name || tool.name.endsWith(`_${name}`),
+      );
+      return governedName ? [governedName] : [];
+    }),
+  );
+  const toolCount = discoveredTools.size;
+  if (server.state === "ready" && toolCount !== PHASE_2_CURATED_TOOLS.length)
+    return {
+      id: "salesforce",
+      label: "Salesforce agents",
+      state: "error",
+      toolCount,
+      errorCode: "UPSTREAM_UNAVAILABLE",
+      message: `${toolCount} of ${PHASE_2_CURATED_TOOLS.length} governed Salesforce tools are available. An administrator must refresh the active Salesforce MCP server and synchronize the portal.`,
+    };
   if (server.state === "ready")
     return {
       id: "salesforce",
@@ -1271,22 +1285,25 @@ export class MarketingOrchestrator extends AIChatAgent<
         { status: 409 },
       );
     // Salesforce decides whether this user may write; the card shows each check it ran.
-    const permissions = await this.checkWriteAccess(
+    const permissionCheck = await this.checkWriteAccess(
       action as Confirmation["action"],
       plan?.write,
       recordId,
     );
-    if (!permissions)
+    if (!permissionCheck.permissions)
       return json(
         {
           error: {
             code: "UPSTREAM_UNAVAILABLE",
             message:
-              "The Salesforce permission check is unavailable, so nothing was prepared. Reconnect Salesforce and retry.",
+              permissionCheck.failure === "catalog-incomplete"
+                ? "Salesforce is connected, but its governed tool catalog is incomplete: the permission check is not available. An administrator must refresh the active Salesforce MCP server and synchronize the Cloudflare portal. Nothing was prepared."
+                : "Salesforce could not complete the permission check, so nothing was prepared. Reconnect Salesforce and retry; if the problem continues, ask an administrator to verify the permission tool response.",
           },
         },
         { status: 503 },
       );
+    const permissions = permissionCheck.permissions;
     if (!permissions.allowed)
       return json(
         {
@@ -1396,15 +1413,19 @@ export class MarketingOrchestrator extends AIChatAgent<
     action: Confirmation["action"],
     write: RecordWrite | undefined,
     recordId: string,
-  ): Promise<PermissionReport | null> {
+  ): Promise<{
+    permissions?: PermissionReport;
+    failure?: "catalog-incomplete" | "call-failed" | "invalid-response";
+  }> {
     if ((this.env.ENVIRONMENT as string) === "local")
-      return fixturePermissionReport(action, write, new Date());
+      return { permissions: fixturePermissionReport(action, write, new Date()) };
     await this.mcp.waitForConnections({ timeout: 5_000 });
-    const entry = Object.entries(this.mcp.getAITools()).find(([key]) =>
-      key.endsWith("_check_write_access"),
+    const entry = Object.entries(this.mcp.getAITools()).find(
+      ([key]) => key === "check_write_access" || key.endsWith("_check_write_access"),
     );
     const tool = entry?.[1];
-    if (!tool || !("execute" in tool) || typeof tool.execute !== "function") return null;
+    if (!tool || !("execute" in tool) || typeof tool.execute !== "function")
+      return { failure: "catalog-incomplete" };
     const updating = write ? write.recordId : recordId;
     try {
       const output = await resolveToolResult(
@@ -1421,9 +1442,10 @@ export class MarketingOrchestrator extends AIChatAgent<
           { toolCallId: crypto.randomUUID(), messages: [], context: undefined },
         ),
       );
-      return parsePermissionReport(output, new Date());
+      const permissions = parsePermissionReport(output, new Date());
+      return permissions ? { permissions } : { failure: "invalid-response" };
     } catch {
-      return null;
+      return { failure: "call-failed" };
     }
   }
 
@@ -1738,6 +1760,39 @@ export class MarketingOrchestrator extends AIChatAgent<
         ],
         request.signal,
       );
+    }
+    if (
+      url.pathname.endsWith("/diagnostics/salesforce-write-preflight") &&
+      request.method === "POST"
+    ) {
+      const result = await this.checkWriteAccess(
+        "save-message",
+        {
+          objectType: "Northstar_Message__c",
+          objectLabel: "Message",
+          newCampaignName: "Permission preflight",
+          brand: "Northstar",
+          title: "Permission preflight",
+          channel: "Email",
+          body: "Read-only production permission preflight.",
+          draftFields: "[]",
+        },
+        "new",
+      );
+      if (!result.permissions)
+        return json(
+          {
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message:
+                result.failure === "catalog-incomplete"
+                  ? "The governed Salesforce catalog is incomplete."
+                  : "The Salesforce permission check did not return a valid report.",
+            },
+          },
+          { status: 503 },
+        );
+      return json({ permissions: result.permissions });
     }
     if (url.pathname.endsWith("/operations") && request.method === "GET")
       return json({
