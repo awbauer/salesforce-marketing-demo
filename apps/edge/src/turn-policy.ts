@@ -10,9 +10,23 @@ export const TURN_TIMEOUT = { totalMs: 150_000, chunkMs: 60_000, toolMs: 120_000
 // Workers AI defaults to 256 output tokens, which gpt-oss reasoning can exhaust before any text.
 export const MAX_OUTPUT_TOKENS = 4096;
 
+/**
+ * True for a short follow-up that points back at the conversation ("looks good, create this
+ * brief", "send it for review"), where "this" or "it" means the previous reply, not a record.
+ */
+export function isFollowUpReference(prompt: string) {
+  const words = prompt.trim().split(/\s+/).filter(Boolean);
+  return (
+    words.length > 0 &&
+    words.length <= 14 &&
+    /\b(?:it|this|that|these|those|above|same|previous|last one)\b/i.test(prompt)
+  );
+}
+
 export function orchestratorSystemPrompt(
   workspaceReferences: unknown,
   toolPlan?: readonly string[],
+  followUp?: { referent: string | null } | null,
 ) {
   // Scenario guidance is added only when its plan is active, so it cannot steer other requests.
   const restaurantPlan = toolPlan?.some((name) => name.endsWith("get_restaurant_profile"));
@@ -35,7 +49,12 @@ export function orchestratorSystemPrompt(
           "Knowledge-graph results are fictional demo data with evidence paths. Explain the answer from those paths, name only entities that appear in the results, and never suggest that the graph or Salesforce was changed.",
         ]
       : []),
-    `Non-authoritative workspace record references: ${JSON.stringify(workspaceReferences)}`,
+    ...(followUp
+      ? [
+          `The latest message refers to your previous reply${followUp.referent ? `, "${followUp.referent}"` : ""}. Build every tool input from that reply's content (its names, items, copy, and details). Do not substitute a workspace record reference or invent a different campaign.`,
+        ]
+      : []),
+    `Background workspace record references (non-authoritative; they are never what "this" or "it" means in a follow-up): ${JSON.stringify(workspaceReferences)}`,
   ].join(" ");
 }
 

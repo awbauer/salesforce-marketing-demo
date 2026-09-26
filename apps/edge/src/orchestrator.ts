@@ -42,6 +42,7 @@ import {
 } from "./knowledge-graph/server";
 import { buildTurnRecord } from "./turn-history";
 import {
+  isFollowUpReference,
   MAX_OUTPUT_TOKENS,
   MAX_TURN_STEPS,
   missingPlannedTool,
@@ -548,7 +549,13 @@ export class MarketingOrchestrator extends AIChatAgent<
               model: workersAI(PROOF_DEFAULTS.orchestratorModel),
               middleware: forcedToolCallMiddleware,
             }),
-            system: orchestratorSystemPrompt(workspaceReferences, toolPlan),
+            system: orchestratorSystemPrompt(
+              workspaceReferences,
+              toolPlan,
+              isFollowUpReference(prompt) && turnMessages.some((m) => m.role === "assistant")
+                ? { referent: this.previousReplyReferent() }
+                : null,
+            ),
             messages: await convertToModelMessages(turnMessages),
             tools,
             prepareStep: ({ stepNumber }: { stepNumber: number }) =>
