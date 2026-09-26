@@ -28,6 +28,7 @@ import {
   stepToolChoice,
   TURN_TIMEOUT,
 } from "../apps/edge/src/turn-policy.ts";
+import { applyFocusUpdate, focusTools } from "../apps/edge/src/focus.ts";
 import { workingSetPrompt } from "../apps/edge/src/working-set.ts";
 import {
   classifyPolicyIntent,
@@ -319,7 +320,13 @@ const graph = await connectKnowledgeGraphTools(
     ? knowledgeGraphBackend(process.env)
     : knowledgeGraphBackend({}),
 );
-const tools = { ...fixtureTools(), ...campaignContext.tools, ...graph.tools };
+// Each evaluation turn is a fresh chat, so the focus tool saves into a throwaway working set.
+let evalWorkingSet = emptyWorkingSet();
+const focus = focusTools((input) => {
+  evalWorkingSet = applyFocusUpdate(evalWorkingSet, input, new Date());
+  return evalWorkingSet.focus;
+});
+const tools = { ...fixtureTools(), ...campaignContext.tools, ...graph.tools, ...focus };
 const suites = [
   { id: "demo-scenarios", cases: demoScenarios, trials: trialsDemo },
   { id: "routing-pipeline", cases: routingCases, trials: trialsRouting },

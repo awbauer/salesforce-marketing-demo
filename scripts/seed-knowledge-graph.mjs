@@ -52,8 +52,11 @@ for (const label of labels)
   await write(
     `CREATE CONSTRAINT kg_${safe(label).toLowerCase()}_id IF NOT EXISTS FOR (n:${safe(label)}) REQUIRE n.id IS UNIQUE`,
   );
-if (args.has("--reset"))
-  await write("MATCH (n {dataset: $dataset}) DETACH DELETE n", { dataset: DATASET_VERSION });
+// --reset removes every version of the demo dataset, so renamed labels and ids leave nothing behind.
+if (args.has("--reset")) {
+  await write("MATCH (n) WHERE n.dataset IS NOT NULL DETACH DELETE n");
+  console.log("Removed previous demo dataset versions.");
+}
 
 for (const label of labels) {
   const rows = dataset.nodes

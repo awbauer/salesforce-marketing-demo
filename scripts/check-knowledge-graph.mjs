@@ -4,7 +4,7 @@ import { isDeepStrictEqual } from "node:util";
 import {
   ACCOUNTS,
   buildDataset,
-  CAMPAIGNS,
+  ALL_CAMPAIGNS,
   KNOWLEDGE_GRAPH_TOOL_SPECS,
   queryApiBackend,
 } from "../packages/knowledge-graph/src/index.ts";
@@ -22,11 +22,13 @@ const cases = {
     account,
     limit: 5,
   })),
-  find_audience_overlap: CAMPAIGNS.map((campaign) => ({ campaign: campaign.id })),
+  find_audience_overlap: ALL_CAMPAIGNS.map((campaign) => ({ campaign: campaign.id })),
   check_consent_coverage: [
     { campaign: "camp-fall", channel: "email" },
     { campaign: "camp-holiday", channel: "sms" },
     { campaign: "camp-winter", channel: "push" },
+    { campaign: "camp-coastline-weather", channel: "mobile-app" },
+    { campaign: "camp-coastline-late-night", channel: "push" },
   ],
   find_similar_past_pushes: [
     { location: "los-angeles", daypart: "dinner", condition: "clear" },
@@ -34,7 +36,7 @@ const cases = {
     { location: "fresno", daypart: "afternoon", condition: "heat" },
     { location: "san-diego", daypart: "breakfast", condition: "rain" },
   ],
-  trace_content_lineage: CAMPAIGNS.map((campaign) => ({ campaign: campaign.id })),
+  trace_content_lineage: ALL_CAMPAIGNS.map((campaign) => ({ campaign: campaign.id })),
 };
 
 // Averages can differ in the last floating-point digits by summation order.

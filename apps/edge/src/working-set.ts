@@ -8,9 +8,11 @@ import {
   recordKey,
   systemLabel,
   WORKSPACE_CATALOG,
+  WORKSPACE_TOOLS,
   type WorkingRecord,
   type WorkingSet,
 } from "../../../packages/contracts/src/index.ts";
+import { focusPrompt } from "./focus.ts";
 
 /**
  * Builds the chat's working set from tool results. Everything here is deterministic: cards and
@@ -400,7 +402,9 @@ function salesforceCard(payload: Payload, tool: string, input: unknown, at: Date
 /** What one tool result adds to the working set; unknown or failed results add nothing. */
 export function ingestionFor(event: ToolResultEvent): Ingested {
   const tool = baseToolName(event.toolName);
-  if (!tool || isFailure(event.output)) return { cards: [], records: [] };
+  // Workspace tools change the focus directly; they are not context.
+  if (!tool || (WORKSPACE_TOOLS as readonly string[]).includes(tool) || isFailure(event.output))
+    return { cards: [], records: [] };
   const payload = toolPayload(event.output);
   if ((CAMPAIGN_CONTEXT_TOOLS as readonly string[]).includes(tool)) {
     if (!payload.data) return { cards: [], records: [] };
@@ -428,12 +432,13 @@ export function mergeIntoWorkingSet(set: WorkingSet, added: Ingested, at: Date):
   for (const next of added.records) {
     const index = records.findIndex((existing) => existing.key === next.key);
     if (index === -1) records.unshift(next);
-    // A record the chat created stays "created" even when it is read again later.
-    else if (next.relation === "created")
+    // A write this chat made (created or updated) outranks a later read of the same record.
+    else if (next.relation !== "read")
       records[index] = { ...next, addedAt: records[index]?.addedAt ?? next.addedAt };
   }
   return {
     startedAt: set.startedAt ?? at.toISOString(),
+    focus: set.focus ?? null,
     cards,
     records: records.slice(0, MAX_RECORDS),
   };
@@ -442,14 +447,15 @@ export function mergeIntoWorkingSet(set: WorkingSet, added: Ingested, at: Date):
 export const ingestToolResult = (set: WorkingSet, event: ToolResultEvent) =>
   mergeIntoWorkingSet(set, ingestionFor(event), event.at);
 
-/** Adds a record the chat created through a confirmed write. */
+/** Adds a record the chat created or updated through a confirmed write. */
 export function addCreatedRecord(
   set: WorkingSet,
   ref: RecordRef & { title: string },
   via: string,
   at: Date,
+  relation: "created" | "updated" = "created",
 ): WorkingSet {
-  return mergeIntoWorkingSet(set, { cards: [], records: [record(ref, via, at, "created")] }, at);
+  return mergeIntoWorkingSet(set, { cards: [], records: [record(ref, via, at, relation)] }, at);
 }
 
 /** The Salesforce campaign the chat has open, most recent first: the target for writes. */
@@ -469,6 +475,7 @@ export function workingSetPrompt(set: WorkingSet) {
       `${entry.title} (${systemLabel(entry.system)} ${entry.objectType} ${entry.recordId})`,
   );
   return [
+    focusPrompt(set.focus),
     open.length
       ? `Records open in this chat: ${open.join("; ")}.`
       : "No records are open in this chat yet.",

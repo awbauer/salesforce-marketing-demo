@@ -827,7 +827,7 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
   "push-plan": () => (
     <Figure
       label="The push-campaign tool plan"
-      caption="Four forced tools in order, then the model writes the draft from their results."
+      caption="Five forced tools in order: context, past results, the content draft, then the workspace focus. The model then presents the draft."
     >
       <Flow
         numbered
@@ -841,7 +841,7 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
           { title: "Current weather", caption: "Open-Meteo, live", tone: "tool", glyph: "☀" },
           { title: "Past pushes", caption: "knowledge graph", tone: "store", glyph: "⋈" },
           { title: "Content draft", caption: "Salesforce agent", tone: "tool", glyph: "☁" },
-          { title: "Your draft", caption: "variants, send time, why", tone: "output", glyph: "✓" },
+          { title: "Workspace focus", caption: "saved as version 1", tone: "output", glyph: "◎" },
         ]}
       />
     </Figure>

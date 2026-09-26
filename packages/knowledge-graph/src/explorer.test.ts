@@ -8,8 +8,8 @@ const fixture: GraphBackend = { kind: "fixture", dataset: buildDataset() };
 describe("graph explorer", () => {
   it("returns every node except push sends, with counts for the whole graph", async () => {
     const overview = await graphOverview(fixture);
-    expect(overview.nodes).toHaveLength(134);
-    expect(overview.relationships).toHaveLength(562);
+    expect(overview.nodes).toHaveLength(157);
+    expect(overview.relationships).toHaveLength(698);
     expect(overview.labelCounts.PushSend).toBe(1500);
     expect(overview.nodes.every((node) => node.label !== "PushSend")).toBe(true);
     // The seed's dataset stamp and identity fields never appear as properties.

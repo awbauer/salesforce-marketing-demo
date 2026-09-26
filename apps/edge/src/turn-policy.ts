@@ -25,6 +25,7 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
     "Never say you reviewed Salesforce unless a Salesforce tool returned usable evidence.",
     "Never claim a write, publish, send, or activation occurred. Keep customer PII out of responses.",
     "Earlier messages in this conversation are context for follow-ups such as 'looks good' or 'create it'. Treat facts in your earlier replies as unverified: call the governed tools again before restating Salesforce facts. Chat cannot create, save, publish, or send anything; when asked to act on something from earlier, say what it refers to and point to the confirmation actions in the workspace.",
+    "Drafts live in the workspace focus. When you write or revise a campaign, brief, or message, save it with update_focus as labeled fields (for example Headline, Body, Send time, Audience, Featured item, Channel) and a short change note. A revision keeps the parts the user did not ask to change. update_focus only updates the workspace draft: never say it saved, scheduled, or sent anything. In your answer, present the draft and mention that it is in the workspace.",
     "Format answers in concise Markdown: short paragraphs, bold labels, bullet lists, and small tables when they help. Never use raw HTML.",
     ...(restaurantPlan
       ? [
@@ -120,16 +121,52 @@ const TOOL_PLANS: ReadonlyArray<readonly [readonly string[], (prompt: string) =>
   ],
 ];
 
-/** The ordered tools a prompt requires, or null to let the model choose. */
-export function requestedToolPlan(prompt: string): readonly string[] | null {
-  const plan = TOOL_PLANS.find(([, matches]) => matches(prompt))?.[0];
-  if (plan) return plan;
-  const single = INTENT_RULES.find(([, matches]) => matches(prompt))?.[0];
-  return single ? [single] : null;
+// Tools whose result is a draft; a plan ending in one saves the draft to the workspace focus.
+const DRAFTING_TOOLS = new Set([
+  "draft_campaign_content",
+  "draft_campaign_brief",
+  "create_content_section",
+  "refine_campaign_preview",
+]);
+
+export type PlanContext = { hasFocus?: boolean };
+
+/**
+ * A change to the draft in focus: "make it warmer", "shorten the body", "use the burrito
+ * instead". Only meaningful when a focus exists.
+ */
+export function isRevisionRequest(prompt: string) {
+  const words = prompt.trim().split(/\s+/).filter(Boolean).length;
+  return (
+    words > 0 &&
+    words <= 30 &&
+    (/\b(?:make|change|rewrite|revise|tweak|shorten|lengthen|swap|adjust|edit|update|try|use|add|remove|drop|replace)\b/i.test(
+      prompt,
+    ) ||
+      /\b(?:shorter|longer|warmer|punchier|friendlier|simpler|bolder|more|less)\b/i.test(prompt)) &&
+    !/\b(?:summarize|summary|readiness|overview|buyer group|consent|overlap|lineage)\b/i.test(
+      prompt,
+    )
+  );
 }
 
-export function requestedToolName(prompt: string) {
-  return requestedToolPlan(prompt)?.[0] ?? null;
+/** The ordered tools a prompt requires, or null to let the model choose. */
+export function requestedToolPlan(
+  prompt: string,
+  context: PlanContext = {},
+): readonly string[] | null {
+  const plan =
+    TOOL_PLANS.find(([, matches]) => matches(prompt))?.[0] ??
+    (() => {
+      const single = INTENT_RULES.find(([, matches]) => matches(prompt))?.[0];
+      return single ? [single] : null;
+    })();
+  if (plan) return DRAFTING_TOOLS.has(plan.at(-1) ?? "") ? [...plan, "update_focus"] : plan;
+  return context.hasFocus && isRevisionRequest(prompt) ? ["update_focus"] : null;
+}
+
+export function requestedToolName(prompt: string, context: PlanContext = {}) {
+  return requestedToolPlan(prompt, context)?.[0] ?? null;
 }
 
 function resolveTool(name: string, availableNames: string[]) {
@@ -137,16 +174,26 @@ function resolveTool(name: string, availableNames: string[]) {
 }
 
 /** Resolves a prompt's plan to available tool keys; undefined if any step's tool is missing. */
-export function selectToolPlan(prompt: string, availableNames: string[]) {
-  const plan = requestedToolPlan(prompt);
+export function selectToolPlan(
+  prompt: string,
+  availableNames: string[],
+  context: PlanContext = {},
+) {
+  const plan = requestedToolPlan(prompt, context);
   if (!plan) return undefined;
   const resolved = plan.map((name) => resolveTool(name, availableNames));
   return resolved.every((name): name is string => Boolean(name)) ? resolved : undefined;
 }
 
 /** The first planned tool that is not available, for explaining why a plan cannot run. */
-export function missingPlannedTool(prompt: string, availableNames: string[]) {
-  return requestedToolPlan(prompt)?.find((name) => !resolveTool(name, availableNames)) ?? null;
+export function missingPlannedTool(
+  prompt: string,
+  availableNames: string[],
+  context: PlanContext = {},
+) {
+  return (
+    requestedToolPlan(prompt, context)?.find((name) => !resolveTool(name, availableNames)) ?? null
+  );
 }
 
 export function selectRequiredTool(prompt: string, availableNames: string[]) {

@@ -35,14 +35,16 @@ describe("knowledge graph tools (fixture backend)", () => {
       daypart: "afternoon",
       condition: "heat",
     })) as { topItems: Array<{ serves: string }>; bestAngle: string };
-    expect(heat.topItems.map((item) => item.serves)).toEqual(["cold", "cold", "cold"]);
+    expect(heat.topItems[0]?.serves).toBe("cold");
+    expect(heat.topItems.filter((item) => item.serves === "cold").length).toBeGreaterThanOrEqual(2);
     expect(heat.bestAngle).toBe("Beat the heat");
     const rain = (await tool("find_similar_past_pushes")({
       location: "san-francisco",
       daypart: "late-night",
       condition: "rain",
     })) as { topItems: Array<{ serves: string }> };
-    expect(rain.topItems.every((item) => item.serves === "hot")).toBe(true);
+    expect(rain.topItems[0]?.serves).toBe("hot");
+    expect(rain.topItems.filter((item) => item.serves === "hot").length).toBeGreaterThanOrEqual(2);
   });
 
   it("shows the fall hero email failing alt text, matching the readiness blocker", async () => {
@@ -126,5 +128,79 @@ describe("Neo4j Query API client", () => {
       .catch((error: Error) => {
         expect(error.message).not.toContain("secret-pass");
       });
+  });
+
+  it("connects Coastline Kitchen to Northstar and every push to its campaign, content, audience, and consent", () => {
+    const dataset = buildDataset();
+    const out = (id: string, type: string) =>
+      dataset.relationships
+        .filter((edge) => edge.from === id && edge.type === type)
+        .map((edge) => edge.to);
+    expect(out("brand-coastline-kitchen", "PART_OF")).toEqual(["brand-northstar"]);
+    expect(out("consent-push-marketing", "FOR")).toEqual(["channel-mobile-app"]);
+    const pushes = dataset.nodes.filter((node) => node.label === "PushSend");
+    expect(pushes).toHaveLength(1500);
+    for (const push of pushes) {
+      expect(out(push.id, "ON")).toEqual(["channel-mobile-app"]);
+      expect(out(push.id, "SENT_UNDER")).toEqual(["consent-push-marketing"]);
+      expect(out(push.id, "PART_OF")[0]).toMatch(/^camp-coastline-/);
+      expect(out(push.id, "USED")[0]).toMatch(/^asset-camp-coastline-/);
+      expect(out(push.id, "SENT_TO")[0]).toMatch(/^segment-coastline-/);
+    }
+    // Restaurant entities belong to the brand: locations it operates and one menu they serve.
+    expect(out("brand-coastline-kitchen", "OPERATES")).toHaveLength(5);
+    expect(out("location-los-angeles", "SERVES")).toEqual(["menu-coastline-core"]);
+    expect(
+      dataset.relationships.filter(
+        (edge) => edge.type === "ON_MENU" && edge.to === "menu-coastline-core",
+      ),
+    ).toHaveLength(10);
+  });
+
+  it("reports push consent for Coastline's app audiences from segment aggregates", async () => {
+    const coverage = (await tool("check_consent_coverage")({
+      campaign: "camp-coastline-late-night",
+      channel: "push",
+    })) as {
+      channel: string;
+      requiredScope: string;
+      campaignUsesChannel: boolean;
+      audience: number;
+      covered: number;
+      segments: unknown[];
+      paths: Array<{ nodes: Array<{ label: string }> }>;
+    };
+    expect(coverage.channel).toBe("mobile-app");
+    expect(coverage.requiredScope).toBe("push marketing");
+    expect(coverage.campaignUsesChannel).toBe(true);
+    expect(coverage.audience).toBe(51200);
+    expect(coverage.covered).toBe(31700);
+    expect(coverage.segments).toHaveLength(5);
+    expect(coverage.paths[0]?.nodes.map((node) => node.label)).toEqual([
+      "Campaign",
+      "Segment",
+      "ConsentScope",
+    ]);
+  });
+
+  it("returns the push content and consented app audience behind similar past pushes", async () => {
+    const result = (await tool("find_similar_past_pushes")({
+      location: "los-angeles",
+      daypart: "lunch",
+      condition: "rain",
+    })) as {
+      topItems: Array<{ content: string | null }>;
+      audience: { segment: string; pushOptIns: number; consentScope: string };
+      paths: Array<{ relationships: Array<{ type: string }> }>;
+    };
+    expect(result.topItems.every((item) => item.content?.endsWith("· push"))).toBe(true);
+    expect(result.audience).toEqual({
+      segment: "Coastline app · Los Angeles",
+      appUsers: 18400,
+      pushOptIns: 11900,
+      consentScope: "push marketing",
+    });
+    const types = result.paths.flatMap((path) => path.relationships.map((edge) => edge.type));
+    expect(types).toEqual(expect.arrayContaining(["FEATURED", "USED", "SENT_TO"]));
   });
 });

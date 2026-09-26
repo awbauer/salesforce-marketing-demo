@@ -52,11 +52,19 @@ export const TOURS: Tour[] = [
     target: () => "segment-camp-fall",
   },
   {
+    id: "coastline",
+    title: "Coastline Kitchen under Northstar",
+    question: "How does Coastline's weather campaign reach app users?",
+    explain:
+      "Coastline Kitchen is a brand under Northstar. Its weather campaign runs on the mobile app channel, targets an app segment near each location with aggregate push consent, and uses push content checked against Coastline's own brand rules.",
+    target: () => "camp-coastline-weather",
+  },
+  {
     id: "rain",
     title: "What worked in the rain",
     question: "Which past pushes performed best when it rained?",
     explain:
-      "Each push send links to the location, daypart, weather, and menu item it featured. The push scenario reads these paths before drafting a new notification.",
+      "Each push send links to its campaign, the push content it used, the app segment and push consent it went out under, and the location, daypart, weather, and menu item. The push scenario reads these paths before drafting a new notification.",
     target: () => "weather-rain",
     expand: true,
   },
@@ -476,8 +484,8 @@ function GraphPrimer() {
       <h3>Nodes are things, relationships are facts</h3>
       <ol>
         <li>
-          <strong>Colors are node types</strong>, grouped into campaigns, audience, and restaurant
-          pushes.
+          <strong>Colors are node types</strong>, grouped into brands and campaigns, audience and
+          consent, and Coastline Kitchen's restaurants.
         </li>
         <li>
           <strong>Size is connectedness</strong>: bigger nodes take part in more relationships.
