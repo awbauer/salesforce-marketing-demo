@@ -194,12 +194,47 @@ export function classifyPolicyIntent(
   )
     return "unsupported";
   if (
-    /\bsave\b[^.?!]*\b(?:campaign|brief|draft|this|it)\b|\bcreate\b[^.?!]*\breview (?:task|request)\b|\b(?:update|edit|change)\b[^.?!]*\b(?:salesforce|record)\b/i.test(
+    /\bsave\b[^.?!]*\b(?:campaign|brief|draft|this|it)\b|\bcreate\b[^.?!]*\breview (?:task|request)\b|\b(?:update|edit|change)\b[^.?!]*\b(?:salesforce|record)\b|\b(?:create|build|launch|schedule)\s+(?:it|this|that|them)(?:\s+(?:now|please|in salesforce|for real))?\s*[.!]*\s*$/i.test(
       affirmative,
     )
   )
     return "confirmation-required";
   return null;
+}
+
+/**
+ * The policy reply, naming what a follow-up such as "looks good, create it" refers to when the
+ * previous assistant reply had a title. The reference is a label only, never treated as evidence.
+ */
+export function policyResponse(
+  intent: "confirmation-required" | "unsupported",
+  referent?: string | null,
+) {
+  if (!referent) return POLICY_RESPONSES[intent];
+  return intent === "confirmation-required"
+    ? `I can't create “${referent}” in Salesforce from chat, and nothing has been saved or created. This demo only writes through a confirmation step: use Create review request in the Insights panel to send this draft for review, check the confirmation card, and confirm it yourself. I can keep refining the draft here.`
+    : `I can't do that with “${referent}”: publishing, sending, activating, deleting, suppressing, changing buyer groups, and revealing audience contact details are blocked in this workbench, and I didn't take the action. I can keep refining the draft for review instead.`;
+}
+
+/** A title for the previous assistant reply: a heading, a fully bold first line, or a "Draft …" line. */
+export function referentFromReply(text: string): string | null {
+  const firstLine =
+    text
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.length > 0) ?? "";
+  const isTitle =
+    /^#{1,6}\s+\S/.test(firstLine) ||
+    /^(\*\*|__)[^*_]+\1[:.]?$/.test(firstLine) ||
+    /^(?:\*\*)?draft\b/i.test(firstLine);
+  if (!isTitle) return null;
+  const title = firstLine
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/\*\*|__|[*_`]/g, "")
+    .replace(/[.:!?]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return title.length >= 4 && title.length <= 90 ? title : null;
 }
 
 export const POLICY_RESPONSES = Object.freeze({

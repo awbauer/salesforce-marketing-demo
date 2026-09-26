@@ -1,11 +1,14 @@
 import { env, SELF } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
-import { type AuthError, deriveAgentKey, resolvePrincipal } from "./auth";
 import { classifyPolicyIntent } from "@northstar/contracts";
+import type { UIMessage } from "ai";
+import { describe, expect, it } from "vitest";
 import { routingCases, routingHoldout } from "../../../packages/evals/src/cases";
+import { type AuthError, deriveAgentKey, resolvePrincipal } from "./auth";
 import {
+  CONVERSATION_WINDOW,
   classifyMcpFailure,
   classifyToolResult,
+  conversationWindow,
   evidenceTurnMessages,
   requestedToolName,
   requiredToolChoice,
@@ -198,6 +201,47 @@ describe("edge runtime", () => {
     ];
     expect(evidenceTurnMessages(messages)).toEqual([messages[2]]);
   });
+  it("keeps recent conversation for follow-ups but only the text of earlier replies", () => {
+    const draft = {
+      id: "draft",
+      role: "assistant" as const,
+      parts: [
+        { type: "reasoning" as const, text: "private planning" },
+        {
+          type: "dynamic-tool" as const,
+          toolName: "tool_salesforce_ns_draft_campaign_content",
+          toolCallId: "c1",
+          state: "output-available" as const,
+          input: {},
+          output: { stale: true },
+        },
+        { type: "text" as const, text: "Here is the push campaign draft for Coastline Kitchen." },
+      ],
+    } as unknown as UIMessage;
+    const window = conversationWindow([
+      { id: "u1", role: "user", parts: [{ type: "text", text: "Draft a push campaign" }] },
+      draft,
+      { id: "u2", role: "user", parts: [{ type: "text", text: "Looks good, create it" }] },
+    ] as UIMessage[]);
+    expect(window.map((message) => message.id)).toEqual(["u1", "draft", "u2"]);
+    expect(window[1]?.parts).toEqual([
+      { type: "text", text: "Here is the push campaign draft for Coastline Kitchen." },
+    ]);
+  });
+
+  it("bounds the window and starts it at a user message", () => {
+    const messages = Array.from({ length: 20 }, (_, index) => ({
+      id: `m${index}`,
+      role: index % 2 === 0 ? "user" : "assistant",
+      parts: [{ type: "text", text: `message ${index}` }],
+    })) as UIMessage[];
+    const window = conversationWindow(messages);
+    expect(window.length).toBeLessThanOrEqual(CONVERSATION_WINDOW);
+    expect(window[0]?.role).toBe("user");
+    expect(window.at(-1)?.id).toBe("m18");
+    expect(conversationWindow([])).toEqual([]);
+  });
+
   it("requires a bounded server-side confirmation before the local review fixture", async () => {
     const missing = await SELF.fetch("https://example.test/agent/confirmations/execute", {
       method: "POST",

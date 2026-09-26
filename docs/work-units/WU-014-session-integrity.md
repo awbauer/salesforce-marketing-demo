@@ -17,7 +17,7 @@ Prevent unsupported claims from old durable conversations from contaminating new
 
 # Acceptance criteria
 
-- [x] Each new evidence turn sends only the latest user request plus the authoritative system policy to the model.
+- [x] Each new evidence turn sends only the latest user request plus the authoritative system policy to the model. (Superseded by WU-030: a bounded, text-only conversation window restores follow-up context.)
 - [x] Persisted legacy assistant claims cannot enter a later model prompt.
 - [x] Complete and interrupted JSON-wrapped assistant text renders as readable text rather than a raw envelope.
 - [x] Pull requests validate the governed Salesforce core and merged `main` changes deploy it through a serialized, exact-org-bound pipeline.
