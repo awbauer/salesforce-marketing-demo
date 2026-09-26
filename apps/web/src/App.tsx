@@ -608,7 +608,16 @@ export function App() {
           </div>
         </nav>
         {view === "evaluations" && <EvaluationView onClose={() => setView("overview")} />}
-        {view === "learn" && <LearnView onClose={() => setView("overview")} />}
+        {view === "learn" && (
+          <LearnView
+            onClose={() => setView("overview")}
+            onTryPrompt={(prompt) => {
+              setInput(prompt);
+              setView("overview");
+            }}
+            onOpenView={setView}
+          />
+        )}
         {view === "graph" && <GraphView onClose={() => setView("overview")} />}
         {view === "history" && (
           <HistoryView

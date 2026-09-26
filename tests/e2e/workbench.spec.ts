@@ -517,14 +517,40 @@ test("explains context, GraphRAG, and every demo concept on the Learn page", asy
   await expect(resource).toHaveAttribute("target", "_blank");
   await expect(resource).toHaveAttribute("rel", "noopener noreferrer");
   await toc.getByRole("button", { name: "Glossary" }).click();
-  await expect(page.getByText("Tool plan", { exact: true })).toBeVisible();
+  const glossary = page.locator("#learn-glossary");
+  await expect(glossary.getByText("Tool plan", { exact: true })).toBeVisible();
+  await glossary.getByLabel("Filter the glossary").fill("cypher");
+  await expect(glossary.getByText("Tool plan", { exact: true })).toBeHidden();
   // Jumping scrolls the Learn view, never the page, so the top bar stays visible.
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
   await expect(page.getByRole("heading", { name: "Marketing workbench" })).toBeInViewport();
+  // Lessons can be marked read, and progress shows in the contents and the hero.
+  const firstLesson = page.locator("#learn-what-is-context");
+  await firstLesson.getByRole("button", { name: "Mark as read" }).click();
+  await expect(firstLesson.getByRole("button", { name: "Read" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByRole("progressbar", { name: "Lessons read" })).toHaveAttribute(
+    "aria-valuenow",
+    /[1-9]/,
+  );
+  // The quick check explains the answer.
+  const check = page.locator(".learn-check").first();
+  await check.getByLabel("In the conversation window sent with this turn").check();
+  await expect(check.getByText(/Correct\./)).toBeVisible();
   await toc.getByRole("button", { name: "Primer: RAG and GraphRAG" }).click();
   await expect(page.getByRole("heading", { name: "RAG in one page" })).toBeInViewport();
   await page.waitForTimeout(400);
-  await page.screenshot({ path: `artifacts/evidence/WU-031/learn-${testInfo.project.name}.png` });
+  await page.screenshot({ path: `artifacts/evidence/WU-034/learn-${testInfo.project.name}.png` });
+  // "Try it" puts a prompt in the composer on the workspace.
+  await page
+    .locator("#learn-graphrag-here")
+    .getByRole("button", { name: /Ask a graph question/ })
+    .click();
+  await expect(page.getByLabel("Message the orchestrator")).toHaveValue(
+    "Who should be in the buyer group for Acme Outfitters, and why?",
+  );
 });
 
 test("answers a 'create it' follow-up through the confirmation policy", async ({ page }) => {

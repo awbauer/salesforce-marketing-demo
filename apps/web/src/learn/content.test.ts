@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GLOSSARY, LEARN_PARTS } from "./content";
+import { DIAGRAM_IDS } from "./diagrams";
+import { PART_LESSONS, SECTION_LESSONS } from "./lessons";
 
 describe("learn page content", () => {
   const sections = LEARN_PARTS.flatMap((part) => part.sections);
@@ -43,5 +45,24 @@ describe("learn page content", () => {
   it("keeps the glossary sorted for scanning", () => {
     const terms = GLOSSARY.map((entry) => entry.term);
     expect(terms).toEqual([...terms].sort((a, b) => a.localeCompare(b)));
+  });
+
+  it("gives every part a path, outcomes, and a quick check with a valid answer", () => {
+    LEARN_PARTS.forEach((part, index) => {
+      const lesson = PART_LESSONS[part.id];
+      expect(lesson?.number).toBe(index + 1);
+      expect(lesson?.outcomes.length).toBeGreaterThan(0);
+      expect(lesson?.check.options[lesson.check.answer]).toBeDefined();
+    });
+  });
+
+  it("gives every lesson a diagram that exists and one key idea", () => {
+    for (const section of sections) {
+      const lesson = SECTION_LESSONS[section.id];
+      expect(lesson, section.id).toBeDefined();
+      expect(DIAGRAM_IDS).toContain(lesson?.diagram);
+      expect(lesson?.keyIdea.length).toBeGreaterThan(20);
+    }
+    expect(Object.keys(SECTION_LESSONS).sort()).toEqual(sections.map((s) => s.id).sort());
   });
 });
