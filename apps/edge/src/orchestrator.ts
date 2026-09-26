@@ -8,9 +8,10 @@ import {
   type OrchestratorState,
   PHASE_2_AUTONOMOUS_TOOLS,
   PHASE_2_CURATED_TOOLS,
-  POLICY_RESPONSES,
   PROOF_DEFAULTS,
   parseOperationControls,
+  policyResponse,
+  referentFromReply,
   TURN_HISTORY_RETENTION_DAYS,
   type TurnRecord,
   TurnRecordSchema,
@@ -128,6 +129,37 @@ export function evidenceTurnMessages(messages: UIMessage[]): UIMessage[] {
     if (message?.role === "user") return [message];
   }
   return [];
+}
+
+/** Most recent messages sent to the model so follow-ups ("looks good, create it") keep context. */
+export const CONVERSATION_WINDOW = 8;
+
+/**
+ * The bounded conversation for a model turn. Earlier assistant replies keep only their text:
+ * stale tool results, reasoning, and trace data never re-enter the prompt, and the system policy
+ * tells the model that earlier replies are context, not Salesforce evidence (see WU-030).
+ */
+export function conversationWindow(
+  messages: UIMessage[],
+  maxMessages = CONVERSATION_WINDOW,
+): UIMessage[] {
+  let lastUser = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1)
+    if (messages[index]?.role === "user") {
+      lastUser = index;
+      break;
+    }
+  if (lastUser < 0) return [];
+  const window = messages.slice(Math.max(0, lastUser - maxMessages + 1), lastUser + 1);
+  const firstUser = window.findIndex((message) => message.role === "user");
+  return window.slice(firstUser).flatMap((message, index, all): UIMessage[] => {
+    if (message.role === "user") return [message];
+    if (message.role !== "assistant" || index === all.length - 1) return [];
+    const parts = message.parts.filter(
+      (part) => part.type === "text" && part.text.trim().length > 0,
+    );
+    return parts.length ? [{ ...message, parts }] : [];
+  });
 }
 
 function guardToolResults(tools: ToolSet): ToolSet {
@@ -435,7 +467,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     messages: UIMessage[],
     abortSignal?: AbortSignal,
   ): Promise<Response> {
-    const turnMessages = evidenceTurnMessages(messages);
+    const turnMessages = conversationWindow(messages);
     await this.mcp.waitForConnections({ timeout: 10_000 });
     const discoveredTools = this.mcp.getAITools();
     const { disabledTools } = parseOperationControls(this.env);
@@ -566,6 +598,17 @@ export class MarketingOrchestrator extends AIChatAgent<
   private writeBlocked(action: keyof typeof WRITE_TOOL_BY_ACTION) {
     const message = writeBlockReason(parseOperationControls(this.env), action);
     return message ? json({ error: { code: "WRITES_DISABLED", message } }, { status: 503 }) : null;
+  }
+
+  /** Labels what a follow-up refers to, from the assistant reply before the latest message. */
+  private previousReplyReferent() {
+    const window = conversationWindow(this.messages);
+    const previous = [...window].reverse().find((message) => message.role === "assistant");
+    const text = previous?.parts
+      .map((part) => (part.type === "text" ? part.text : ""))
+      .join("")
+      .trim();
+    return text ? referentFromReply(text) : null;
   }
 
   private ensureTurnHistory() {
@@ -1490,7 +1533,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     const utterance = latestUserText(evidenceTurnMessages(this.messages));
     const policyIntent = classifyPolicyIntent(utterance);
     if (policyIntent)
-      return scriptedResponse([POLICY_RESPONSES[policyIntent]], {
+      return scriptedResponse([policyResponse(policyIntent, this.previousReplyReferent())], {
         model: POLICY_ROUTER,
         route: policyIntent,
         abortSignal,

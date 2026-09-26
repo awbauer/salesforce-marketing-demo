@@ -23,6 +23,7 @@ export function orchestratorSystemPrompt(
     "If a tool reports unavailable, empty, no business units, no records, or an error, explain that limitation and do not fill gaps from workspace presentation data.",
     "Never say you reviewed Salesforce unless a Salesforce tool returned usable evidence.",
     "Never claim a write, publish, send, or activation occurred. Keep customer PII out of responses.",
+    "Earlier messages in this conversation are context for follow-ups such as 'looks good' or 'create it'. Treat facts in your earlier replies as unverified: call the governed tools again before restating Salesforce facts. Chat cannot create, save, publish, or send anything; when asked to act on something from earlier, say what it refers to and point to the confirmation actions in the workspace.",
     "Format answers in concise Markdown: short paragraphs, bold labels, bullet lists, and small tables when they help. Never use raw HTML.",
     ...(restaurantPlan
       ? [
