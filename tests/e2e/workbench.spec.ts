@@ -497,3 +497,17 @@ test("reviews persisted image variants and rejects one so it cannot be attached"
     fullPage: true,
   });
 });
+
+test("answers a 'create it' follow-up through the confirmation policy", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "New chat" }).click();
+  const composer = page.getByLabel("Message the orchestrator");
+  await composer.fill("Review the sample campaign readiness");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByText(/strongest signal is stable engagement/i).last()).toBeVisible();
+  await composer.fill("Looks good, create it");
+  await page.getByRole("button", { name: "Send message" }).click();
+  const reply = page.locator(".message.assistant").last();
+  await expect(reply).toContainText("nothing has been saved or created");
+  await expect(reply).toContainText("Create review request");
+});

@@ -4,6 +4,9 @@ import { routingCases } from "../../evals/src/cases";
 import {
   classifyPolicyIntent,
   initialOrchestratorState,
+  POLICY_RESPONSES,
+  policyResponse,
+  referentFromReply,
   OrchestratorStateSchema,
   PROOF_DEFAULTS,
 } from "./index";
@@ -36,6 +39,9 @@ describe("policy intent routing", () => {
       "Please save the brief to Salesforce",
       "Create a review request for the launch",
       "Update the Salesforce record with these dates",
+      "Looks good, create it",
+      "Great, schedule it now.",
+      "build this in salesforce",
     ])
       expect(classifyPolicyIntent(prompt), prompt).toBe("confirmation-required");
   });
@@ -66,6 +72,10 @@ describe("policy intent routing", () => {
       "Refine the campaign preview without saving it",
       "When should we send the email?",
       "Create a draft hero section for the email",
+      "Make it shorter and punchier",
+      "Create the campaign brief for the winter launch",
+      "Go ahead and draft three subject lines",
+      "Can you create it with a warmer tone?",
     ])
       expect(classifyPolicyIntent(prompt), prompt).toBeNull();
   });
@@ -78,5 +88,24 @@ describe("policy intent routing", () => {
       else if (test.expected === "unsupported") expect(intent, test.id).toBe("unsupported");
       else expect(intent, test.id).toBeNull();
     }
+  });
+});
+
+describe("follow-up policy replies", () => {
+  it("names what a follow-up refers to from the previous reply", () => {
+    expect(
+      referentFromReply("**Draft push campaign – Coastline Kitchen (Los Angeles)**\n\nClear, 71°F"),
+    ).toBe("Draft push campaign – Coastline Kitchen (Los Angeles)");
+    expect(referentFromReply("## Readiness summary\nTwo blockers")).toBe("Readiness summary");
+    expect(referentFromReply("")).toBeNull();
+    expect(
+      referentFromReply("I reviewed the fictional Northstar sample campaign. The strongest…"),
+    ).toBeNull();
+    expect(policyResponse("confirmation-required", "Draft push campaign")).toContain(
+      "I can't create “Draft push campaign” in Salesforce from chat",
+    );
+    expect(policyResponse("confirmation-required", null)).toBe(
+      POLICY_RESPONSES["confirmation-required"],
+    );
   });
 });
