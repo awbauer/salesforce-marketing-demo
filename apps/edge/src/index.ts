@@ -1,9 +1,16 @@
-import { getAgentByName } from "agents";
-import { HealthSchema, PROOF_DEFAULTS } from "@northstar/contracts";
 import { createMcpHandler } from "@modelcontextprotocol/server";
-import { AuthError, deriveAgentKey, resolvePrincipal, type AuthBindings } from "./auth";
+import { HealthSchema, PROOF_DEFAULTS } from "@northstar/contracts";
+import { getAgentByName } from "agents";
+import {
+  EXPLORER_MAX_ROWS,
+  GraphNodeNotFoundError,
+  graphNeighbors,
+  graphOverview,
+} from "../../../packages/knowledge-graph/src/index.ts";
+import { type AuthBindings, AuthError, deriveAgentKey, resolvePrincipal } from "./auth";
 import { createCampaignContextMcpServer } from "./campaign-context/server";
 import { createKnowledgeGraphMcpServer, knowledgeGraphBackend } from "./knowledge-graph/server";
+
 export { MarketingOrchestrator } from "./orchestrator";
 
 type Env = CloudflareBindings & AuthBindings;
@@ -44,6 +51,43 @@ function errorResponse(error: unknown, id: string) {
   );
 }
 
+const NEIGHBORS_PATH = /^\/api\/graph\/nodes\/([^/]+)\/neighbors$/;
+
+/** Read-only graph snapshots for the Graph explorer page; fixed Cypher, never user queries. */
+async function graphExplorerResponse(url: URL, env: Env, id: string): Promise<Response> {
+  const backend = knowledgeGraphBackend(
+    env as Parameters<typeof knowledgeGraphBackend>[0],
+    undefined,
+    { maxRows: EXPLORER_MAX_ROWS },
+  );
+  try {
+    if (url.pathname === "/api/graph/overview") return json(await graphOverview(backend));
+    const neighbors = NEIGHBORS_PATH.exec(url.pathname);
+    if (neighbors?.[1])
+      return json(await graphNeighbors(backend, decodeURIComponent(neighbors[1])));
+  } catch (error) {
+    if (error instanceof GraphNodeNotFoundError)
+      return json(
+        { error: { code: "NOT_FOUND", message: error.message, correlationId: id } },
+        { status: 404 },
+      );
+    return json(
+      {
+        error: {
+          code: "GRAPH_UNAVAILABLE",
+          message: error instanceof Error ? error.message : "The knowledge graph is unavailable.",
+          correlationId: id,
+        },
+      },
+      { status: 502 },
+    );
+  }
+  return json(
+    { error: { code: "NOT_FOUND", message: "Endpoint not found.", correlationId: id } },
+    { status: 404 },
+  );
+}
+
 // Stateless streamable HTTP: each request gets a fresh server from the factory.
 const campaignContextMcpHandler = createMcpHandler(() => createCampaignContextMcpServer());
 
@@ -77,6 +121,10 @@ export default {
         const principal = await resolvePrincipal(request, env);
         const agentKey = await deriveAgentKey(principal, PROOF_DEFAULTS.workspaceId);
         return json({ workspaceId: PROOF_DEFAULTS.workspaceId, principal, agentKey });
+      }
+      if (url.pathname.startsWith("/api/graph/")) {
+        await resolvePrincipal(request, env);
+        return await graphExplorerResponse(url, env, id);
       }
       if (url.pathname === "/mcp/knowledge-graph") {
         await resolvePrincipal(request, env);

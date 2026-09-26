@@ -1,5 +1,7 @@
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
+import { jsonSchema, type ToolSet, tool } from "ai";
+import type { z } from "zod";
 import {
   buildDataset,
   type Dataset,
@@ -7,8 +9,6 @@ import {
   KNOWLEDGE_GRAPH_TOOL_SPECS,
   queryApiBackend,
 } from "../../../../packages/knowledge-graph/src/index.ts";
-import { jsonSchema, type ToolSet, tool } from "ai";
-import type { z } from "zod";
 
 // One widened shape lets the loop register each spec; each spec's schema still validates input.
 type AnyGraphToolSpec = {
@@ -30,10 +30,19 @@ let fixtureDataset: Dataset | undefined;
  * Neo4j Aura when its Worker secrets are set; otherwise the identical fictional dataset in memory,
  * so local development, tests, and evaluations run without a database.
  */
-export function knowledgeGraphBackend(env: GraphEnv, fetchImpl?: typeof fetch): GraphBackend {
+export function knowledgeGraphBackend(
+  env: GraphEnv,
+  fetchImpl?: typeof fetch,
+  options: { maxRows?: number } = {},
+): GraphBackend {
   if (env.NEO4J_QUERY_URL && env.NEO4J_USERNAME && env.NEO4J_PASSWORD)
     return queryApiBackend(
-      { url: env.NEO4J_QUERY_URL, username: env.NEO4J_USERNAME, password: env.NEO4J_PASSWORD },
+      {
+        url: env.NEO4J_QUERY_URL,
+        username: env.NEO4J_USERNAME,
+        password: env.NEO4J_PASSWORD,
+        maxRows: options.maxRows,
+      },
       fetchImpl,
     );
   fixtureDataset ??= buildDataset();

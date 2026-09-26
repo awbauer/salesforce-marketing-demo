@@ -5,6 +5,8 @@ export type QueryApiConfig = {
   username: string;
   password: string;
   timeoutMs?: number;
+  /** Rows kept per statement; tool answers stay small, the graph explorer needs more. */
+  maxRows?: number;
 };
 
 const MAX_ROWS = 200;
@@ -57,7 +59,7 @@ export function queryApiBackend(
       }
       const fields = body.data?.fields ?? [];
       return (body.data?.values ?? [])
-        .slice(0, MAX_ROWS)
+        .slice(0, config.maxRows ?? MAX_ROWS)
         .map(
           (values) =>
             Object.fromEntries(fields.map((field, index) => [field, values[index]])) as Row,
