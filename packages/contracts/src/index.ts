@@ -221,7 +221,7 @@ export type FocusVersion = z.infer<typeof FocusVersionSchema>;
 
 /**
  * The focus: the one thing the chat is building, as structured data with every version kept.
- * "This" and "it" in the chat refer to the focus.
+ * Revisions, references to the draft, and confirmed saves all act on it.
  */
 export const FocusItemSchema = z.object({
   id: z.string(),
@@ -281,7 +281,7 @@ export const systemLabel = (system: string) => CONNECTED_SYSTEMS[system]?.label 
 
 /**
  * Records the connected systems make available to this workspace. The model can open them by
- * name or id, but a catalog record is never what "this" means until the chat opens it.
+ * name or id, but it acts on one only when the user asks for it or the chat opens it.
  */
 export const WORKSPACE_CATALOG: ReadonlyArray<RecordRef & { title: string }> = Object.freeze([
   {
@@ -359,8 +359,8 @@ export function classifyPolicyIntent(
 }
 
 /**
- * The policy reply, naming what a follow-up such as "looks good, create it" refers to when the
- * previous assistant reply had a title. The reference is a label only, never treated as evidence.
+ * The policy reply for a write request, naming the draft it concerns: the workspace focus, or
+ * the previous reply's title. The name is a label only, never treated as evidence.
  */
 export function policyResponse(
   intent: "confirmation-required" | "unsupported",

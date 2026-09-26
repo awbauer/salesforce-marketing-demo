@@ -251,7 +251,7 @@ export const LEARN_PARTS: LearnPart[] = [
 | **Audit trail** | What each turn did: route, tools, inputs and outputs, outcome | Agent SQLite (turn history) | 14 days |
 | **Long-term memory** | Decisions and drafts that matter across chats | Knowledge graph, linked to the entities involved | 14 days (planned, issue #41) |
 
-**Working memory** is sent to the model as a bounded window: the last 8 messages. Earlier assistant replies are reduced to their text, so old tool results and reasoning never re-enter the prompt. The workspace is working memory too: the **focus** is the draft the chat is building, saved as structured, versioned data through the local \`update_focus\` tool. The prompt names it as what "this" and "it" refer to, so "looks good, save it" acts on the draft you can see, never on some other record.
+**Working memory** is sent to the model as a bounded window: the last 8 messages. Earlier assistant replies are reduced to their text, so old tool results and reasoning never re-enter the prompt. The workspace is working memory too. The draft being built, the records the chat opened, and the context its tools gathered are summarized in every prompt, so the model works from structured state instead of re-reading old replies. See *The workspace* under the demo concepts.
 
 **The audit trail** is never sent to the model. It exists for people: the History view and the audit export.
 
@@ -368,6 +368,29 @@ A turn runs a **tool loop** of up to 6 steps. On each step the model either call
           "“Behind the scenes · technical trace” under each answer",
         ],
         resources: [R.cfAgents, R.cfChatAgents, R.durableObjects, R.aiSdk, R.react],
+      },
+      {
+        id: "workspace",
+        title: "The workspace: focus, context, and records",
+        summary:
+          "A per-chat, structured model of the work, built from tool results rather than model text.",
+        body: `Each chat has a **working set**, shown in the Workspace panel and summarized in every prompt. It starts empty with **New chat** and has three parts:
+
+- **Focus:** the draft being built (a campaign, brief, or message) as structured data: a title, labeled fields, a change note, and the context it was built from. The model saves drafts with the local \`update_focus\` tool; each revision becomes a new version, and earlier versions stay viewable.
+- **Context:** cards for what tools returned, such as weather, the restaurant profile, graph evidence, and Salesforce summaries, each with its source and fetch time.
+- **Records:** records the chat opened, created, or updated, in any connected system. Salesforce is one system and restaurant data is another; any system can join through the same reference: system, object type, and id.
+
+Three properties make it trustworthy:
+
+1. **Deterministic ingestion.** Cards and records come from tool results through code, never from model-written text, so nothing in the workspace is invented.
+2. **Open versus available.** Records the connected systems make available are listed separately as a catalog, so the model never acts on a record the chat hasn't opened.
+3. **Writes act on what you see.** *Save to Salesforce as brief* writes exactly the focus version on screen. The confirmation records that version in its request hash, and the campaign then shows as updated.`,
+        inDemo: [
+          "Workspace panel: Focus, Records, and Context",
+          "apps/edge/src/working-set.ts, apps/edge/src/focus.ts",
+          "Issue #46: session working set",
+        ],
+        resources: [R.contextEngineering, R.writingTools, R.buildingAgents],
       },
       {
         id: "model",

@@ -9,7 +9,7 @@ issue: 46
 
 # Objective
 
-- **Phase 2 of #46:** the chat builds a **focus**, a structured, versioned draft that "this" and "it" refer to and that confirmed writes act on.
+- **Phase 2 of #46:** the chat builds a **focus**, a structured, versioned draft that revisions, references, and confirmed writes all act on.
 - **Graph remodel:** Coastline Kitchen becomes a brand under Northstar with its own restaurant entities, and pushes connect to consent, content, and segments over a mobile app channel.
 
 ## Knowledge graph v2 (`northstar-kg-v2`)
@@ -41,8 +41,8 @@ issue: 46
   - Drafting plans end with `update_focus`; the push plan is profile → weather → past pushes → content → focus.
   - With a focus, a revision request ("make it warmer") routes straight to `update_focus`.
   - Operators can turn it off with `DISABLED_TOOLS`.
-- **Prompt:** leads with the current focus as what "this" and "it" refer to, and requires drafts and revisions to be saved to it.
-- **Policy router:** "looks good, create it" names the focus draft.
+- **Prompt:** leads with the current focus as the draft that revisions and saves apply to, and requires drafts and revisions to be saved to it.
+- **Policy router:** a chat write request names the focus draft in its reply.
 - **Writes:**
   - *Save to Salesforce as brief* on the Focus card creates a confirmation whose brief text the server writes from the focus. It records the focus id and version and includes them in the request hash.
   - Review requests name the focus version.
@@ -60,5 +60,5 @@ issue: 46
   - contracts
 - Worker tests: focus versioning, the prompt, brief text limits, a focus-bound save marking the campaign updated, push and revision plans, and all existing flows (75).
 - Live: seed read-back, graph tool parity, and explorer parity against prod Aura.
-- E2E in Chrome and Edge: draft → revise to v2 → "create it" names the draft → save as brief with confirmation → campaign shows "Updated". Graph explorer counts are updated.
+- E2E in Chrome and Edge: draft → revise to v2 → a chat write request names the draft → save as brief with confirmation → campaign shows "Updated". Graph explorer counts are updated.
 - `pnpm verify` passes.

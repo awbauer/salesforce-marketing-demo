@@ -29,7 +29,7 @@ Phase 1 of issue #46. The workspace becomes the chat's **working set**: it start
   - The first message of any conversation also starts a fresh working set.
   - A pending confirmation and the chat's activity clear with it; History and the audit export keep everything.
   - Saved state from before this change is migrated on start.
-- **Prompt:** lists the records open in this chat and the context gathered, and separately the catalog, labeled as not open and never "this" or "it".
+- **Prompt:** lists the records open in this chat and the context gathered, and separately the catalog, labeled as not open, so the model acts on a catalog record only when the user asks for it.
 - **Writes:** Create review request and campaign visuals target the Salesforce campaign open in the working set. The server refuses a confirmation for any other record (409). Confirmed writes add a **created** record (Task or ContentDocument).
 - **UI:**
   - The *Workspace* panel shows Records grouped by system, each with a system badge, relation, tool, time, and a link only where the system has one.

@@ -481,7 +481,7 @@ export function workingSetPrompt(set: WorkingSet) {
       : "No records are open in this chat yet.",
     context.length ? `Context gathered in this chat: ${context.join("; ")}.` : "",
     catalog.length
-      ? `Catalog of records available in connected systems (not open in this chat; never what "this" or "it" refers to unless the user names one): ${catalog.join("; ")}.`
+      ? `Catalog of records available in connected systems (not open in this chat; act on one only when the user asks for it by name or id): ${catalog.join("; ")}.`
       : "",
   ]
     .filter(Boolean)

@@ -138,7 +138,7 @@ export function evidenceTurnMessages(messages: UIMessage[]): UIMessage[] {
   return [];
 }
 
-/** Most recent messages sent to the model so follow-ups ("looks good, create it") keep context. */
+/** Most recent messages sent to the model, so follow-up requests keep the conversation's context. */
 export const CONVERSATION_WINDOW = 8;
 
 /**
@@ -1147,7 +1147,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     return workingSet.focus as FocusItem;
   }
 
-  /** What "this" means: the focus draft's title, when there is one. */
+  /** The focus draft's title, which the policy reply names when there is one. */
   private focusReferent() {
     const focus = this.state.workingSet.focus;
     return focus ? currentFocusVersion(focus).title : null;

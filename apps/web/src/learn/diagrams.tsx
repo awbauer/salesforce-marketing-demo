@@ -504,6 +504,55 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
   "graph-path": () => <GraphPath />,
   "graph-tools": () => <GraphTools />,
   architecture: () => <Architecture />,
+  workspace: () => (
+    <Figure
+      label="How the workspace is built and used"
+      caption="Code turns tool results into context and records; the model drafts into the focus; confirmed writes act on the focus version shown."
+    >
+      <Lanes
+        lanes={[
+          {
+            label: "Tools",
+            steps: [
+              {
+                title: "Tool result",
+                caption: "weather, graph, Salesforce",
+                tone: "tool",
+                glyph: "▶",
+              },
+              {
+                title: "Context and records",
+                caption: "built by code, any system",
+                tone: "store",
+                glyph: "▤",
+              },
+            ],
+          },
+          {
+            label: "Drafting",
+            steps: [
+              { title: "Model drafts", tone: "model", glyph: "◆" },
+              {
+                title: "update_focus",
+                caption: "local, workspace only",
+                tone: "guard",
+                glyph: "✎",
+              },
+              { title: "Focus v1, v2…", caption: "every version kept", tone: "output", glyph: "◎" },
+            ],
+          },
+          {
+            label: "Writes",
+            steps: [
+              { title: "Confirm", caption: "the version on screen", tone: "person", glyph: "☑" },
+              { title: "Signed write", tone: "guard", glyph: "⛨" },
+              { title: "Record updated", tone: "output", glyph: "✓" },
+            ],
+          },
+        ]}
+      />
+    </Figure>
+  ),
   "model-guards": () => (
     <Figure
       label="The model and its known quirks"

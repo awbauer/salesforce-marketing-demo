@@ -11,7 +11,8 @@ import {
 /**
  * The workspace focus: the draft the chat is building. The model saves drafts through the
  * local `update_focus` tool, so the focus is structured data with every version kept, and
- * "this" or "it" in the chat refers to it. The tool changes only the workspace.
+ * revisions, references to the draft, and confirmed saves all act on the same object. The tool
+ * changes only the workspace.
  */
 
 export const FOCUS_TOOL_KEY = "workspace_update_focus";
@@ -71,12 +72,12 @@ export function applyFocusUpdate(
   return { ...set, startedAt: set.startedAt ?? at.toISOString(), focus };
 }
 
-/** Prompt lines naming the focus, so "this" and "it" resolve to it. */
+/** Prompt lines describing the focus: the draft that revisions and saves apply to. */
 export function focusPrompt(focus: FocusItem | null) {
   if (!focus) return "";
   const current = currentFocusVersion(focus);
   const fields = current.fields.map((field) => `${field.label}: ${field.value}`).join(" | ");
-  return `Current focus, which is what "this" and "it" refer to: ${FOCUS_KIND_LABELS[focus.kind]} "${current.title}" (version ${current.version}). ${current.summary} Fields: ${fields}.`;
+  return `Current focus (the draft the user is working on; revisions, references to the draft, and saves apply to it): ${FOCUS_KIND_LABELS[focus.kind]} "${current.title}" (version ${current.version}). ${current.summary} Fields: ${fields}.`;
 }
 
 /** The focus as brief text for a confirmed save, within the 500-character confirmation limit. */

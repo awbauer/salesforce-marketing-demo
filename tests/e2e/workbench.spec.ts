@@ -565,7 +565,7 @@ test("explains context, GraphRAG, and every demo concept on the Learn page", asy
   );
   // The quick check explains the answer.
   const check = page.locator(".learn-check").first();
-  await check.getByLabel("In the conversation window sent with this turn").check();
+  await check.getByLabel("The recent conversation and a summary of the workspace").check();
   await expect(check.getByText(/Correct\./)).toBeVisible();
   await toc.getByRole("button", { name: "Primer: RAG and GraphRAG" }).click();
   await expect(page.getByRole("heading", { name: "RAG in one page" })).toBeInViewport();

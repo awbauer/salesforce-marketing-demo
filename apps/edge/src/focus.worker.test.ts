@@ -61,10 +61,10 @@ describe("workspace focus", () => {
     expect(brief.focus).toMatchObject({ id: "focus-2", kind: "brief", current: 1 });
   });
 
-  it("tells the model the focus is what this and it mean", () => {
+  it("describes the focus as the draft revisions and saves apply to", () => {
     const set = applyFocusUpdate(emptyWorkingSet(), draft(), at);
     expect(focusPrompt(set.focus)).toContain(
-      'Current focus, which is what "this" and "it" refer to: Push message "Rainy-day comfort" (version 1).',
+      'Current focus (the draft the user is working on; revisions, references to the draft, and saves apply to it): Push message "Rainy-day comfort" (version 1).',
     );
     expect(workingSetPrompt(set).startsWith("Current focus")).toBe(true);
     expect(focusPrompt(null)).toBe("");

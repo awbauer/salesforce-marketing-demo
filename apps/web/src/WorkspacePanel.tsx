@@ -61,7 +61,7 @@ export function FocusCard({
     <section className="focus-card" aria-labelledby="focus-title" data-testid="workspace-focus">
       <div className="focus-topline">
         <span className="focus-kind">{FOCUS_KIND_LABELS[focus.kind]}</span>
-        <span className="focus-this">What “this” refers to</span>
+        <span className="focus-this">Draft in progress</span>
       </div>
       <h3 id="focus-title">{version.title}</h3>
       {focus.versions.length > 1 && (
