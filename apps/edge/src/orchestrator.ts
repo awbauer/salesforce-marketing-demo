@@ -2,6 +2,7 @@ import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import {
   ConfirmationSchema,
   type ConnectorState,
+  classifyPolicyIntent,
   GeneratedCampaignImageSchema,
   initialOrchestratorState,
   type OrchestratorState,
@@ -10,18 +11,17 @@ import {
   POLICY_RESPONSES,
   PROOF_DEFAULTS,
   parseOperationControls,
-  WRITE_TOOL_BY_ACTION,
   TURN_HISTORY_RETENTION_DAYS,
   type TurnRecord,
   TurnRecordSchema,
-  classifyPolicyIntent,
+  WRITE_TOOL_BY_ACTION,
 } from "@northstar/contracts";
 import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
-  stepCountIs,
   type GenerateTextOnFinishCallback,
+  stepCountIs,
   streamText,
   type ToolSet,
   type UIMessage,
@@ -29,17 +29,21 @@ import {
   wrapLanguageModel,
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
+import {
+  CAMPAIGN_CONTEXT_TOOL_PREFIX,
+  connectCampaignContextTools,
+} from "./campaign-context/server";
 import { forcedToolCallMiddleware } from "./forced-tool-middleware";
+import { buildTurnRecord } from "./turn-history";
 import {
   MAX_OUTPUT_TOKENS,
   MAX_TURN_STEPS,
+  missingPlannedTool,
   orchestratorSystemPrompt,
-  requestedToolName,
-  selectRequiredTool,
+  selectToolPlan,
   stepToolChoice,
   TURN_TIMEOUT,
 } from "./turn-policy";
-import { buildTurnRecord } from "./turn-history";
 import { createTurnTracer, describeTurnError, type TurnRoute } from "./turn-trace";
 
 export {
@@ -426,15 +430,25 @@ export class MarketingOrchestrator extends AIChatAgent<
     await this.mcp.waitForConnections({ timeout: 10_000 });
     const discoveredTools = this.mcp.getAITools();
     const { disabledTools } = parseOperationControls(this.env);
-    const tools = guardToolResults(
-      Object.fromEntries(
+    // The campaign-context MCP runs in-process; it is closed when the turn finishes.
+    const context = await connectCampaignContextTools();
+    const tools = guardToolResults({
+      ...Object.fromEntries(
         Object.entries(discoveredTools).filter(([key]) =>
           PHASE_2_AUTONOMOUS_TOOLS.some(
             (name) => key.endsWith(`_${name}`) && !disabledTools.includes(name),
           ),
         ),
       ),
-    );
+      ...Object.fromEntries(
+        Object.entries(context.tools).filter(
+          ([key]) =>
+            !(disabledTools as readonly string[]).includes(
+              key.slice(CAMPAIGN_CONTEXT_TOOL_PREFIX.length),
+            ),
+        ),
+      ),
+    });
     const workersAI = createWorkersAI({
       binding: this.env.AI,
       gateway: { id: this.env.AI_GATEWAY_ID },
@@ -446,13 +460,16 @@ export class MarketingOrchestrator extends AIChatAgent<
       presentationStatus: tile.presentation?.sourceStatus,
     }));
     const prompt = latestUserText(turnMessages);
-    const requestedTool = requestedToolName(prompt);
-    const requiredTool = selectRequiredTool(prompt, Object.keys(tools));
-    if (requestedTool && !requiredTool)
+    const toolPlan = selectToolPlan(prompt, Object.keys(tools));
+    // Readable plan for the trace and history, such as "a → b → c".
+    const requiredTool = toolPlan?.join(" → ");
+    const missingTool = missingPlannedTool(prompt, Object.keys(tools));
+    if (missingTool) {
+      await context.close();
       return scriptedResponse(
         [
-          (disabledTools as readonly string[]).includes(requestedTool)
-            ? `The ${requestedTool.replaceAll("_", " ")} tool is turned off by an operator right now, so I did not call it or substitute demo data.`
+          (disabledTools as readonly string[]).includes(missingTool)
+            ? `The ${missingTool.replaceAll("_", " ")} tool is turned off by an operator right now, so I did not call it or substitute demo data.`
             : "Salesforce is connected, but the governed tool catalog is not ready for this request. Check the Salesforce connection status and retry. I did not substitute demo data.",
         ],
         {
@@ -463,6 +480,7 @@ export class MarketingOrchestrator extends AIChatAgent<
             this.recordTurn(prompt, { model: POLICY_ROUTER, route: "catalog-unavailable" }, result),
         },
       );
+    }
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         const tracer = createTurnTracer(writer, {
@@ -479,11 +497,11 @@ export class MarketingOrchestrator extends AIChatAgent<
               model: workersAI(PROOF_DEFAULTS.orchestratorModel),
               middleware: forcedToolCallMiddleware,
             }),
-            system: orchestratorSystemPrompt(workspaceReferences),
+            system: orchestratorSystemPrompt(workspaceReferences, toolPlan),
             messages: await convertToModelMessages(turnMessages),
             tools,
             prepareStep: ({ stepNumber }: { stepNumber: number }) =>
-              stepToolChoice(requiredTool, stepNumber),
+              stepToolChoice(toolPlan, stepNumber),
             stopWhen: stepCountIs(MAX_TURN_STEPS),
             maxOutputTokens: MAX_OUTPUT_TOKENS,
             timeout: TURN_TIMEOUT,
@@ -515,6 +533,8 @@ export class MarketingOrchestrator extends AIChatAgent<
             { model: PROOF_DEFAULTS.orchestratorModel, route: "model", requiredTool },
             turn,
           );
+        } finally {
+          await context.close();
         }
       },
       onError: describeTurnError,
@@ -1458,8 +1478,8 @@ export class MarketingOrchestrator extends AIChatAgent<
       return this.productionChatResponse(this.messages, abortSignal);
     return scriptedResponse(
       [
-        "I reviewed the fictional Northstar sample campaign. ",
-        "The strongest signal is stable engagement, while accessibility copy and the commercial-consent scope remain the two readiness blockers. ",
+        "I reviewed the fictional Northstar sample campaign. The **strongest signal is stable engagement**.\n\n",
+        "**Readiness blockers**\n\n- Accessibility copy\n- Commercial-consent scope\n\n",
         "I have not changed, published, or sent anything.",
       ],
       {

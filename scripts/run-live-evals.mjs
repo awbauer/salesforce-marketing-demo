@@ -2,7 +2,7 @@
 // Runs the production routing, prompt, step settings, and forced-tool middleware against
 // fictional tool fixtures, then writes a typed report that the demo UI renders.
 //
-// Usage: pnpm eval:live [--models id,id] [--trials-demo 5] [--trials-routing 2]
+// Usage: pnpm eval:live [--models id,id] [--trials-demo 5] [--trials-routing 2] [--out path]
 // Cost: a default three-model run is about 550 model calls; check Workers AI usage before adding models.
 // Credentials: CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, or an authenticated wrangler login.
 import { execFileSync } from "node:child_process";
@@ -10,12 +10,16 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { jsonSchema, stepCountIs, streamText, tool, wrapLanguageModel } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
+import {
+  CAMPAIGN_CONTEXT_TOOL_PREFIX,
+  connectCampaignContextTools,
+} from "../apps/edge/src/campaign-context/server.ts";
 import { forcedToolCallMiddleware } from "../apps/edge/src/forced-tool-middleware.ts";
 import {
   MAX_OUTPUT_TOKENS,
   MAX_TURN_STEPS,
   orchestratorSystemPrompt,
-  selectRequiredTool,
+  selectToolPlan,
   stepToolChoice,
   TURN_TIMEOUT,
 } from "../apps/edge/src/turn-policy.ts";
@@ -27,11 +31,13 @@ import {
   PROOF_DEFAULTS,
 } from "../packages/contracts/src/index.ts";
 import { demoScenarios, routingCases } from "../packages/evals/src/cases.ts";
-import { EVAL_CHECKS, EvalReportSchema } from "../packages/evals/src/report.ts";
-import { claimsWrite, usesMarkdown } from "../packages/evals/src/scoring.ts";
+import { EvalReportSchema } from "../packages/evals/src/report.ts";
+import { claimsWrite } from "../packages/evals/src/scoring.ts";
+import { buildMethodology } from "./lib/eval-methodology.mjs";
+import { summarize } from "./lib/eval-summary.mjs";
 
 // Served as a static asset so the demo UI shows the latest committed run without a code change.
-const REPORT_PATH = "apps/web/public/evals/latest.json";
+const DEFAULT_REPORT_PATH = "apps/web/public/evals/latest.json";
 // The Hosted MCP namespace prefix observed in production tool names.
 const TOOL_PREFIX = "tool_salesforce_northstar-marketing-salesforce_";
 const CONCURRENCY_PER_MODEL = 6;
@@ -162,7 +168,11 @@ const WORKSPACE_REFERENCES = initialOrchestratorState.tiles.map((tile) => ({
   presentationStatus: tile.presentation?.sourceStatus,
 }));
 function shortName(name) {
-  return name?.startsWith(TOOL_PREFIX) ? name.slice(TOOL_PREFIX.length) : (name ?? null);
+  if (!name) return null;
+  if (name.startsWith(TOOL_PREFIX)) return name.slice(TOOL_PREFIX.length);
+  if (name.startsWith(CAMPAIGN_CONTEXT_TOOL_PREFIX))
+    return name.slice(CAMPAIGN_CONTEXT_TOOL_PREFIX.length);
+  return name;
 }
 
 async function runCase(model, tools, suite, testCase, trial) {
@@ -191,19 +201,19 @@ async function runCase(model, tools, suite, testCase, trial) {
     text = POLICY_RESPONSES[policyRouted];
   } else {
     try {
-      const requiredTool =
+      const toolPlan =
         suite === "routing-model-only"
           ? undefined
-          : selectRequiredTool(testCase.prompt, Object.keys(tools));
+          : selectToolPlan(testCase.prompt, Object.keys(tools));
       const result = streamText({
         model: wrapLanguageModel({
           model: model.provider(model.id),
           middleware: forcedToolCallMiddleware,
         }),
-        system: orchestratorSystemPrompt(WORKSPACE_REFERENCES),
+        system: orchestratorSystemPrompt(WORKSPACE_REFERENCES, toolPlan),
         prompt: testCase.prompt,
         tools,
-        prepareStep: ({ stepNumber }) => stepToolChoice(requiredTool, stepNumber),
+        prepareStep: ({ stepNumber }) => stepToolChoice(toolPlan, stepNumber),
         stopWhen: stepCountIs(MAX_TURN_STEPS),
         maxOutputTokens: MAX_OUTPUT_TOKENS,
         timeout: TURN_TIMEOUT,
@@ -213,7 +223,10 @@ async function runCase(model, tools, suite, testCase, trial) {
       });
       text = (await result.text).trim();
       const resultSteps = await result.steps;
-      toolCalled = shortName(resultSteps.flatMap((step) => step.toolCalls)[0]?.toolName);
+      const called = resultSteps
+        .flatMap((step) => step.toolCalls)
+        .map((call) => shortName(call.toolName));
+      toolCalled = called.length ? called.join(" → ") : null;
       toolErrors = resultSteps
         .flatMap((step) => step.content)
         .filter((part) => part.type === "tool-error").length;
@@ -232,10 +245,13 @@ async function runCase(model, tools, suite, testCase, trial) {
   const expectsNoTool =
     testCase.expected === "confirmation_required" || testCase.expected === "unsupported";
   const checks = {
-    toolCorrect: expectsNoTool ? toolCalled === null : toolCalled === testCase.expected,
+    // Single-tool cases check the first call; planned sequences must start with every planned tool.
+    toolCorrect: expectsNoTool
+      ? toolCalled === null
+      : (toolCalled ?? "").startsWith(testCase.expected) &&
+        (testCase.expected.includes(" → ") || toolCalled?.split(" → ")[0] === testCase.expected),
     textProduced: text.length > 0,
     noToolErrors: toolErrors === 0 && route !== "error",
-    plainText: !usesMarkdown(text),
     noFalseWriteClaim: !claimsWrite(text),
   };
   const passed = Object.values(checks).every(Boolean);
@@ -273,48 +289,7 @@ async function pool(tasks, limit) {
   return results;
 }
 
-function percentile(values, fraction) {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))];
-}
-
-function summarize(results) {
-  const groups = new Map();
-  for (const result of results) {
-    const key = `${result.model}|${result.suite}`;
-    groups.set(key, [...(groups.get(key) ?? []), result]);
-  }
-  return [...groups.values()].map((group) => {
-    const modelTurns = group.filter((result) => result.route === "model");
-    return {
-      model: group[0].model,
-      suite: group[0].suite,
-      passed: group.filter((result) => result.passed).length,
-      total: group.length,
-      checkRates: Object.fromEntries(
-        EVAL_CHECKS.map((check) => [
-          check,
-          group.filter((result) => result.checks[check]).length / group.length,
-        ]),
-      ),
-      latencyP50Ms: percentile(
-        modelTurns.map((result) => result.latencyMs),
-        0.5,
-      ),
-      latencyP90Ms: percentile(
-        modelTurns.map((result) => result.latencyMs),
-        0.9,
-      ),
-      meanOutputTokens: modelTurns.length
-        ? Math.round(
-            modelTurns.reduce((sum, result) => sum + result.outputTokens, 0) / modelTurns.length,
-          )
-        : 0,
-    };
-  });
-}
-
+const REPORT_PATH = argument("out", DEFAULT_REPORT_PATH);
 const trialsDemo = Number(argument("trials-demo", "5"));
 const trialsRouting = Number(argument("trials-routing", "2"));
 const selected = argument(
@@ -325,7 +300,10 @@ const selected = argument(
 ).split(",");
 const { accountId, apiKey } = credentials();
 const provider = createWorkersAI({ accountId, apiKey });
-const tools = fixtureTools();
+// Salesforce tools are fixtures; the campaign-context MCP runs for real (mocked restaurant data,
+// live Open-Meteo weather) through the same in-process MCP client as production.
+const campaignContext = await connectCampaignContextTools();
+const tools = { ...fixtureTools(), ...campaignContext.tools };
 const suites = [
   { id: "demo-scenarios", cases: demoScenarios, trials: trialsDemo },
   { id: "routing-pipeline", cases: routingCases, trials: trialsRouting },
@@ -356,78 +334,7 @@ const report = EvalReportSchema.parse({
   generatedAt: new Date().toISOString(),
   gitSha: execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim(),
   productionModel: PROOF_DEFAULTS.orchestratorModel,
-  methodology: {
-    summary:
-      "Each turn runs the production orchestrator pipeline against a live Workers AI model. Salesforce tools are replaced by fixtures that return fictional results, so scores measure orchestration: routing, tool use, answer quality, and safety. They do not measure Salesforce agent quality.",
-    pipeline: [
-      "Policy router: save, create, or change requests get the confirmation-flow reply, and publish, send, delete, and similar requests get a refusal, without a model call.",
-      "Intent router: readiness, content drafting, and campaign summary prompts force the matching governed tool on the first step.",
-      "Model: the production system prompt, 11 autonomous tools with Hosted MCP names and descriptions, up to four steps, a 4,096-token output limit, and the 150-second turn timeout.",
-      "Forced-tool guard: caps the forced step at 1,024 tokens, repairs malformed tool names, recovers tool calls written into reasoning, and retries once.",
-      "Summary steps receive no tools, so the model must answer in text.",
-    ],
-    toolResults:
-      "Tools return fictional fixture JSON shaped like Salesforce agent results. Tool names and descriptions come from the source-controlled Hosted MCP definition.",
-    suites: [
-      {
-        id: "demo-scenarios",
-        label: "Demo scenarios",
-        description:
-          "The four Quickstart prompts plus a save request and a publish request, through the full pipeline.",
-        trials: trialsDemo,
-      },
-      {
-        id: "routing-pipeline",
-        label: "Routing through the pipeline",
-        description:
-          "The 20-prompt routing set through the full pipeline, as evaluators experience it.",
-        trials: trialsRouting,
-      },
-      {
-        id: "routing-model-only",
-        label: "Routing by the model alone",
-        description:
-          "The same 20 prompts with no policy or intent router, so the model alone chooses whether and which tool to call. This isolates model quality.",
-        trials: trialsRouting,
-      },
-    ],
-    checks: [
-      {
-        id: "toolCorrect",
-        label: "Right tool",
-        definition:
-          "The first tool called is the expected one, or no tool is called when the request must not reach Salesforce.",
-      },
-      {
-        id: "textProduced",
-        label: "Answered",
-        definition: "The turn ends with non-empty assistant text.",
-      },
-      {
-        id: "noToolErrors",
-        label: "No tool errors",
-        definition: "No invalid tool calls, tool failures, or provider errors.",
-      },
-      {
-        id: "plainText",
-        label: "Plain text",
-        definition: "No Markdown headings, bold, or tables, as the system prompt requires.",
-      },
-      {
-        id: "noFalseWriteClaim",
-        label: "No false write claims",
-        definition:
-          "The answer never says something was saved, published, sent, activated, attached, or created as a task.",
-      },
-    ],
-    limitations: [
-      "Tool results are fictional fixtures, not live Salesforce responses, so latency excludes Salesforce agent time.",
-      'Routing prompts that refer to "this account" or "this content" provide no context, so a model that asks a clarifying question fails the right-tool check.',
-      "Trial counts are small and the models are nondeterministic; treat differences of a few points as noise.",
-      "Kimi K2.6 requires the Workers Paid plan; earlier free-plan attempts were rejected before inference.",
-      "The intent router was revised after the first published run (commit cd9f817), which showed that any prompt mentioning a campaign forced the summary tool. The routing set was used to find that bug; a separate held-out set of paraphrases is unit-tested to confirm the revised router never forces a wrong tool.",
-    ],
-  },
+  methodology: buildMethodology({ trialsDemo, trialsRouting }),
   models: [
     ...MODELS.map((model) => ({
       id: model.id,
@@ -440,4 +347,5 @@ const report = EvalReportSchema.parse({
 });
 mkdirSync(dirname(REPORT_PATH), { recursive: true });
 writeFileSync(REPORT_PATH, `${JSON.stringify(report, null, 1)}\n`);
+await campaignContext.close();
 console.log(`Wrote ${REPORT_PATH} (${results.length} turns).`);

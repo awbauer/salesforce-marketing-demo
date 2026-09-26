@@ -208,4 +208,20 @@ describe("forced tool call middleware", () => {
     expect(calls()).toBe(2);
     expect(parts).toEqual(structured);
   });
+
+  it("recovers a forced call whose arguments leaked into the answer text, hiding that text", async () => {
+    const { parts, calls } = await run([
+      [
+        { type: "text-start", id: "t" },
+        { type: "text-delta", id: "t", delta: '{"message":"Draft content for the audience"}' },
+        { type: "text-end", id: "t" },
+        { type: "finish", finishReason: { unified: "error", raw: "stream-truncated" }, usage },
+      ],
+    ]);
+    expect(calls()).toBe(1);
+    expect(parts.some((part) => part.type === "text-delta")).toBe(false);
+    expect(parts.find((part) => part.type === "tool-call")).toMatchObject({
+      input: '{"message":"Draft content for the audience"}',
+    });
+  });
 });

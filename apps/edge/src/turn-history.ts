@@ -38,7 +38,7 @@ function bounded(value: unknown) {
 }
 
 function readable(toolName: string) {
-  const bare = toolName.split("_").slice(-3).join(" ");
+  const bare = toolName.replace(/^(?:tool_salesforce_[\w-]+?_|context_)/, "").replaceAll("_", " ");
   return toolName.includes("_") ? bare : toolName;
 }
 
@@ -54,9 +54,14 @@ export function describeInterpretation(route: TurnRecord["route"], requiredTool?
     case "local-fixture":
       return "Local development turn answered from the fictional fixture without a model call.";
     default:
-      return requiredTool
-        ? `Matched the ${readable(requiredTool)} intent and required the model to call that governed tool first, then summarize its result.`
-        : "No fixed intent matched, so the model chose whether and which governed tools to call.";
+      if (!requiredTool)
+        return "No fixed intent matched, so the model chose whether and which governed tools to call.";
+      if (requiredTool.includes(" → "))
+        return `Matched a multi-step plan and required the tools in order: ${requiredTool
+          .split(" → ")
+          .map(readable)
+          .join(", then ")}. The model then wrote the answer from their results.`;
+      return `Matched the ${readable(requiredTool)} intent and required the model to call that governed tool first, then summarize its result.`;
   }
 }
 

@@ -108,8 +108,17 @@ export function repairForcedToolStep(
         ? !wrongIds.has(part.id)
         : true,
   );
-  const input = salvageToolInput(reasoning, required);
+  // gpt-oss usually leaks the arguments into reasoning, and sometimes into the answer text.
+  const text = held.map((part) => (part.type === "text-delta" ? part.delta : "")).join("");
+  const fromText = salvageToolInput(text.trim(), required);
+  const input = salvageToolInput(reasoning, required) ?? fromText;
   if (!input) return null;
+  // Leaked JSON answer text must not reach the user as if it were a reply.
+  if (fromText === input)
+    held = held.filter(
+      (part) =>
+        part.type !== "text-start" && part.type !== "text-delta" && part.type !== "text-end",
+    );
   const toolCallId = `salvaged-${crypto.randomUUID()}`;
   const finishIndex = held.findIndex((part) => part.type === "finish");
   const finish = finishIndex >= 0 ? held[finishIndex] : undefined;

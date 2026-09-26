@@ -1,6 +1,8 @@
 import { getAgentByName } from "agents";
 import { HealthSchema, PROOF_DEFAULTS } from "@northstar/contracts";
+import { createMcpHandler } from "@modelcontextprotocol/server";
 import { AuthError, deriveAgentKey, resolvePrincipal, type AuthBindings } from "./auth";
+import { createCampaignContextMcpServer } from "./campaign-context/server";
 export { MarketingOrchestrator } from "./orchestrator";
 
 type Env = CloudflareBindings & AuthBindings;
@@ -41,6 +43,9 @@ function errorResponse(error: unknown, id: string) {
   );
 }
 
+// Stateless streamable HTTP: each request gets a fresh server from the factory.
+const campaignContextMcpHandler = createMcpHandler(() => createCampaignContextMcpServer());
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -71,6 +76,11 @@ export default {
         const principal = await resolvePrincipal(request, env);
         const agentKey = await deriveAgentKey(principal, PROOF_DEFAULTS.workspaceId);
         return json({ workspaceId: PROOF_DEFAULTS.workspaceId, principal, agentKey });
+      }
+      if (url.pathname === "/mcp/campaign-context") {
+        // Same Access-authenticated principal requirement as the rest of the API.
+        await resolvePrincipal(request, env);
+        return campaignContextMcpHandler.fetch(request);
       }
       if (url.pathname === "/agent" || url.pathname.startsWith("/agent/")) {
         const principal = await resolvePrincipal(request, env);

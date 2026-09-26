@@ -8,7 +8,8 @@ export function salesforceRecordUrl(objectApiName: string, recordId: string) {
   return `${SALESFORCE_SANDBOX_ORIGIN}/lightning/r/${objectName}/${id}/view`;
 }
 
-export function normalizeAssistantText(text: string) {
+/** Recovers answer text from JSON envelopes some models emit, keeping Markdown intact. */
+export function unwrapAssistantText(text: string) {
   let normalized = text.trim();
   if (normalized.startsWith("{") && normalized.endsWith("}")) {
     try {
@@ -37,6 +38,12 @@ export function normalizeAssistantText(text: string) {
     }
     normalized = fragment;
   }
+  return normalized.trim();
+}
+
+/** Plain-text form for places that cannot render Markdown, such as trace details. */
+export function normalizeAssistantText(text: string) {
+  const normalized = unwrapAssistantText(text);
   return normalized
     .replace(/<br\s*\/?\s*>/gi, "\n")
     .replace(/<[^>]*>/g, "")

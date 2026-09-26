@@ -9,14 +9,24 @@ export const TURN_TIMEOUT = { totalMs: 150_000, chunkMs: 60_000, toolMs: 120_000
 // Workers AI defaults to 256 output tokens, which gpt-oss reasoning can exhaust before any text.
 export const MAX_OUTPUT_TOKENS = 4096;
 
-export function orchestratorSystemPrompt(workspaceReferences: unknown) {
+export function orchestratorSystemPrompt(
+  workspaceReferences: unknown,
+  toolPlan?: readonly string[],
+) {
+  // Scenario guidance is added only when its plan is active, so it cannot steer other requests.
+  const restaurantPlan = toolPlan?.some((name) => name.endsWith("get_restaurant_profile"));
   return [
     "You are the Northstar marketing proof orchestrator.",
     "Salesforce tool results are the only authority for Salesforce facts. Protocol success does not mean that a business result exists.",
     "If a tool reports unavailable, empty, no business units, no records, or an error, explain that limitation and do not fill gaps from workspace presentation data.",
     "Never say you reviewed Salesforce unless a Salesforce tool returned usable evidence.",
     "Never claim a write, publish, send, or activation occurred. Keep customer PII out of responses.",
-    "Return accessible plain text only. Do not use Markdown, HTML, tables, pipe characters, asterisks, or emoji. Use short paragraphs and hyphen-prefixed bullets when a list helps.",
+    "Format answers in concise Markdown: short paragraphs, bold labels, bullet lists, and small tables when they help. Never use raw HTML.",
+    ...(restaurantPlan
+      ? [
+          "For this restaurant push campaign, read the restaurant profile, then the current weather for its city, then ask the campaign content tool for a draft that uses the menu, favorites, local time of day, and weather. Present the featured items, two or three notification variants, a send time, and why each fits. It is a draft; never say it was scheduled or sent.",
+        ]
+      : []),
     `Non-authoritative workspace record references: ${JSON.stringify(workspaceReferences)}`,
   ].join(" ");
 }
@@ -65,15 +75,45 @@ const INTENT_RULES: ReadonlyArray<readonly [string, (prompt: string) => boolean]
   ],
 ];
 
+// Multi-tool plans for requests that need context before drafting. Each step forces one tool.
+const TOOL_PLANS: ReadonlyArray<readonly [readonly string[], (prompt: string) => boolean]> = [
+  [
+    ["get_restaurant_profile", "get_current_weather", "draft_campaign_content"],
+    (p) => /\bpush\b/i.test(p) && /\b(?:notifications?|campaigns?|messages?|alerts?)\b/i.test(p),
+  ],
+];
+
+/** The ordered tools a prompt requires, or null to let the model choose. */
+export function requestedToolPlan(prompt: string): readonly string[] | null {
+  const plan = TOOL_PLANS.find(([, matches]) => matches(prompt))?.[0];
+  if (plan) return plan;
+  const single = INTENT_RULES.find(([, matches]) => matches(prompt))?.[0];
+  return single ? [single] : null;
+}
+
 export function requestedToolName(prompt: string) {
-  return INTENT_RULES.find(([, matches]) => matches(prompt))?.[0] ?? null;
+  return requestedToolPlan(prompt)?.[0] ?? null;
+}
+
+function resolveTool(name: string, availableNames: string[]) {
+  return availableNames.find((available) => available === name || available.endsWith(`_${name}`));
+}
+
+/** Resolves a prompt's plan to available tool keys; undefined if any step's tool is missing. */
+export function selectToolPlan(prompt: string, availableNames: string[]) {
+  const plan = requestedToolPlan(prompt);
+  if (!plan) return undefined;
+  const resolved = plan.map((name) => resolveTool(name, availableNames));
+  return resolved.every((name): name is string => Boolean(name)) ? resolved : undefined;
+}
+
+/** The first planned tool that is not available, for explaining why a plan cannot run. */
+export function missingPlannedTool(prompt: string, availableNames: string[]) {
+  return requestedToolPlan(prompt)?.find((name) => !resolveTool(name, availableNames)) ?? null;
 }
 
 export function selectRequiredTool(prompt: string, availableNames: string[]) {
-  const requested = requestedToolName(prompt);
-  return requested
-    ? availableNames.find((name) => name === requested || name.endsWith(`_${requested}`))
-    : undefined;
+  return selectToolPlan(prompt, availableNames)?.[0];
 }
 
 export function requiredToolChoice(requiredTool: string | undefined, stepNumber: number) {
@@ -84,19 +124,20 @@ export function requiredToolChoice(requiredTool: string | undefined, stepNumber:
 }
 
 /**
- * Per-step tool settings. A forced step only sees its required tool, and text-only steps receive
- * no tools at all: Workers AI does not enforce `toolChoice: "none"`, so gpt-oss otherwise emits
- * malformed tool calls instead of the summary. The last allowed step is always text-only.
+ * Per-step tool settings. Step N of a plan forces its Nth tool and only sees that tool; steps after
+ * the plan, and the last allowed step, receive no tools at all: Workers AI does not enforce
+ * `toolChoice: "none"`, so gpt-oss otherwise emits malformed tool calls instead of the answer.
  */
 export function stepToolChoice(
-  requiredTool: string | undefined,
+  plan: string | readonly string[] | undefined,
   stepNumber: number,
   maxSteps = MAX_TURN_STEPS,
 ) {
-  const forced = requiredToolChoice(requiredTool, stepNumber);
-  if (forced && forced.toolChoice !== "none")
-    return { ...forced, activeTools: [requiredTool as string] };
-  if (forced || stepNumber >= maxSteps - 1)
+  const steps = plan === undefined ? [] : typeof plan === "string" ? [plan] : plan;
+  const forced = steps[stepNumber];
+  if (forced && stepNumber < maxSteps - 1)
+    return { toolChoice: { type: "tool" as const, toolName: forced }, activeTools: [forced] };
+  if (steps.length > 0 || stepNumber >= maxSteps - 1)
     return { toolChoice: "none" as const, activeTools: [] as string[] };
   return undefined;
 }

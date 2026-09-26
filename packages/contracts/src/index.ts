@@ -2,8 +2,8 @@ import { z } from "zod";
 
 export const PROOF_DEFAULTS = Object.freeze({
   workspaceId: "northstar-demo",
-  // The only place the orchestrator model is set; the Worker reads it from here. See ADR-004.
-  orchestratorModel: "@cf/openai/gpt-oss-120b",
+  // The only place the orchestrator model is set; the Worker reads it from here. See ADR-005.
+  orchestratorModel: "@cf/openai/gpt-oss-20b",
   imageModel: "@cf/black-forest-labs/flux-2-klein-4b",
   imageSize: 1024,
   imageCap: 100,
@@ -112,6 +112,18 @@ export const PHASE_2_CURATED_TOOLS = Object.freeze([
   "save_campaign_brief",
   "create_campaign_review_request",
   "attach_campaign_image",
+] as const);
+
+/** Read-only tools served by the campaign-context MCP (mocked restaurant profile and live weather). */
+export const CAMPAIGN_CONTEXT_TOOLS = Object.freeze([
+  "get_restaurant_profile",
+  "get_current_weather",
+] as const);
+
+/** Every tool the orchestrator may call, for display names and operator kill switches. */
+export const ORCHESTRATOR_TOOLS = Object.freeze([
+  ...PHASE_2_CURATED_TOOLS,
+  ...CAMPAIGN_CONTEXT_TOOLS,
 ] as const);
 
 export const InsightTileSchema = z.object({
@@ -286,7 +298,7 @@ export const WRITE_TOOL_BY_ACTION = Object.freeze({
 
 export const OperationControlsSchema = z.object({
   writesEnabled: z.boolean(),
-  disabledTools: z.array(z.enum(PHASE_2_CURATED_TOOLS as unknown as [string, ...string[]])),
+  disabledTools: z.array(z.enum(ORCHESTRATOR_TOOLS as unknown as [string, ...string[]])),
 });
 export type OperationControls = z.infer<typeof OperationControlsSchema>;
 
@@ -304,7 +316,7 @@ export function parseOperationControls(env: {
     .filter(Boolean);
   return {
     writesEnabled: env.WRITES_ENABLED?.trim().toLowerCase() !== "false",
-    disabledTools: PHASE_2_CURATED_TOOLS.filter((tool) => requested.includes(tool)),
+    disabledTools: ORCHESTRATOR_TOOLS.filter((tool) => requested.includes(tool)),
   };
 }
 

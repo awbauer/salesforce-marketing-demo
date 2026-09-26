@@ -7,7 +7,7 @@
   "assets": {
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/agent", "/agent/*"]
+    "run_worker_first": ["/api/*", "/agent", "/agent/*", "/mcp/*"]
   },
   "durable_objects": {
     "bindings": [{ "name": "MarketingOrchestrator", "class_name": "MarketingOrchestrator" }]
