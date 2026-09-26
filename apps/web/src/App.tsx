@@ -2,6 +2,7 @@ import { useAgentChat } from "@cloudflare/ai-chat/react";
 import {
   type Confirmation,
   type GeneratedCampaignImage,
+  GeneratedCampaignImageSchema,
   initialOrchestratorState,
   type OperationControls,
   OperationControlsSchema,
@@ -114,7 +115,14 @@ export function App() {
   const [imageConcept, setImageConcept] = useState(
     "A quiet trailhead at golden hour with layered hiking gear and room for campaign copy",
   );
-  const [generatedImage, setGeneratedImage] = useState<GeneratedCampaignImage | null>(null);
+  const [images, setImages] = useState<GeneratedCampaignImage[]>([]);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  const generatedImage =
+    images.find((image) => image.id === selectedImageId) ??
+    images.find((image) => image.lifecycle !== "rejected") ??
+    null;
+  const briefCampaignId = state.tiles.find((tile) => tile.kind === "campaign-brief")?.recordRef
+    ?.recordId;
   const [imageBusy, setImageBusy] = useState(false);
   const [quickstartOpen, setQuickstartOpen] = useState(false);
   const [operations, setOperations] = useState<OperationControls>({
@@ -300,13 +308,43 @@ export function App() {
         concept: imageConcept,
       });
       setActionError("");
-      setGeneratedImage(image);
+      setImages((current) => [image, ...current.filter((existing) => existing.id !== image.id)]);
+      setSelectedImageId(image.id);
     } catch (actionError) {
       setActionError(
         actionError instanceof Error ? actionError.message : "Image generation failed.",
       );
     } finally {
       setImageBusy(false);
+    }
+  }
+
+  // Variants persist server-side for seven days, so reloads keep the review gallery.
+  useEffect(() => {
+    if (!briefCampaignId) return;
+    fetch(`/agent/images?campaignId=${encodeURIComponent(briefCampaignId)}`)
+      .then((response) => (response.ok ? response.json() : { images: [] }))
+      .then((body: { images?: unknown[] }) => {
+        const loaded = (body.images ?? []).flatMap((image) => {
+          const parsed = GeneratedCampaignImageSchema.safeParse(image);
+          return parsed.success ? [parsed.data] : [];
+        });
+        setImages((current) => (current.length ? current : loaded));
+      })
+      .catch(() => undefined);
+  }, [briefCampaignId]);
+
+  async function rejectImage(imageId: string) {
+    try {
+      await agentAction(`images/${imageId}/reject`);
+      setImages((current) =>
+        current.map((image) =>
+          image.id === imageId ? { ...image, lifecycle: "rejected" } : image,
+        ),
+      );
+      setSelectedImageId(null);
+    } catch (actionError) {
+      setActionError(actionError instanceof Error ? actionError.message : "Reject failed.");
     }
   }
 
@@ -362,7 +400,12 @@ export function App() {
           contentSize: result.result.contentSize ?? 0,
           contentHash: result.result.contentHash ?? "",
         });
-        setGeneratedImage((image) => (image ? { ...image, lifecycle: "attached" } : image));
+        const attachedId = pendingConfirmation?.imageId;
+        setImages((current) =>
+          current.map((image) =>
+            image.id === attachedId ? { ...image, lifecycle: "attached" } : image,
+          ),
+        );
       } else if (decision === "execute" && result.result?.readBack) {
         setActionError("");
         setCreatedRecord({
@@ -861,6 +904,26 @@ export function App() {
                 </li>
               </ol>
             )}
+            {images.length > 1 && (
+              <fieldset className="variant-gallery">
+                <legend>{`Variants (${images.length})`}</legend>
+                {images.map((image, index) => (
+                  <button
+                    type="button"
+                    key={image.id}
+                    className={`variant-thumb lifecycle-${image.lifecycle}`}
+                    aria-pressed={image.id === generatedImage?.id}
+                    aria-label={`Variant ${images.length - index}: ${image.promptSummary} (${image.lifecycle})`}
+                    onClick={() => setSelectedImageId(image.id)}
+                  >
+                    <img src={image.imageUrl} alt="" />
+                    <span className="variant-label">
+                      {image.lifecycle === "draft" ? `#${images.length - index}` : image.lifecycle}
+                    </span>
+                  </button>
+                ))}
+              </fieldset>
+            )}
             {generatedImage && (
               <figure className="generated-image-card">
                 <img src={generatedImage.imageUrl} alt="Generated Northstar campaign draft" />
@@ -868,7 +931,9 @@ export function App() {
                   <strong>
                     {generatedImage.lifecycle === "attached"
                       ? "Attached to the campaign"
-                      : "Reviewable draft"}
+                      : generatedImage.lifecycle === "rejected"
+                        ? "Rejected variant"
+                        : "Reviewable draft"}
                   </strong>
                   <span className="generated-image-summary">{generatedImage.promptSummary}</span>
                   <small className="generated-image-metadata">
@@ -888,6 +953,16 @@ export function App() {
                       }
                     >
                       Attach to campaign
+                    </button>
+                  )}
+                  {generatedImage.lifecycle === "draft" && (
+                    <button
+                      type="button"
+                      className="text-button reject-image-button"
+                      onClick={() => void rejectImage(generatedImage.id)}
+                      disabled={pendingConfirmation?.imageId === generatedImage.id}
+                    >
+                      Reject variant
                     </button>
                   )}
                   <details className="payload-viewer image-payload">

@@ -80,7 +80,7 @@ export const GeneratedCampaignImageSchema = z.object({
   height: z.literal(PROOF_DEFAULTS.imageSize),
   contentHash: z.string().regex(/^[a-f0-9]{64}$/),
   model: z.literal(PROOF_DEFAULTS.imageModel),
-  lifecycle: z.enum(["draft", "attached"]),
+  lifecycle: z.enum(["draft", "attached", "rejected"]),
   expiresAt: z.string().datetime(),
 });
 export type GeneratedCampaignImage = z.infer<typeof GeneratedCampaignImageSchema>;
