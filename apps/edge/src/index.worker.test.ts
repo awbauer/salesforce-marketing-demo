@@ -1,6 +1,8 @@
 import { env, SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { type AuthError, deriveAgentKey, resolvePrincipal } from "./auth";
+import { classifyPolicyIntent } from "@northstar/contracts";
+import { routingCases, routingHoldout } from "../../../packages/evals/src/cases";
 import {
   classifyMcpFailure,
   classifyToolResult,
@@ -143,6 +145,39 @@ describe("edge runtime", () => {
     });
     expect(requiredToolChoice(names[0], 1)).toEqual({ toolChoice: "none" });
   });
+  it("routes the whole routing set correctly through the policy and intent routers", () => {
+    for (const test of routingCases) {
+      const policy = classifyPolicyIntent(test.prompt);
+      const routed = policy
+        ? policy === "unsupported"
+          ? "unsupported"
+          : "confirmation_required"
+        : requestedToolName(test.prompt);
+      expect(routed, `${test.id}: ${test.prompt}`).toBe(test.expected);
+    }
+  });
+
+  it("never forces the wrong tool on held-out paraphrases", () => {
+    let forced = 0;
+    for (const test of routingHoldout) {
+      const routed = requestedToolName(test.prompt);
+      if (routed === null) continue;
+      forced += 1;
+      expect(routed, `${test.id}: ${test.prompt}`).toBe(test.expected);
+    }
+    // Deferring to the model is allowed, but the router should still recognize most clear intents.
+    expect(forced).toBeGreaterThanOrEqual(10);
+  });
+
+  it("does not force a campaign summary just because a prompt mentions a campaign", () => {
+    for (const prompt of [
+      "Draft a campaign brief for the fall loyalty idea",
+      "Generate campaign insights from current Salesforce evidence",
+      "Prepare copy for the campaign but do not publish it",
+    ])
+      expect(requestedToolName(prompt), prompt).not.toBe("summarize_campaign");
+  });
+
   it("excludes legacy assistant claims from a new evidence turn", () => {
     const messages = [
       {

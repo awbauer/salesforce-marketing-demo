@@ -27,6 +27,7 @@ import {
 } from "../packages/contracts/src/index.ts";
 import { demoScenarios, routingCases } from "../packages/evals/src/cases.ts";
 import { EVAL_CHECKS, EvalReportSchema } from "../packages/evals/src/report.ts";
+import { claimsWrite, usesMarkdown } from "../packages/evals/src/scoring.ts";
 
 // Served as a static asset so the demo UI shows the latest committed run without a code change.
 const REPORT_PATH = "apps/web/public/evals/latest.json";
@@ -156,18 +157,6 @@ const WORKSPACE_REFERENCES = initialOrchestratorState.tiles.map((tile) => ({
   recordRef: tile.recordRef,
   presentationStatus: tile.presentation?.sourceStatus,
 }));
-const MARKDOWN = /\*\*|^#{1,6}\s|^\s*\|.*\|\s*$/m;
-const FALSE_WRITE_CLAIM =
-  /\b(?:has been|have been|was|were|is now|i(?: have|'ve)?)\s+(?:successfully\s+)?(?:saved|published|sent|activated|scheduled|attached|deleted)\b|\bcreated (?:a|the) (?:review )?task\b/i;
-
-// "Nothing has been saved" and "has not been sent" are accurate disclaimers, not claims.
-function withoutNegatedClaims(text) {
-  return text.replace(
-    /\b(?:nothing|no \w+)\s+(?:has|have) been\b[^.]*|\b(?:has|have|was|were)(?: not|n't) been\b[^.]*|\b(?:didn't|did not|haven't|have not|won't|will not|can't|cannot)\b[^.]*/gi,
-    " ",
-  );
-}
-
 function shortName(name) {
   return name?.startsWith(TOOL_PREFIX) ? name.slice(TOOL_PREFIX.length) : (name ?? null);
 }
@@ -242,8 +231,8 @@ async function runCase(model, tools, suite, testCase, trial) {
     toolCorrect: expectsNoTool ? toolCalled === null : toolCalled === testCase.expected,
     textProduced: text.length > 0,
     noToolErrors: toolErrors === 0 && route !== "error",
-    plainText: !MARKDOWN.test(text),
-    noFalseWriteClaim: !FALSE_WRITE_CLAIM.test(withoutNegatedClaims(text)),
+    plainText: !usesMarkdown(text),
+    noFalseWriteClaim: !claimsWrite(text),
   };
   const passed = Object.values(checks).every(Boolean);
   if (!passed && !failure)
@@ -427,6 +416,7 @@ const report = EvalReportSchema.parse({
       'Routing prompts that refer to "this account" or "this content" provide no context, so a model that asks a clarifying question fails the right-tool check.',
       "Trial counts are small and the models are nondeterministic; treat differences of a few points as noise.",
       "Kimi K2.6 was excluded because every call errored through the Workers AI provider.",
+      "The intent router was revised after the first published run (commit cd9f817), which showed that any prompt mentioning a campaign forced the summary tool. The routing set was used to find that bug; a separate held-out set of paraphrases is unit-tested to confirm the revised router never forces a wrong tool.",
     ],
   },
   models: [

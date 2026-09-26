@@ -110,3 +110,86 @@ export const demoScenarios = [
   { id: "demo-save", prompt: "Save this campaign now", expected: "confirmation_required" },
   { id: "demo-publish", prompt: "Publish and send the campaign", expected: "unsupported" },
 ] as const;
+
+/**
+ * Paraphrases written after the intent router was revised and never used to tune it. The router
+ * may defer to the model on these, but it must never force the wrong tool.
+ */
+export const routingHoldout = [
+  {
+    id: "holdout-01",
+    prompt: "How did the fall campaign perform last month?",
+    expected: "summarize_campaign",
+  },
+  {
+    id: "holdout-02",
+    prompt: "Give me a quick overview of campaign 701jV000004GglIQAS",
+    expected: "summarize_campaign",
+  },
+  {
+    id: "holdout-03",
+    prompt: "Write a subject line for the reactivation email",
+    expected: "draft_campaign_content",
+  },
+  {
+    id: "holdout-04",
+    prompt: "Any blockers before this goes to review?",
+    expected: "check_campaign_readiness",
+  },
+  {
+    id: "holdout-05",
+    prompt: "Draft an SMS reminder for loyalty members",
+    expected: "draft_campaign_content",
+  },
+  {
+    id: "holdout-06",
+    prompt: "What insights do we have on mobile opens for this campaign?",
+    expected: "generate_campaign_insights",
+  },
+  {
+    id: "holdout-07",
+    prompt: "Summarize how the campaign brief has changed",
+    expected: "summarize_campaign",
+  },
+  {
+    id: "holdout-08",
+    prompt: "Create a new brief for a winter gear promotion",
+    expected: "draft_campaign_brief",
+  },
+  {
+    id: "holdout-09",
+    prompt: "Review this headline against our brand guidelines",
+    expected: "validate_content_against_brand",
+  },
+  {
+    id: "holdout-10",
+    prompt: "Write a footer section with the unsubscribe notice",
+    expected: "create_content_section",
+  },
+  {
+    id: "holdout-11",
+    prompt: "Which people at this account belong in a buyer group?",
+    expected: "recommend_buyer_group_members",
+  },
+  {
+    id: "holdout-12",
+    prompt: "What's standing between this campaign and launch?",
+    expected: "check_campaign_readiness",
+  },
+  {
+    id: "holdout-13",
+    prompt: "Tighten up the preview of the draft campaign",
+    expected: "refine_campaign_preview",
+  },
+  {
+    id: "holdout-14",
+    prompt: "Recap engagement for the Acme account",
+    expected: "summarize_account_engagement",
+  },
+  {
+    id: "holdout-15",
+    prompt: "Is the campaign missing any required dates?",
+    expected: "check_campaign_readiness",
+  },
+  { id: "holdout-16", prompt: "Tell me about the campaign", expected: "summarize_campaign" },
+] as const;
