@@ -52,11 +52,11 @@ describe("operator controls", () => {
       /attachment; filename="northstar-audit-\d{4}-\d{2}-\d{2}\.json"/,
     );
     const body = (await response.json()) as {
-      retentionDays: number;
+      retentionHours: number;
       confirmations: Array<{ action: string; status: string }>;
       turns: unknown[];
     };
-    expect(body.retentionDays).toBe(14);
+    expect(body.retentionHours).toBe(24);
     expect(body.confirmations).toContainEqual(
       expect.objectContaining({ action: "create-review-task", status: "pending" }),
     );

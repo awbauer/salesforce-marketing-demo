@@ -175,3 +175,43 @@ describe("working set", () => {
     ]);
   });
 });
+
+describe("readable Salesforce results", () => {
+  it("never shows raw JSON on a card", () => {
+    const confirm = ingestToolResult(emptyWorkingSet(), {
+      toolName: "tool_salesforce_x_draft_campaign_content",
+      input: { message: `Draft an email for ${CATALOG_CAMPAIGN_ID}` },
+      output: text(
+        JSON.stringify({
+          messages: [
+            {
+              type: "Confirm",
+              confirm: [
+                {
+                  type: "copilotActionInput/CreateOrRefineSectionWithContent_abc",
+                  inputs: { contentKey: "fall-email", contentTypeFqn: "email", userInput: "Draft" },
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+      at,
+    });
+    const card = confirm.cards[0];
+    expect(card?.summary).toBe(
+      "The Salesforce agent is asking to confirm before it continues: create or refine section with content (email). It did not return a draft.",
+    );
+    expect(JSON.stringify(card?.details)).not.toContain("{");
+
+    const spoken = ingestToolResult(emptyWorkingSet(), {
+      toolName: "tool_salesforce_x_summarize_campaign",
+      input: {},
+      output: text(
+        JSON.stringify({ messages: [{ type: "Inform", message: "Engagement is holding." }] }),
+      ),
+      at,
+    });
+    expect(spoken.cards[0]?.summary).toBe("Engagement is holding.");
+  });
+});

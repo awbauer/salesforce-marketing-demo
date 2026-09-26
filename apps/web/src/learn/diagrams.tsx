@@ -164,7 +164,7 @@ function MemoryLayers() {
       name: "Audit trail",
       where: "Agent SQLite · turn history",
       reader: "Read by people",
-      life: "14 days",
+      life: "24 hours",
       width: 58,
       tone: "store",
     },
@@ -533,8 +533,8 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
             steps: [
               { title: "Model drafts", tone: "model", glyph: "◆" },
               {
-                title: "update_focus",
-                caption: "local, workspace only",
+                title: "Saved from the answer",
+                caption: "labeled lines become fields",
                 tone: "guard",
                 glyph: "✎",
               },
@@ -820,7 +820,7 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
           },
           {
             title: "Turn history",
-            caption: "History view · 14 days",
+            caption: "History view · 24 hours",
             tone: "store",
             glyph: "▤",
             points: ["interpretation", "tool calls", "outcome"],
@@ -890,8 +890,8 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
   ),
   "push-plan": () => (
     <Figure
-      label="The push-campaign tool plan"
-      caption="Five forced tools in order: context, past results, the content draft, then the workspace focus. The model then presents the draft."
+      label="The Coastline campaign tool plan"
+      caption="Four forced tools in order: context, past results, then the content draft. The model presents the draft, and the workspace saves it as the focus."
     >
       <Flow
         numbered

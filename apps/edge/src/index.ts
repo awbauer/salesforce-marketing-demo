@@ -10,6 +10,7 @@ import {
 import { type AuthBindings, AuthError, deriveAgentKey, resolvePrincipal } from "./auth";
 import { createCampaignContextMcpServer } from "./campaign-context/server";
 import { createKnowledgeGraphMcpServer, knowledgeGraphBackend } from "./knowledge-graph/server";
+import { pruneConfirmationAudit } from "./orchestrator";
 
 export { MarketingOrchestrator } from "./orchestrator";
 
@@ -156,6 +157,7 @@ export default {
   },
   // Daily read keeps an Aura Free instance from pausing after three idle days.
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+    await pruneConfirmationAudit(env.APP_DB);
     const backend = knowledgeGraphBackend(env as Parameters<typeof knowledgeGraphBackend>[0]);
     if (backend.kind !== "neo4j") return;
     try {

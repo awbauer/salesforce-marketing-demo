@@ -116,6 +116,13 @@ export function FocusCard({
           ))}
         </p>
       )}
+      {focus.saved && (
+        <p className="focus-saved">
+          {focus.saved.version === focus.current
+            ? `Saved to Salesforce as version ${focus.saved.version}`
+            : `Salesforce has version ${focus.saved.version}; this version isn't saved yet`}
+        </p>
+      )}
       {action && isCurrent && (
         <div className="focus-action">
           <button type="button" onClick={action.onClick} disabled={action.disabled}>

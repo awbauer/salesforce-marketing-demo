@@ -1,3 +1,5 @@
+import type { FocusKind } from "../../../packages/contracts/src/index.ts";
+
 /**
  * Turn routing and model settings shared by the orchestrator and the live evaluation runner.
  * Keep this module free of Workers runtime imports so the evaluation runs exactly this logic.
@@ -25,12 +27,12 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
     "Never say you reviewed Salesforce unless a Salesforce tool returned usable evidence.",
     "Never claim a write, publish, send, or activation occurred. Keep customer PII out of responses.",
     "Earlier messages in this conversation are context for follow-up requests. Treat facts in your earlier replies as unverified: call the governed tools again before restating Salesforce facts. Chat cannot create, save, publish, or send anything; when asked to act on something from earlier, say what it refers to and point to the confirmation actions in the workspace.",
-    "To create or update a campaign, brief, or email, push, or SMS message in Salesforce, save the draft with update_focus, then call propose_salesforce_save. It checks the user's Salesforce permissions and prepares a confirmation card; nothing is written until the user confirms, so never say a record was created or saved.",
-    "Drafts live in the workspace focus. When you write or revise a campaign, brief, or message, save it with update_focus as labeled fields (for example Headline, Body, Send time, Audience, Featured item, Channel) and a short change note. A revision keeps the parts the user did not ask to change. update_focus only updates the workspace draft: never say it saved, scheduled, or sent anything. In your answer, present the draft and mention that it is in the workspace.",
+    "When you write or revise a campaign, brief, or message, start with its title as a bold line, then give the draft as labeled lines, one per line, such as **Headline:** …, **Body:** …, **Send time:** …, **Audience:** …, **Channel:** …, **Campaign:** …, and **Brand:** … The workspace saves your draft from these lines. For a revision, rewrite the whole draft with the requested change and keep everything else the same.",
+    "Saving to Salesforce always goes through a confirmation card that checks the user's Salesforce permissions; nothing is written until the user confirms. Never say a record was created, saved, scheduled, or sent.",
     "Format answers in concise Markdown: short paragraphs, bold labels, bullet lists, and small tables when they help. Never use raw HTML.",
     ...(restaurantPlan
       ? [
-          "For this restaurant push campaign, read the restaurant profile, then the current weather for its city, then look up similar past pushes in the knowledge graph for that location, daypart, and weather bucket, then ask the campaign content tool for a draft that uses the menu, favorites, local time of day, weather, and what performed best before. Present the featured items, two or three notification variants, a send time, and why each fits, citing past performance. It is a draft; never say it was scheduled or sent.",
+          "For this restaurant campaign, read the restaurant profile, then the current weather for its city, then look up similar past pushes in the knowledge graph for that location, daypart, and weather bucket (they show which menu items performed best), then ask the campaign content tool for a draft that uses the menu, favorites, local time of day, weather, and what performed best before. For a push campaign, present the featured items, two or three notification variants, a send time, and why each fits. For an email, present a subject line, a preheader, the body, a call to action, and a send time, and explain why it fits. Cite past performance, and include **Campaign:** and **Brand:** Coastline Kitchen lines. It is a draft; never say it was scheduled or sent.",
         ]
       : []),
     ...(graphPlan
@@ -118,7 +120,12 @@ const TOOL_PLANS: ReadonlyArray<readonly [readonly string[], (prompt: string) =>
       "find_similar_past_pushes",
       "draft_campaign_content",
     ],
-    (p) => /\bpush\b/i.test(p) && /\b(?:notifications?|campaigns?|messages?|alerts?)\b/i.test(p),
+    // A push campaign, or any campaign or email for the restaurant: both use the same context.
+    (p) =>
+      (/\bpush\b/i.test(p) && /\b(?:notifications?|campaigns?|messages?|alerts?)\b/i.test(p)) ||
+      (/\b(?:coastline|restaurant)\b/i.test(p) &&
+        /\b(?:draft|write|create|plan)\b/i.test(p) &&
+        /\b(?:e-?mail|campaign|newsletter)\b/i.test(p)),
   ],
 ];
 
@@ -158,10 +165,42 @@ export function wantsSalesforceRecord(prompt: string) {
   );
 }
 
+export type DraftIntent = { mode: "draft" | "revise"; kind: FocusKind };
+
+/**
+ * Whether this turn writes a draft the workspace should save as its focus: a new draft (a
+ * drafting plan, or a new campaign requested in Salesforce) or a revision of the current one.
+ * The orchestrator saves the draft from the finished answer, so no tool call is required.
+ */
+export function draftIntent(
+  prompt: string,
+  context: PlanContext & { focusKind?: FocusKind } = {},
+): DraftIntent | null {
+  const plan = requestedToolPlan(prompt, context);
+  const last = plan?.at(-1);
+  if (last && DRAFTING_TOOLS.has(last)) {
+    if (last === "draft_campaign_brief") return { mode: "draft", kind: "brief" };
+    if (last === "refine_campaign_preview") return { mode: "draft", kind: "campaign" };
+    if (/\bpush\b|\bnotification/i.test(prompt)) return { mode: "draft", kind: "push-message" };
+    if (/\bemail\b|subject line|preheader/i.test(prompt)) return { mode: "draft", kind: "email" };
+    return { mode: "draft", kind: "content" };
+  }
+  if (plan) return null;
+  if (
+    wantsSalesforceRecord(prompt) &&
+    /\bcampaign\b/i.test(prompt) &&
+    /\b(?:create|set up|start|make)\b/i.test(prompt)
+  )
+    return { mode: "draft", kind: "campaign" };
+  if (context.hasFocus && context.focusKind && isRevisionRequest(prompt))
+    return { mode: "revise", kind: context.focusKind };
+  return null;
+}
+
 /** The ordered tools a prompt requires, or null to let the model choose. */
 export function requestedToolPlan(
   prompt: string,
-  context: PlanContext = {},
+  _context: PlanContext = {},
 ): readonly string[] | null {
   const plan =
     TOOL_PLANS.find(([, matches]) => matches(prompt))?.[0] ??
@@ -169,19 +208,7 @@ export function requestedToolPlan(
       const single = INTENT_RULES.find(([, matches]) => matches(prompt))?.[0];
       return single ? [single] : null;
     })();
-  const toSalesforce = wantsSalesforceRecord(prompt);
-  if (plan) {
-    const drafted = DRAFTING_TOOLS.has(plan.at(-1) ?? "") ? [...plan, "update_focus"] : plan;
-    return toSalesforce && drafted.at(-1) === "update_focus"
-      ? [...drafted, "propose_salesforce_save"]
-      : drafted;
-  }
-  // "Create a new campaign for the spring menu in Salesforce": draft it, then propose the save.
-  if (toSalesforce && /\b(?:create|set up|start|make|add)\b/i.test(prompt))
-    return context.hasFocus && !/\bnew\b/i.test(prompt)
-      ? ["propose_salesforce_save"]
-      : ["update_focus", "propose_salesforce_save"];
-  return context.hasFocus && isRevisionRequest(prompt) ? ["update_focus"] : null;
+  return plan;
 }
 
 export function requestedToolName(prompt: string, context: PlanContext = {}) {

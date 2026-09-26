@@ -20,14 +20,13 @@ test("builds the workspace from the chat and completes a durable turn", async ({
   await expect(page.getByRole("navigation", { name: "Workspace navigation" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Campaign intelligence" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Workspace" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Generate campaign visual" })).toBeVisible();
+  await expect(page.locator(".image-workflow-summary")).toBeVisible();
   await expect(page.getByText("18 configured tools")).toBeVisible();
   // A new chat starts with an empty workspace and nothing to write to.
   await page.getByRole("button", { name: "New chat" }).click();
   await expect(page.locator(".messages .message.user")).toHaveCount(0);
   await expect(page.getByText("Nothing in this chat yet")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create review request" })).toBeDisabled();
-  await expect(page.getByText("Open a campaign in the chat first")).toBeVisible();
+  await expect(page.getByTestId("action-card")).toHaveCount(0);
   await page.getByLabel("Message the orchestrator").focus();
   await expect(page.getByLabel("Message the orchestrator")).toBeFocused();
   const assistantMessages = page.locator(".message.assistant");
@@ -81,7 +80,16 @@ test("builds the workspace from the chat and completes a durable turn", async ({
     path: `artifacts/evidence/WU-016/technical-trace-${testInfo.project.name}.png`,
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Create review request" }).click();
+  // The readiness check surfaces a review action card in the chat.
+  await page.getByTestId("action-card").first().scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: `artifacts/evidence/WU-038/action-card-${testInfo.project.name}.png`,
+  });
+  await page
+    .getByTestId("action-card")
+    .filter({ hasText: "Request a review" })
+    .getByRole("button", { name: "Prepare review request" })
+    .click();
   await expect(page.getByRole("heading", { name: "Create Salesforce review task?" })).toBeVisible();
   await expect(
     page.locator(".confirmation-card").getByRole("link", { name: /701jV000004GglIQAS/ }),
@@ -272,6 +280,7 @@ test("attaches a selected image draft only after an explicit confirmation", asyn
 
   await page.goto("/");
   await openSampleCampaign(page);
+  await page.locator(".image-workflow-summary").click();
   await page.getByRole("button", { name: "Generate draft" }).click();
   await page.getByRole("button", { name: "Attach to campaign" }).click();
   expect(attachRequest).toEqual({
@@ -463,8 +472,7 @@ test("reflects operator kill switches and offers the audit export", async ({ pag
   );
   await page.goto("/");
   await expect(page.getByText(/Salesforce writes are paused by an operator/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create review request" })).toBeDisabled();
-  await expect(page.getByText("Writes paused by an operator")).toBeVisible();
+
   await page.screenshot({
     path: `artifacts/evidence/WU-023/writes-paused-${testInfo.project.name}.png`,
     fullPage: true,
@@ -511,6 +519,8 @@ test("reviews persisted image variants and rejects one so it cannot be attached"
   });
 
   await page.goto("/");
+  await openSampleCampaign(page);
+  await page.locator(".image-workflow-summary").click();
   const gallery = page.getByRole("group", { name: "Variants (2)" });
   await expect(gallery.getByRole("button")).toHaveCount(2);
   await expect(page.locator(".generated-image-summary")).toHaveText("Sunrise over a ridge trail");
@@ -592,7 +602,7 @@ test("answers a 'create it' follow-up through the confirmation policy", async ({
   await page.getByRole("button", { name: "Send message" }).click();
   const reply = page.locator(".message.assistant").last();
   await expect(reply).toContainText("nothing has been saved or created");
-  await expect(reply).toContainText("Create review request");
+  await expect(reply).toContainText("confirmation card");
 });
 
 test("explores the knowledge graph with tours, search, and expansion", async ({
@@ -695,13 +705,13 @@ test("builds a versioned focus draft that follow-ups and confirmed saves act on"
   const records = page.getByTestId("workspace-record");
   await expect(records.filter({ hasText: "Coastline Weather Moments" })).toContainText("Created");
   await expect(records.filter({ hasText: "Rainy-day comfort" })).toContainText("Created");
-  await expect(focus.getByRole("button", { name: "Saved to Salesforce" })).toBeDisabled();
+  await expect(focus).toContainText("Saved to Salesforce as version 2");
 
   // A new version updates the same record instead of creating another.
   await composer.fill("Make it warmer");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(focus).toContainText("Version 3 · current");
-  await focus.getByRole("button", { name: "Update in Salesforce" }).click();
+  await page.getByTestId("action-card").getByRole("button", { name: "Review update" }).click();
   await expect(card).toContainText("Update message “Rainy-day comfort: Spicy Tortilla Soup”");
   await card.getByRole("button", { name: "Confirm save" }).click();
   await expect(records.filter({ hasText: "Rainy-day comfort" })).toContainText("Updated");

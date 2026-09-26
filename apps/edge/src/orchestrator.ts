@@ -1,11 +1,14 @@
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import {
+  AUDIT_RETENTION_HOURS,
+  AUDIT_RETENTION_MS,
   type Confirmation,
   ConfirmationSchema,
   type ConnectorState,
   classifyPolicyIntent,
   currentFocusVersion,
   emptyWorkingSet,
+  FOCUS_KIND_LABELS,
   type FocusItem,
   GeneratedCampaignImageSchema,
   initialOrchestratorState,
@@ -18,7 +21,7 @@ import {
   policyResponse,
   type RecordWrite,
   referentFromReply,
-  TURN_HISTORY_RETENTION_DAYS,
+  type SuggestedAction,
   type TurnRecord,
   TurnRecordSchema,
   WRITE_TOOL_BY_ACTION,
@@ -31,18 +34,16 @@ import {
   stepCountIs,
   streamText,
   type ToolSet,
-  tool,
   type UIMessage,
   type UIMessageChunk,
   wrapLanguageModel,
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
-import { z } from "zod";
 import {
   CAMPAIGN_CONTEXT_TOOL_PREFIX,
   connectCampaignContextTools,
 } from "./campaign-context/server";
-import { applyFocusUpdate, type FocusInput, focusBriefText, focusTools } from "./focus";
+import { applyFocusUpdate, type FocusInput, focusBriefText, focusFromAnswer } from "./focus";
 import { forcedToolCallMiddleware } from "./forced-tool-middleware";
 import {
   connectKnowledgeGraphTools,
@@ -57,6 +58,8 @@ import {
 } from "./record-writes";
 import { buildTurnRecord } from "./turn-history";
 import {
+  type DraftIntent,
+  draftIntent,
   isRevisionRequest,
   MAX_OUTPUT_TOKENS,
   MAX_TURN_STEPS,
@@ -65,9 +68,16 @@ import {
   selectToolPlan,
   stepToolChoice,
   TURN_TIMEOUT,
+  wantsSalesforceRecord,
 } from "./turn-policy";
 import { createTurnTracer, describeTurnError, type TurnRoute } from "./turn-trace";
-import { addCreatedRecord, ingestToolResult, openCampaign, workingSetPrompt } from "./working-set";
+import {
+  addCreatedRecord,
+  baseToolName,
+  ingestToolResult,
+  openCampaign,
+  workingSetPrompt,
+} from "./working-set";
 
 export {
   requestedToolName,
@@ -219,6 +229,16 @@ const LOCAL_FIXTURE_RESULTS: Array<[string, unknown]> = [
     },
   ],
 ];
+
+/** Deletes confirmation audit rows older than the 24-hour retention window. */
+export async function pruneConfirmationAudit(db: D1Database) {
+  const cutoff = new Date(Date.now() - AUDIT_RETENTION_MS).toISOString();
+  try {
+    await db.prepare("DELETE FROM confirmation_audit WHERE created_at < ?").bind(cutoff).run();
+  } catch {
+    // The table is created on the first confirmation; nothing to prune before that.
+  }
+}
 
 /** Apex inputs for a confirmed record write, from the server-authored write plan. */
 function recordWriteInputs(confirmation: Confirmation) {
@@ -652,23 +672,10 @@ export class MarketingOrchestrator extends AIChatAgent<
       },
       (name, input, output) => this.ingestToolResult(name, input, output),
     );
-    // The local focus tool changes only the workspace draft.
-    if (!(disabledTools as readonly string[]).includes("update_focus"))
-      Object.assign(
-        tools,
-        focusTools((input) => this.updateFocus(input)),
-      );
-    // The model can propose saving the draft; the user still confirms every write.
-    if (!(disabledTools as readonly string[]).includes("propose_salesforce_save"))
-      Object.assign(tools, {
-        workspace_propose_salesforce_save: tool({
-          description:
-            "Prepare the workspace draft to be created or updated in Salesforce: a campaign, a brief, or an email, push, or SMS message. It checks the user's Salesforce permissions and puts a confirmation card in front of the user. Nothing is written until the user confirms.",
-          inputSchema: z.object({}),
-          execute: async () => ({ message: await this.proposeFocusSave() }),
-        }),
-      });
-    const planContext = { hasFocus: Boolean(this.state.workingSet.focus) };
+    const planContext = {
+      hasFocus: Boolean(this.state.workingSet.focus),
+      focusKind: this.state.workingSet.focus?.kind,
+    };
     const workersAI = createWorkersAI({
       binding: this.env.AI,
       gateway: { id: this.env.AI_GATEWAY_ID },
@@ -676,6 +683,8 @@ export class MarketingOrchestrator extends AIChatAgent<
     const workspace = workingSetPrompt(this.state.workingSet);
     const prompt = latestUserText(turnMessages);
     const toolPlan = selectToolPlan(prompt, Object.keys(tools), planContext);
+    // A drafting or revision turn's answer is saved as the workspace focus when it completes.
+    const drafting = draftIntent(prompt, planContext);
     // Readable plan for the trace and history, such as "a → b → c".
     const requiredTool = toolPlan?.join(" → ");
     const missingTool = missingPlannedTool(prompt, Object.keys(tools), planContext);
@@ -716,8 +725,11 @@ export class MarketingOrchestrator extends AIChatAgent<
             system: orchestratorSystemPrompt(workspace, toolPlan),
             messages: await convertToModelMessages(turnMessages),
             tools,
+            // A revision rewrites the draft in focus; it needs no tools.
             prepareStep: ({ stepNumber }: { stepNumber: number }) =>
-              stepToolChoice(toolPlan, stepNumber),
+              drafting?.mode === "revise"
+                ? { toolChoice: "none" as const, activeTools: [] as string[] }
+                : stepToolChoice(toolPlan, stepNumber),
             stopWhen: stepCountIs(MAX_TURN_STEPS),
             maxOutputTokens: MAX_OUTPUT_TOKENS,
             timeout: TURN_TIMEOUT,
@@ -730,6 +742,7 @@ export class MarketingOrchestrator extends AIChatAgent<
           );
           if (turn.outcome !== "completed")
             console.warn(`[orchestrator] turn ended with outcome ${turn.outcome}`);
+          else if (drafting) this.saveDraftFromAnswer(turn.answer, drafting, prompt);
           await this.recordTurn(
             prompt,
             { model: PROOF_DEFAULTS.orchestratorModel, route: "model", requiredTool },
@@ -795,7 +808,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       this.ensureTurnHistory();
       this.sql`INSERT INTO northstar_turn_history (id, started_at, record)
         VALUES (${record.id}, ${Date.parse(record.startedAt)}, ${JSON.stringify(record)})`;
-      const cutoff = Date.now() - TURN_HISTORY_RETENTION_DAYS * 86_400_000;
+      const cutoff = Date.now() - AUDIT_RETENTION_MS;
       this.sql`DELETE FROM northstar_turn_history WHERE started_at < ${cutoff}`;
       this.sql`DELETE FROM northstar_turn_history WHERE id NOT IN (
         SELECT id FROM northstar_turn_history ORDER BY started_at DESC LIMIT ${TURN_HISTORY_LIMIT}
@@ -807,7 +820,7 @@ export class MarketingOrchestrator extends AIChatAgent<
 
   /** A compact, per-user export of confirmed-write audit rows and turn summaries in retention. */
   private async exportAudit() {
-    const cutoff = new Date(Date.now() - TURN_HISTORY_RETENTION_DAYS * 86_400_000).toISOString();
+    const cutoff = new Date(Date.now() - AUDIT_RETENTION_MS).toISOString();
     let confirmations: Record<string, unknown>[] = [];
     try {
       const rows = await this.env.APP_DB.prepare(
@@ -828,7 +841,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         {
           exportedAt,
           workspaceId: this.state.workspaceId,
-          retentionDays: TURN_HISTORY_RETENTION_DAYS,
+          retentionHours: AUDIT_RETENTION_HOURS,
           operations: parseOperationControls(this.env),
           confirmations,
           turns: this.listTurns().map((turn) => ({
@@ -858,7 +871,7 @@ export class MarketingOrchestrator extends AIChatAgent<
 
   private listTurns(): TurnRecord[] {
     this.ensureTurnHistory();
-    const cutoff = Date.now() - TURN_HISTORY_RETENTION_DAYS * 86_400_000;
+    const cutoff = Date.now() - AUDIT_RETENTION_MS;
     return this.sql<{ record: string }>`SELECT record FROM northstar_turn_history
       WHERE started_at >= ${cutoff} ORDER BY started_at DESC LIMIT ${TURN_HISTORY_LIMIT}`.flatMap(
       (row) => {
@@ -1196,6 +1209,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       const { tiles: _tiles, ...rest } = saved;
       this.setState({ ...rest, workingSet: emptyWorkingSet(), pendingConfirmation: null });
     }
+    if (!Array.isArray(this.state.suggestions)) this.setState({ ...this.state, suggestions: [] });
     // Working sets saved before the focus existed have no focus field.
     else if (saved.workingSet.focus === undefined)
       this.setState({ ...saved, workingSet: { ...saved.workingSet, focus: null } });
@@ -1360,7 +1374,16 @@ export class MarketingOrchestrator extends AIChatAgent<
       permissions,
     });
     await this.recordConfirmationAudit(confirmation, "pending");
-    this.setState({ ...this.state, pendingConfirmation: confirmation });
+    this.setState({
+      ...this.state,
+      pendingConfirmation: confirmation,
+      // The confirmation card replaces the action card that led to it.
+      suggestions: (this.state.suggestions ?? []).filter(
+        (item) =>
+          item.action !==
+          (confirmation.action === "create-review-task" ? "create-review-task" : "save-focus"),
+      ),
+    });
     return json(confirmation, { status: 201 });
   }
 
@@ -1496,6 +1519,80 @@ export class MarketingOrchestrator extends AIChatAgent<
       .join("\n\n");
   }
 
+  /**
+   * Saves a completed drafting or revision turn's answer as the workspace focus. When the user
+   * asked for the record in Salesforce, the save is then prepared for confirmation.
+   */
+  private saveDraftFromAnswer(answer: string, intent: DraftIntent, prompt: string) {
+    const focus = this.state.workingSet.focus;
+    const input = focusFromAnswer(answer, {
+      kind: intent.kind,
+      fallbackTitle: focus
+        ? currentFocusVersion(focus).title
+        : `${FOCUS_KIND_LABELS[intent.kind]} draft`,
+      changeNote: intent.mode === "revise" ? prompt : "First draft",
+    });
+    if (!input) return;
+    this.updateFocus(input);
+    if (wantsSalesforceRecord(prompt))
+      void this.proposeFocusSave().catch((error: unknown) =>
+        console.error("[orchestrator] could not prepare the Salesforce save", error),
+      );
+    else this.suggestFocusSave();
+  }
+
+  /** Adds an action card to the chat, replacing any earlier card for the same action. */
+  private suggest(input: Omit<SuggestedAction, "id" | "createdAt">) {
+    const suggestion = { ...input, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    this.setState({
+      ...this.state,
+      suggestions: [
+        ...(this.state.suggestions ?? []).filter((existing) => existing.action !== input.action),
+        suggestion,
+      ],
+    });
+  }
+
+  /** Suggests saving the draft in focus to Salesforce, as a new record or an update. */
+  private suggestFocusSave() {
+    const focus = this.state.workingSet.focus;
+    if (!focus) return;
+    const plan = planFocusWrite(focus, this.state.workingSet);
+    this.suggest({
+      action: "save-focus",
+      title: `${plan.write.recordId ? "Update" : "Save"} “${plan.write.title}” in Salesforce?`,
+      detail: plan.summary,
+      cta: plan.write.recordId ? "Review update" : "Review and save",
+    });
+  }
+
+  /** Accepting an action card prepares its confirmation, with the Salesforce permission check. */
+  private async acceptSuggestion(id: string): Promise<Response> {
+    const suggestion = (this.state.suggestions ?? []).find((item) => item.id === id);
+    if (!suggestion)
+      return json(
+        { error: { code: "NOT_FOUND", message: "That suggestion is no longer available." } },
+        { status: 404 },
+      );
+    if (suggestion.action === "save-focus") {
+      const focus = this.state.workingSet.focus;
+      if (!focus)
+        return json(
+          { error: { code: "CONFLICT", message: "There is no draft to save." } },
+          { status: 409 },
+        );
+      return this.prepareConfirmation({
+        action: planFocusWrite(focus, this.state.workingSet).action,
+      });
+    }
+    return this.prepareConfirmation({
+      action: "create-review-task",
+      recordId: openCampaign(this.state.workingSet)?.recordId,
+      summary:
+        "Create a campaign review task with current campaign context, readiness findings, a due date, and a human review checklist.",
+    });
+  }
+
   /** Saves a draft (or its revision) as the workspace focus. */
   private updateFocus(input: FocusInput) {
     const workingSet = applyFocusUpdate(this.state.workingSet, input, new Date());
@@ -1518,6 +1615,16 @@ export class MarketingOrchestrator extends AIChatAgent<
       at: new Date(),
     });
     if (next !== this.state.workingSet) this.setState({ ...this.state, workingSet: next });
+    // A readiness check on an open campaign is a natural moment to ask for a review.
+    const campaign = openCampaign(next);
+    if (baseToolName(toolName) === "check_campaign_readiness" && campaign)
+      this.suggest({
+        action: "create-review-task",
+        title: `Request a review of ${campaign.title}?`,
+        detail:
+          "Creates a Salesforce review task with the campaign context, readiness findings, a due date, and a checklist, after Salesforce checks your permissions and you confirm.",
+        cta: "Prepare review request",
+      });
   }
 
   /** The working set with the record a confirmed write created. */
@@ -1552,6 +1659,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       ...this.state,
       workingSet: emptyWorkingSet(),
       pendingConfirmation: null,
+      suggestions: [],
       activity: [],
     });
   }
@@ -1602,6 +1710,8 @@ export class MarketingOrchestrator extends AIChatAgent<
         now,
       )
       .run();
+    // The audit keeps 24 hours; older rows go on every write, and hourly by the cron.
+    await pruneConfirmationAudit(this.env.APP_DB);
   }
 
   override async onRequest(request: Request): Promise<Response> {
@@ -1637,7 +1747,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     if (url.pathname.endsWith("/audit/export") && request.method === "GET")
       return this.exportAudit();
     if (url.pathname.endsWith("/turns") && request.method === "GET")
-      return json({ retentionDays: TURN_HISTORY_RETENTION_DAYS, turns: this.listTurns() });
+      return json({ retentionHours: AUDIT_RETENTION_HOURS, turns: this.listTurns() });
     if (url.pathname.endsWith("/images/generate") && request.method === "POST")
       return this.generateCampaignImage(request);
     if (url.pathname.endsWith("/images") && request.method === "GET")
@@ -1675,6 +1785,16 @@ export class MarketingOrchestrator extends AIChatAgent<
     if (url.pathname.endsWith("/working-set/reset") && request.method === "POST") {
       this.resetWorkingSet();
       return json(this.state.workingSet);
+    }
+    const suggestionMatch = url.pathname.match(/\/suggestions\/([a-f0-9-]{36})\/(accept|dismiss)$/);
+    if (suggestionMatch && request.method === "POST") {
+      const [, id, verb] = suggestionMatch;
+      if (verb === "accept") return this.acceptSuggestion(id as string);
+      this.setState({
+        ...this.state,
+        suggestions: (this.state.suggestions ?? []).filter((item) => item.id !== id),
+      });
+      return json({ suggestions: this.state.suggestions });
     }
     if (url.pathname.endsWith("/confirmations") && request.method === "POST")
       return this.prepareConfirmation((await request.json()) as Record<string, unknown>);
@@ -2003,6 +2123,30 @@ export class MarketingOrchestrator extends AIChatAgent<
     const policyIntent = classifyPolicyIntent(utterance);
     // A request to save or create the draft prepares that write for confirmation, with the
     // Salesforce permission check, instead of only pointing at a button.
+    // A review request prepares the review task for the open campaign, in the chat.
+    if (
+      policyIntent === "confirmation-required" &&
+      /\breview\b/i.test(utterance) &&
+      openCampaign(this.state.workingSet)
+    ) {
+      const response = await this.prepareConfirmation({
+        action: "create-review-task",
+        recordId: openCampaign(this.state.workingSet)?.recordId,
+        summary:
+          "Create a campaign review task with current campaign context, readiness findings, a due date, and a human review checklist.",
+      });
+      const body = (await response.json()) as Confirmation & { error?: { message?: string } };
+      const text = response.ok
+        ? `**Ready to confirm:** ${body.summary}\n\nSalesforce checked your permissions; review the confirmation card and confirm it yourself. Nothing is created until you do.`
+        : `I couldn't prepare the review request. ${body.error?.message ?? ""} Nothing was created.`;
+      return scriptedResponse([text], {
+        model: POLICY_ROUTER,
+        route: policyIntent,
+        abortSignal,
+        onComplete: (result) =>
+          this.recordTurn(utterance, { model: POLICY_ROUTER, route: policyIntent }, result),
+      });
+    }
     if (policyIntent === "confirmation-required" && this.state.workingSet.focus) {
       const text = await this.proposeFocusSave();
       return scriptedResponse([text], {
@@ -2035,6 +2179,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     const localDraft = localFixtureDraft(utterance, this.state.workingSet.focus);
     if (localDraft) {
       const focus = this.updateFocus(localDraft);
+      this.suggestFocusSave();
       const current = currentFocusVersion(focus);
       return scriptedResponse(
         [

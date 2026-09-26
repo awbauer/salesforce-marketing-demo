@@ -248,8 +248,8 @@ export const LEARN_PARTS: LearnPart[] = [
 | Layer | Holds | Lives in | Lifetime |
 |---|---|---|---|
 | **Working memory** | The current conversation, plus the workspace: the focus draft, open records, and context cards | Each user's agent Durable Object | Until **New chat** |
-| **Audit trail** | What each turn did: route, tools, inputs and outputs, outcome | Agent SQLite (turn history) | 14 days |
-| **Long-term memory** | Decisions and drafts that matter across chats | Knowledge graph, linked to the entities involved | 14 days (planned, issue #41) |
+| **Audit trail** | What each turn did: route, tools, inputs and outputs, outcome | Agent SQLite (turn history) | 24 hours |
+| **Long-term memory** | Decisions and drafts that matter across chats | Knowledge graph, linked to the entities involved | Across chats (planned, issue #41) |
 
 **Working memory** is sent to the model as a bounded window: the last 8 messages. Earlier assistant replies are reduced to their text, so old tool results and reasoning never re-enter the prompt. The workspace is working memory too. The draft being built, the records the chat opened, and the context its tools gathered are summarized in every prompt, so the model works from structured state instead of re-reading old replies. See *The workspace* under the demo concepts.
 
@@ -376,15 +376,16 @@ A turn runs a **tool loop** of up to 6 steps. On each step the model either call
           "A per-chat, structured model of the work, built from tool results rather than model text.",
         body: `Each chat has a **working set**, shown in the Workspace panel and summarized in every prompt. It starts empty with **New chat** and has three parts:
 
-- **Focus:** the draft being built (a campaign, brief, or message) as structured data: a title, labeled fields, a change note, and the context it was built from. The model saves drafts with the local \`update_focus\` tool; each revision becomes a new version, and earlier versions stay viewable.
+- **Focus:** the draft being built (a campaign, brief, or message) as structured data: a title, labeled fields, a change note, and the context it was built from. When a turn drafts or revises something, the orchestrator saves the finished draft from the model's answer, reading its labeled lines (Headline, Body, Send time, and so on) into fields. Each revision becomes a new version, and earlier versions stay viewable. Saving this way never depends on a small model producing a large structured tool call.
 - **Context:** cards for what tools returned, such as weather, the restaurant profile, graph evidence, and Salesforce summaries, each with its source and fetch time.
 - **Records:** records the chat opened, created, or updated, in any connected system. Salesforce is one system and restaurant data is another; any system can join through the same reference: system, object type, and id.
 
-Three properties make it trustworthy:
+Four properties make it trustworthy:
 
 1. **Deterministic ingestion.** Cards and records come from tool results through code, never from model-written text, so nothing in the workspace is invented.
 2. **Open versus available.** Records the connected systems make available are listed separately as a catalog, so the model never acts on a record the chat hasn't opened.
-3. **Writes act on what you see.** Saving writes exactly the focus version on screen to Salesforce: a new campaign, brief, or message, or an update to the record it was saved as before. The confirmation records that version in its request hash, and the saved records appear in Records as created or updated.`,
+3. **Approvals come to you.** When something needs your approval (saving the draft to Salesforce, or requesting a review after a readiness check), an **action card** appears in the chat. Accepting it prepares the confirmation card, with Salesforce's permission check.
+4. **Writes act on what you see.** Saving writes exactly the focus version on screen to Salesforce: a new campaign, brief, or message, or an update to the record it was saved as before. The confirmation records that version in its request hash, and the saved records appear in Records as created or updated.`,
         inDemo: [
           "Workspace panel: Focus, Records, and Context",
           "apps/edge/src/working-set.ts, apps/edge/src/focus.ts",
@@ -463,9 +464,9 @@ Metadata (Apex, fields, the permission set, and the MCP definition) deploys thro
 2. **Intent router.** Clear intents force a **tool plan**: an ordered list of tools, one forced per step.
    - "Check readiness" → \`check_campaign_readiness\`
    - "Why is X in the buyer group?" → \`explain_buyer_group\`
-   - A restaurant push campaign → profile → weather → past pushes → content draft → focus
-   - A revision of the focus ("make it warmer") → \`update_focus\`
-   - "…as a new campaign in Salesforce" → \`update_focus\` → \`propose_salesforce_save\`, which prepares the confirmation
+   - A Coastline Kitchen email or push campaign → profile → weather → past pushes → content draft; the finished draft is saved to the focus
+   - A revision of the focus ("make it warmer") → no tools; the model rewrites the draft, which is saved as the next version
+   - "…as a new campaign in Salesforce" → the model drafts the campaign; once it's saved to the focus, the Salesforce save is prepared for confirmation
    - The rules need specific signals and **defer to the model** when unsure, because a wrongly forced tool can't be undone within the turn.
 
 After a plan finishes, the model gets **no tools** and must write the answer.`,
@@ -518,8 +519,8 @@ At the turn level:
 
 **Kill switches** (\`WRITES_ENABLED\`, \`DISABLED_TOOLS\`) are Worker secrets that operators can flip without a deploy. The knowledge graph is read-only at the database level. No customer PII enters prompts, logs, or the graph.`,
         inDemo: [
-          "Focus card → Create in Salesforce → confirmation card with the permission check",
-          "Create review request → confirmation card",
+          "Draft something → the Save to Salesforce action card in the chat → confirmation card with the permission check",
+          "Check readiness → the Request a review action card → confirmation card",
           "Attach to campaign on a generated image",
           "infra/cloudflare/pot/README.md (operator runbook)",
         ],
@@ -548,7 +549,7 @@ At the turn level:
   - reasoning start and end, with the model's reasoning, redacted
   - text start and end
   - tool input and output, errors, recovery messages, and the outcome
-- **Turn history** (History view): each utterance with the orchestrator's interpretation, the tool calls with inputs and results, and the outcome. Filterable, and kept 14 days per user.
+- **Turn history** (History view): each utterance with the orchestrator's interpretation, the tool calls with inputs and results, and the outcome. Filterable, and kept 24 hours per user.
 - **Audit export:** a JSON download of the user's confirmed writes and turn summaries.`,
         inDemo: [
           "Any answer → “Behind the scenes · technical trace”",
@@ -580,7 +581,7 @@ Salesforce tools are fixtures, so the scores measure orchestration, not Salesfor
 - Drafts are stored privately in **R2** for 7 days, with provenance (model, prompt version, content hash) in **D1**.
 - The variant gallery lets you select, reject, or revise.
 - **Attach to campaign** runs the confirmation flow. Apex checks the PNG's SHA-256 against the confirmed hash, creates one Salesforce file on the Campaign, and reads back its checksum and link.`,
-        inDemo: ["Workspace → Generate campaign visual → Attach to campaign"],
+        inDemo: ["Workspace → Generate campaign visual (expand it) → Attach to campaign"],
         resources: [R.flux, R.r2, R.d1],
       },
       {
@@ -592,7 +593,7 @@ Salesforce tools are fixtures, so the scores measure orchestration, not Salesfor
 - \`get_restaurant_profile\`: the restaurant system's own data for **Coastline Kitchen**, a fictional fast-casual brand under Northstar that is open 24/7: its five California locations, menu, favorites, dayparts, app audience, brand voice, and promotion rules. Locations and menu items carry the same ids as their knowledge-graph nodes.
 - \`get_current_weather\`: live conditions from **Open-Meteo**, which is free, keyless, and CC BY 4.0, for a California city.
 
-The push-campaign plan chains these with the knowledge graph's past performance and the Salesforce content tool, then saves the draft to the workspace **focus**. The draft fits the menu, the time of day, the weather, and what worked before, and "make it warmer" revises it as a new version.`,
+The Coastline campaign plan (email or push) chains these with the knowledge graph's past performance and the Salesforce content tool, and the finished draft is saved to the workspace **focus**. The draft fits the menu, the time of day, the weather, and what worked before, and "make it warmer" revises it as a new version.`,
         inDemo: [
           "Quickstart: the Coastline Kitchen push campaign prompt",
           "Sources: Restaurant data, Weather · Open-Meteo",

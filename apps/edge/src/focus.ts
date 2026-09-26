@@ -1,4 +1,3 @@
-import { type ToolSet, tool } from "ai";
 import { z } from "zod";
 import {
   currentFocusVersion,
@@ -9,13 +8,11 @@ import {
 } from "../../../packages/contracts/src/index.ts";
 
 /**
- * The workspace focus: the draft the chat is building. The model saves drafts through the
- * local `update_focus` tool, so the focus is structured data with every version kept, and
- * revisions, references to the draft, and confirmed saves all act on the same object. The tool
- * changes only the workspace.
+ * The workspace focus: the draft the chat is building. The orchestrator saves each draft the
+ * model writes as structured data with every version kept, so revisions, references to the
+ * draft, and confirmed saves all act on the same object. Saving changes only the workspace.
  */
 
-export const FOCUS_TOOL_KEY = "workspace_update_focus";
 export const MAX_FOCUS_VERSIONS = 20;
 
 export const FocusInputSchema = z.object({
@@ -93,22 +90,64 @@ export function focusBriefText(focus: FocusItem) {
   return text.length > 500 ? `${text.slice(0, 499).trimEnd()}…` : text;
 }
 
-/** The local tool the model uses to save or revise the focus. */
-export function focusTools(onUpdate: (input: FocusInput) => FocusItem): ToolSet {
+const LABEL_LINE =
+  /^\s*(?:[-*•]\s*)?(?:\*\*|__)([^*_:\n]{1,60}?):?(?:\*\*|__):?\s*(.+?)\s*$|^\s*(?:[-*•]\s*)?([A-Z][\w /&'()-]{0,40}):\s+(.+?)\s*$/;
+const stripMarkdown = (text: string) =>
+  text
+    .replace(/\*\*|__|`/g, "")
+    .replace(/^#+\s*/, "")
+    .trim();
+
+/**
+ * The draft in a model answer as focus input: its title (a heading or a bold first line), a
+ * summary (its first plain paragraph), and its labeled lines ("**Headline:** …") as fields.
+ * The orchestrator saves drafts this way, so a drafting turn never depends on the model
+ * producing a large structured tool call.
+ */
+export function focusFromAnswer(
+  answer: string,
+  options: { kind: FocusInput["kind"]; fallbackTitle: string; changeNote: string },
+): FocusInput | null {
+  const lines = answer
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!lines.length) return null;
+  const titleLine = lines.find(
+    (line) => /^#{1,4}\s+\S/.test(line) || /^(\*\*|__)[^*_]+\1$/.test(line),
+  );
+  const title = titleLine ? stripMarkdown(titleLine).replace(/[.:]+$/, "") : options.fallbackTitle;
+  const fields: FocusInput["fields"] = [];
+  const seen = new Map<string, number>();
+  const prose: string[] = [];
+  for (const line of lines) {
+    if (line === titleLine) continue;
+    const match = LABEL_LINE.exec(line);
+    const label = match ? stripMarkdown(match[1] ?? match[3] ?? "") : "";
+    const value = match ? stripMarkdown(match[2] ?? match[4] ?? "") : "";
+    if (label && value && fields.length < 16) {
+      const count = (seen.get(label.toLowerCase()) ?? 0) + 1;
+      seen.set(label.toLowerCase(), count);
+      fields.push({
+        label: (count > 1 ? `${label} ${count}` : label).slice(0, 60),
+        value: value.slice(0, 1200),
+      });
+    } else if (!/^[-*•|#]/.test(line) && !/^\d+[.)]/.test(line)) prose.push(stripMarkdown(line));
+  }
+  if (!fields.length) {
+    const body = lines
+      .filter((line) => line !== titleLine)
+      .map(stripMarkdown)
+      .join("\n")
+      .slice(0, 1200);
+    if (!body) return null;
+    fields.push({ label: "Draft", value: body });
+  }
   return {
-    [FOCUS_TOOL_KEY]: tool({
-      description:
-        "Save the draft you are writing (a push message, email, brief, campaign, or content) as the workspace focus, or save a revision of it as a new version. Use labeled fields for the draft itself. This only updates the workspace draft; it never saves to Salesforce, schedules, or sends anything.",
-      inputSchema: FocusInputSchema,
-      execute: async (input) => {
-        const focus = onUpdate(input);
-        const current = currentFocusVersion(focus);
-        return {
-          saved: true,
-          focus: { kind: focus.kind, title: current.title, version: current.version },
-          message: `Saved "${current.title}" as version ${current.version} of the workspace focus. It is a draft; nothing was saved to Salesforce, scheduled, or sent.`,
-        };
-      },
-    }),
+    kind: options.kind,
+    title: title.slice(0, 160) || options.fallbackTitle,
+    summary: (prose[0] ?? "").slice(0, 600),
+    fields,
+    changeNote: options.changeNote.slice(0, 240),
   };
 }

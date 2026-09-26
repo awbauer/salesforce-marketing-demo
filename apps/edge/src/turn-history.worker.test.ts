@@ -81,6 +81,6 @@ describe("turn history", () => {
   it("lists this user's turns with the retention period", async () => {
     const response = await SELF.fetch("https://example.test/agent/turns");
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ retentionDays: 14, turns: [] });
+    await expect(response.json()).resolves.toMatchObject({ retentionHours: 24, turns: [] });
   });
 });

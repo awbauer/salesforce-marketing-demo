@@ -1,7 +1,13 @@
 import { runInDurableObject, SELF } from "cloudflare:test";
 import { emptyWorkingSet, type WorkingSet } from "@northstar/contracts";
 import { describe, expect, it } from "vitest";
-import { applyFocusUpdate, type FocusInput, focusBriefText, focusPrompt } from "./focus";
+import {
+  applyFocusUpdate,
+  type FocusInput,
+  focusBriefText,
+  focusFromAnswer,
+  focusPrompt,
+} from "./focus";
 import { agentStubFor, CATALOG_CAMPAIGN_ID, openCatalogCampaign } from "./worker.test-helpers";
 import { workingSetPrompt } from "./working-set";
 
@@ -118,5 +124,43 @@ describe("workspace focus", () => {
       relation: "updated",
       title: "Fall Loyalty Reactivation",
     });
+  });
+
+  it("reads a drafted answer's title, summary, and labeled lines into the focus", () => {
+    const answer = [
+      "**Rainy lunch at Coastline Kitchen**",
+      "",
+      "A warm lunch email for Los Angeles subscribers, built from today's rain and past results.",
+      "",
+      "**Subject line:** Rain outside? Soup's on.",
+      "- **Preheader:** Spicy Tortilla Soup, ready in minutes",
+      "**Body:** Warm up with our best rainy-day bowl.",
+      "Send time: 11:15 a.m.",
+      "**Campaign:** Coastline Weather Moments",
+      "**Brand:** Coastline Kitchen",
+      "It is a draft; nothing was scheduled or sent.",
+    ].join("\n");
+    const input = focusFromAnswer(answer, {
+      kind: "email",
+      fallbackTitle: "Email draft",
+      changeNote: "First draft",
+    });
+    expect(input?.title).toBe("Rainy lunch at Coastline Kitchen");
+    expect(input?.summary).toContain("A warm lunch email");
+    expect(input?.fields.map((field) => field.label)).toEqual([
+      "Subject line",
+      "Preheader",
+      "Body",
+      "Send time",
+      "Campaign",
+      "Brand",
+    ]);
+    const plain = focusFromAnswer("Here is a short draft without labels.", {
+      kind: "content",
+      fallbackTitle: "Content draft",
+      changeNote: "First draft",
+    });
+    expect(plain).toMatchObject({ title: "Content draft", fields: [{ label: "Draft" }] });
+    expect(focusFromAnswer("  ", { kind: "email", fallbackTitle: "x", changeNote: "" })).toBeNull();
   });
 });
