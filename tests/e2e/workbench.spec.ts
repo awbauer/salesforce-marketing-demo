@@ -540,3 +540,53 @@ test("answers a 'create it' follow-up through the confirmation policy", async ({
   await expect(reply).toContainText("nothing has been saved or created");
   await expect(reply).toContainText("Create review request");
 });
+
+test("explores the knowledge graph with tours, search, and expansion", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: /^\W*Graph$/ })
+    .first()
+    .click();
+  await expect(page.getByRole("heading", { name: "Graph explorer" })).toBeVisible();
+  await expect(page.getByText("134", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: /Knowledge graph drawing with 134 nodes/ }),
+  ).toBeVisible();
+
+  // The rain tour expands the weather node and summarizes what worked.
+  await page.getByRole("button", { name: /What worked in the rain/ }).click();
+  const details = page.getByRole("complementary", { name: "Node details" });
+  await expect(details.getByRole("heading", { name: "rain", exact: true })).toBeVisible();
+  await expect(details.getByText(/Loaded 60 of \d+ connections/)).toBeVisible();
+  await expect(details.getByText("What the graph says")).toBeVisible();
+  await expect(page.getByText("194", { exact: true })).toBeVisible();
+
+  // Search reaches every loaded node without the canvas.
+  await page.getByLabel("Find a node").fill("fall loyalty");
+  await page
+    .getByRole("list", { name: "Matching nodes" })
+    .getByRole("button", { name: /Fall Loyalty Reactivation\s*Campaign/ })
+    .click();
+  await expect(details.getByRole("heading", { name: "Fall Loyalty Reactivation" })).toBeVisible();
+  await details.getByRole("button", { name: /Fall Loyalty Reactivation brief/ }).click();
+  await expect(
+    details.getByRole("heading", { name: "Fall Loyalty Reactivation brief" }),
+  ).toBeVisible();
+
+  // Node types toggle off and back on.
+  const personas = page.getByRole("button", { name: /^Persona/ });
+  await personas.click();
+  await expect(personas).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("img", { name: /with 142 nodes/ })).toBeVisible();
+  await personas.click();
+
+  await page.getByRole("button", { name: /A failed brand check/ }).click();
+  await expect(details.getByText("Brand rule", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await page.getByRole("button", { name: /What worked in the rain/ }).click();
+  // Let the layout and camera settle before the evidence screenshot.
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: `artifacts/evidence/WU-033/graph-${testInfo.project.name}.png` });
+});

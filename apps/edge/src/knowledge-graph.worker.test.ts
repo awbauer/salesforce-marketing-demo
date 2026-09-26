@@ -81,4 +81,36 @@ describe("knowledge-graph MCP", () => {
     const operations = await SELF.fetch("https://example.test/agent/operations");
     await expect(operations.json()).resolves.toMatchObject({ knowledgeGraph: "fixture" });
   });
+
+  it("serves the graph explorer overview and neighbor expansion", async () => {
+    const overview = await SELF.fetch("https://example.test/api/graph/overview");
+    expect(overview.status).toBe(200);
+    const body = (await overview.json()) as {
+      source: string;
+      nodes: Array<{ id: string; label: string }>;
+      relationships: Array<{ from: string; to: string }>;
+      labelCounts: Record<string, number>;
+    };
+    expect(body.source).toBe("fixture");
+    expect(body.nodes.some((node) => node.label === "PushSend")).toBe(false);
+    expect(body.labelCounts.PushSend).toBe(1500);
+    const ids = new Set(body.nodes.map((node) => node.id));
+    expect(body.relationships.every((edge) => ids.has(edge.from) && ids.has(edge.to))).toBe(true);
+
+    // Every push send points at a location, so a city expands into far more than the limit.
+    const neighbors = await SELF.fetch(
+      "https://example.test/api/graph/nodes/location-los-angeles/neighbors",
+    );
+    const expanded = (await neighbors.json()) as {
+      nodes: unknown[];
+      total: number;
+      truncated: boolean;
+    };
+    expect(expanded.nodes.length).toBe(60);
+    expect(expanded.total).toBeGreaterThan(60);
+    expect(expanded.truncated).toBe(true);
+
+    const missing = await SELF.fetch("https://example.test/api/graph/nodes/nope/neighbors");
+    expect(missing.status).toBe(404);
+  });
 });
