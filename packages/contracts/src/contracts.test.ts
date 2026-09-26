@@ -19,6 +19,7 @@ describe("proof contracts", () => {
   it("starts every workspace empty, with the catalog kept separate", () => {
     expect(OrchestratorStateSchema.parse(initialOrchestratorState).workingSet).toEqual({
       startedAt: null,
+      focus: null,
       cards: [],
       records: [],
     });

@@ -47,13 +47,7 @@ const DOMAIN_BY_LABEL = new Map(
 const domainOf = (label: string) => DOMAIN_BY_LABEL.get(label) ?? "audience";
 const anchorOf = (label: string) => DOMAIN_ANCHORS[domainOf(label)] ?? { x: 0, y: 0 };
 // Hubs that are always labeled so the regions are recognizable before any zooming.
-const ANCHOR_LABELS = new Set([
-  "Campaign",
-  "Restaurant",
-  "Location",
-  "WeatherCondition",
-  "Daypart",
-]);
+const ANCHOR_LABELS = new Set(["Brand", "Campaign", "Location", "WeatherCondition", "Daypart"]);
 
 const endpointId = (end: SimLink["source"]) => (typeof end === "object" ? end.id : String(end));
 

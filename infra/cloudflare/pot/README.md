@@ -64,7 +64,7 @@ pnpm exec wrangler secret delete WRITES_ENABLED --config wrangler.jsonc
 The knowledge graph (ADR-006) reads from Neo4j AuraDB through the Query API.
 
 - **Secrets:** set `NEO4J_QUERY_URL` (`https://<instance>.databases.neo4j.io/db/<database>/query/v2`), `NEO4J_USERNAME`, and `NEO4J_PASSWORD` as Worker secrets with `wrangler secret put`. Without them, the tools use the in-memory demo copy and the rail says so.
-- **Seed or rebuild:** export the same three variables locally, then run `pnpm kg:seed --confirm --reset`. It is idempotent and ends with a count read-back.
+- **Seed or rebuild:** export the same three variables locally, then run `pnpm kg:seed --confirm --reset`. `--reset` removes every earlier demo dataset version first, so a model change (new labels or ids) leaves nothing stale. It is idempotent and ends with a count read-back. Run `pnpm kg:parity` afterwards to confirm every graph tool matches the fixture.
 - **Check parity:** `pnpm kg:parity` confirms Neo4j matches the in-memory copy for every tool.
 - **Keep-alive:** the Worker's daily cron (`17 9 * * *` UTC) runs one read query so Aura Free doesn't pause. A paused instance returns a "may be paused" tool error; resume it in the Aura console.
 - **Teardown:** delete the Aura instance in the console, and remove the three secrets with `wrangler secret delete`.

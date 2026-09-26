@@ -861,6 +861,136 @@ a {
   font-weight: 600;
   color: var(--forest);
 }
+/* Focus: the draft the chat is building. */
+.focus-card {
+  margin: 16px 18px 4px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--forest);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(23, 61, 49, 0.18);
+}
+.focus-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+.focus-kind {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--lime);
+  color: #12231c;
+  font-size: 11px;
+  font-weight: 800;
+}
+.focus-this {
+  font-size: 11px;
+  color: #b9cdc2;
+}
+.focus-card h3 {
+  margin: 10px 0 6px;
+  font-family: Georgia, serif;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+.focus-versions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 6px;
+  padding: 0;
+  border: 0;
+}
+.focus-versions button {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: transparent;
+  color: #dce8e0;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.focus-versions button[aria-pressed="true"] {
+  background: #fff;
+  color: var(--forest);
+  border-color: #fff;
+}
+.focus-meta {
+  margin: 0;
+  font-size: 11px;
+  color: #b9cdc2;
+}
+.focus-summary {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #e7efe9;
+}
+.focus-fields {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+}
+.focus-fields > div {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.focus-fields dt {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--lime);
+}
+.focus-fields dd {
+  margin: 3px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.focus-sources {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: #b9cdc2;
+}
+.focus-source {
+  color: #fff;
+  font-weight: 600;
+}
+.focus-action {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+.focus-action button {
+  border: 0;
+  border-radius: 8px;
+  background: var(--lime);
+  color: #12231c;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.focus-action button:disabled {
+  background: rgba(255, 255, 255, 0.18);
+  color: #b9cdc2;
+  cursor: not-allowed;
+}
+.focus-action span {
+  font-size: 11px;
+  color: #b9cdc2;
+}
+.confirmation-summary {
+  white-space: pre-line;
+}
 .workspace-sections {
   display: flex;
   flex-direction: column;

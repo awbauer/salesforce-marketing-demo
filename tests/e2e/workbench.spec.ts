@@ -565,7 +565,7 @@ test("explains context, GraphRAG, and every demo concept on the Learn page", asy
   );
   // The quick check explains the answer.
   const check = page.locator(".learn-check").first();
-  await check.getByLabel("In the conversation window sent with this turn").check();
+  await check.getByLabel("The recent conversation and a summary of the workspace").check();
   await expect(check.getByText(/Correct\./)).toBeVisible();
   await toc.getByRole("button", { name: "Primer: RAG and GraphRAG" }).click();
   await expect(page.getByRole("heading", { name: "RAG in one page" })).toBeInViewport();
@@ -604,9 +604,9 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
     .first()
     .click();
   await expect(page.getByRole("heading", { name: "Graph explorer" })).toBeVisible();
-  await expect(page.getByText("134", { exact: true })).toBeVisible();
+  await expect(page.getByText("157", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("img", { name: /Knowledge graph drawing with 134 nodes/ }),
+    page.getByRole("img", { name: /Knowledge graph drawing with 157 nodes/ }),
   ).toBeVisible();
 
   // The rain tour expands the weather node and summarizes what worked.
@@ -615,7 +615,7 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
   await expect(details.getByRole("heading", { name: "rain", exact: true })).toBeVisible();
   await expect(details.getByText(/Loaded 60 of \d+ connections/)).toBeVisible();
   await expect(details.getByText("What the graph says")).toBeVisible();
-  await expect(page.getByText("194", { exact: true })).toBeVisible();
+  await expect(page.getByText("217", { exact: true })).toBeVisible();
 
   // Search reaches every loaded node without the canvas.
   await page.getByLabel("Find a node").fill("fall loyalty");
@@ -633,7 +633,7 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
   const personas = page.getByRole("button", { name: /^Persona/ });
   await personas.click();
   await expect(personas).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByRole("img", { name: /with 142 nodes/ })).toBeVisible();
+  await expect(page.getByRole("img", { name: /with 165 nodes/ })).toBeVisible();
   await personas.click();
 
   await page.getByRole("button", { name: /A failed brand check/ }).click();
@@ -643,4 +643,55 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
   // Let the layout and camera settle before the evidence screenshot.
   await page.waitForTimeout(1500);
   await page.screenshot({ path: `artifacts/evidence/WU-033/graph-${testInfo.project.name}.png` });
+});
+
+test("builds a versioned focus draft that follow-ups and confirmed saves act on", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "New chat" }).click();
+  await expect(page.getByText("Nothing in this chat yet")).toBeVisible();
+  const composer = page.getByLabel("Message the orchestrator");
+  const focus = page.getByTestId("workspace-focus");
+
+  await composer.fill("Draft a push notification for Coastline Kitchen's lunch crowd");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(focus).toContainText("Rainy-day comfort: Spicy Tortilla Soup");
+  await expect(focus).toContainText("Push message");
+  await expect(focus).toContainText("Rain outside? Soup's on.");
+  await expect(focus).toContainText("Version 1 · current");
+
+  await composer.fill("Make it warmer");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(focus).toContainText("Rain outside? Warm soup is waiting.");
+  await expect(focus).toContainText("Version 2 · current · Make it warmer");
+  await focus.getByRole("button", { name: "v1" }).click();
+  await expect(focus).toContainText("Rain outside? Soup's on.");
+  await expect(focus.getByRole("button", { name: "Save to Salesforce as brief" })).toHaveCount(0);
+  await focus.getByRole("button", { name: /v2/ }).click();
+
+  // "It" is the focus draft, never another record.
+  await composer.fill("Looks good, create it");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.locator(".message.assistant").last()).toContainText(
+    "I can't create “Rainy-day comfort: Spicy Tortilla Soup” in Salesforce from chat",
+  );
+  await page.getByRole("complementary", { name: "Workspace" }).screenshot({
+    path: `artifacts/evidence/WU-036/focus-${testInfo.project.name}.png`,
+  });
+
+  // Saving writes exactly this version to the open campaign's brief, after confirmation.
+  await focus.getByRole("button", { name: "Save to Salesforce as brief" }).click();
+  const card = page.locator(".confirmation-card");
+  await expect(
+    card.getByRole("heading", { name: "Save draft brief to Salesforce?" }),
+  ).toBeVisible();
+  await expect(card).toContainText("Rainy-day comfort: Spicy Tortilla Soup · version 2");
+  await expect(card).toContainText("Headline: Rain outside? Warm soup is waiting.");
+  await card.getByRole("button", { name: "Confirm save" }).click();
+  await expect(page.getByText("Brief saved to the campaign")).toBeVisible();
+  const campaign = page
+    .getByTestId("workspace-record")
+    .filter({ hasText: "Fall Loyalty Reactivation" });
+  await expect(campaign).toContainText("Updated");
 });

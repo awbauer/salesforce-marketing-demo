@@ -45,9 +45,9 @@ export type Domain = { id: string; title: string; blurb: string; labels: string[
 export const DOMAINS: Domain[] = [
   {
     id: "marketing",
-    title: "Campaigns and content",
-    blurb: "What the Salesforce agents plan, write, and check.",
-    labels: ["Campaign", "Brief", "ContentAsset", "BrandRule"],
+    title: "Brands, campaigns, and content",
+    blurb: "Northstar and its Coastline Kitchen brand: what they plan, write, and check.",
+    labels: ["Brand", "Campaign", "Brief", "ContentAsset", "BrandRule"],
   },
   {
     id: "audience",
@@ -57,13 +57,14 @@ export const DOMAINS: Domain[] = [
   },
   {
     id: "restaurant",
-    title: "Coastline Kitchen pushes",
-    blurb: "Past push notifications and the context they were sent in.",
-    labels: ["Restaurant", "Location", "MenuItem", "Daypart", "WeatherCondition", "PushSend"],
+    title: "Coastline Kitchen restaurants",
+    blurb: "Locations, the menu, and past mobile app pushes with their context.",
+    labels: ["Location", "Menu", "MenuItem", "Daypart", "WeatherCondition", "PushSend"],
   },
 ];
 
 export const LABEL_COLORS: Record<string, string> = {
+  Brand: "#0f2a22",
   Campaign: "#173d31",
   Brief: "#2f7358",
   ContentAsset: "#62a585",
@@ -73,7 +74,7 @@ export const LABEL_COLORS: Record<string, string> = {
   Persona: "#e2b857",
   ConsentScope: "#d9816f",
   Channel: "#7d5f9e",
-  Restaurant: "#1d5b86",
+  Menu: "#1d5b86",
   Location: "#3c8ac0",
   MenuItem: "#7db8da",
   Daypart: "#5b6fb3",
@@ -96,6 +97,19 @@ export const labelColor = (label: string) => LABEL_COLORS[label] ?? "#6b7a72";
 /** Plain-language reading of each relationship type, "from … to". */
 export const RELATIONSHIP_PHRASES: Record<string, string> = {
   FOR: "is for",
+  PART_OF: "is part of",
+  BELONGS_TO: "belongs to",
+  RULE_OF: "is a rule of",
+  OPERATES: "operates",
+  SERVES: "serves",
+  MENU_OF: "is the menu of",
+  ON_MENU: "is on",
+  AVAILABLE_DURING: "is available during",
+  FAVORITE: "has favorite",
+  NEAR: "is near",
+  USED: "used",
+  SENT_TO: "was sent to",
+  SENT_UNDER: "was sent under consent",
   ON: "runs on",
   USES: "uses",
   BUILT_FROM: "was built from",
@@ -106,7 +120,6 @@ export const RELATIONSHIP_PHRASES: Record<string, string> = {
   ENGAGED_WITH: "engaged with",
   INCLUDES: "includes",
   HAS_CONSENT: "has consent for",
-  PART_OF: "is part of",
   FEATURED: "featured",
   SENT_DURING: "was sent during",
   UNDER: "was sent under",

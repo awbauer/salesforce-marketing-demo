@@ -4,7 +4,9 @@ import {
   ConfirmationSchema,
   type ConnectorState,
   classifyPolicyIntent,
+  currentFocusVersion,
   emptyWorkingSet,
+  type FocusItem,
   GeneratedCampaignImageSchema,
   initialOrchestratorState,
   type OrchestratorState,
@@ -36,6 +38,7 @@ import {
   CAMPAIGN_CONTEXT_TOOL_PREFIX,
   connectCampaignContextTools,
 } from "./campaign-context/server";
+import { applyFocusUpdate, type FocusInput, focusBriefText, focusTools } from "./focus";
 import { forcedToolCallMiddleware } from "./forced-tool-middleware";
 import {
   connectKnowledgeGraphTools,
@@ -44,6 +47,7 @@ import {
 } from "./knowledge-graph/server";
 import { buildTurnRecord } from "./turn-history";
 import {
+  isRevisionRequest,
   MAX_OUTPUT_TOKENS,
   MAX_TURN_STEPS,
   missingPlannedTool,
@@ -134,7 +138,7 @@ export function evidenceTurnMessages(messages: UIMessage[]): UIMessage[] {
   return [];
 }
 
-/** Most recent messages sent to the model so follow-ups ("looks good, create it") keep context. */
+/** Most recent messages sent to the model, so follow-up requests keep the conversation's context. */
 export const CONVERSATION_WINDOW = 8;
 
 /**
@@ -202,6 +206,51 @@ const LOCAL_FIXTURE_RESULTS: Array<[string, unknown]> = [
     },
   ],
 ];
+
+/**
+ * Local development's stand-in for the model's drafting: a fictional push draft for a drafting
+ * request, and its next version for a revision of the focus.
+ */
+function localFixtureDraft(utterance: string, focus: FocusItem | null): FocusInput | null {
+  const drafting =
+    /\b(?:draft|write)\b/i.test(utterance) &&
+    /\b(?:push|message|notification|email|brief|content)\b/i.test(utterance);
+  const revising = Boolean(focus) && isRevisionRequest(utterance);
+  if (!drafting && !revising) return null;
+  const draft: FocusInput = {
+    kind: "push-message",
+    title: "Rainy-day comfort: Spicy Tortilla Soup",
+    summary:
+      "Lunch push for Coastline app users in Los Angeles, built from the weather and past rainy-day results (fictional fixture).",
+    fields: [
+      { label: "Headline", value: "Rain outside? Soup's on." },
+      {
+        label: "Body",
+        value:
+          "Warm up with Spicy Tortilla Soup, ready in minutes at Coastline Kitchen Arts District.",
+      },
+      { label: "Send time", value: "11:15 a.m. local" },
+      { label: "Audience", value: "Coastline app · Los Angeles (push opt-ins)" },
+      { label: "Channel", value: "Mobile app push" },
+    ],
+    changeNote: "First draft from the fixture context",
+  };
+  if (!drafting && focus) {
+    const current = currentFocusVersion(focus);
+    return {
+      kind: focus.kind,
+      title: current.title,
+      summary: current.summary,
+      fields: current.fields.map((field) =>
+        field.label === "Headline"
+          ? { ...field, value: "Rain outside? Warm soup is waiting." }
+          : field,
+      ),
+      changeNote: utterance.trim().slice(0, 240),
+    };
+  }
+  return draft;
+}
 
 type ToolResultListener = (toolName: string, input: unknown, output: unknown) => void;
 
@@ -552,16 +601,23 @@ export class MarketingOrchestrator extends AIChatAgent<
       },
       (name, input, output) => this.ingestToolResult(name, input, output),
     );
+    // The local focus tool changes only the workspace draft.
+    if (!(disabledTools as readonly string[]).includes("update_focus"))
+      Object.assign(
+        tools,
+        focusTools((input) => this.updateFocus(input)),
+      );
+    const planContext = { hasFocus: Boolean(this.state.workingSet.focus) };
     const workersAI = createWorkersAI({
       binding: this.env.AI,
       gateway: { id: this.env.AI_GATEWAY_ID },
     });
     const workspace = workingSetPrompt(this.state.workingSet);
     const prompt = latestUserText(turnMessages);
-    const toolPlan = selectToolPlan(prompt, Object.keys(tools));
+    const toolPlan = selectToolPlan(prompt, Object.keys(tools), planContext);
     // Readable plan for the trace and history, such as "a → b → c".
     const requiredTool = toolPlan?.join(" → ");
-    const missingTool = missingPlannedTool(prompt, Object.keys(tools));
+    const missingTool = missingPlannedTool(prompt, Object.keys(tools), planContext);
     if (missingTool) {
       await context.close();
       await graph.close();
@@ -1079,6 +1135,22 @@ export class MarketingOrchestrator extends AIChatAgent<
       const { tiles: _tiles, ...rest } = saved;
       this.setState({ ...rest, workingSet: emptyWorkingSet(), pendingConfirmation: null });
     }
+    // Working sets saved before the focus existed have no focus field.
+    else if (saved.workingSet.focus === undefined)
+      this.setState({ ...saved, workingSet: { ...saved.workingSet, focus: null } });
+  }
+
+  /** Saves a draft (or its revision) as the workspace focus. */
+  private updateFocus(input: FocusInput) {
+    const workingSet = applyFocusUpdate(this.state.workingSet, input, new Date());
+    this.setState({ ...this.state, workingSet });
+    return workingSet.focus as FocusItem;
+  }
+
+  /** The focus draft's title, which the policy reply names when there is one. */
+  private focusReferent() {
+    const focus = this.state.workingSet.focus;
+    return focus ? currentFocusVersion(focus).title : null;
   }
 
   /** Adds what a tool returned to the chat's working set. */
@@ -1106,10 +1178,14 @@ export class MarketingOrchestrator extends AIChatAgent<
         system: "salesforce",
         objectType,
         recordId,
-        title: title ?? `${ACTIVITY_LABELS[action]} ${recordId}`,
+        title:
+          (action === "save-draft-campaign"
+            ? this.state.workingSet.records.find((record) => record.recordId === recordId)?.title
+            : title) ?? `${ACTIVITY_LABELS[action]} ${recordId}`,
       },
       WRITE_TOOL_BY_ACTION[action],
       new Date(),
+      action === "save-draft-campaign" ? "updated" : "created",
     );
   }
 
@@ -1300,6 +1376,21 @@ export class MarketingOrchestrator extends AIChatAgent<
             500,
           );
       }
+      // Brief saves and review requests act on the focus draft when there is one; the server
+      // writes the summary from the focus so the card states exactly what will be written.
+      const focus = this.state.workingSet.focus;
+      let focusRef: Confirmation["focus"];
+      if (focus && (action === "save-draft-campaign" || action === "create-review-task")) {
+        const current = currentFocusVersion(focus);
+        focusRef = { id: focus.id, version: current.version, title: current.title };
+        summary =
+          action === "save-draft-campaign"
+            ? focusBriefText(focus)
+            : `Review "${current.title}" (version ${current.version}) with current campaign context, readiness findings, a due date, and a human review checklist.`.slice(
+                0,
+                500,
+              );
+      }
       if (!summary)
         return json(
           { error: { code: "VALIDATION_FAILED", message: "The confirmation request is invalid." } },
@@ -1314,6 +1405,7 @@ export class MarketingOrchestrator extends AIChatAgent<
           summary,
           principal: this.principalSubject,
           ...(image ?? {}),
+          ...(focusRef ? { focus: focusRef } : {}),
         }),
       );
       const confirmation = ConfirmationSchema.parse({
@@ -1327,6 +1419,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
         status: "pending",
         ...(image ?? {}),
+        ...(focusRef ? { focus: focusRef } : {}),
       });
       await this.recordConfirmationAudit(confirmation, "pending");
       this.setState({ ...this.state, pendingConfirmation: confirmation });
@@ -1635,13 +1728,16 @@ export class MarketingOrchestrator extends AIChatAgent<
     const utterance = latestUserText(evidenceTurnMessages(this.messages));
     const policyIntent = classifyPolicyIntent(utterance);
     if (policyIntent)
-      return scriptedResponse([policyResponse(policyIntent, this.previousReplyReferent())], {
-        model: POLICY_ROUTER,
-        route: policyIntent,
-        abortSignal,
-        onComplete: (result) =>
-          this.recordTurn(utterance, { model: POLICY_ROUTER, route: policyIntent }, result),
-      });
+      return scriptedResponse(
+        [policyResponse(policyIntent, this.focusReferent() ?? this.previousReplyReferent())],
+        {
+          model: POLICY_ROUTER,
+          route: policyIntent,
+          abortSignal,
+          onComplete: (result) =>
+            this.recordTurn(utterance, { model: POLICY_ROUTER, route: policyIntent }, result),
+        },
+      );
     // The first message of a conversation starts a fresh working set, whatever cleared the chat.
     if (!this.messages.some((message) => message.role === "assistant")) this.resetWorkingSet();
     if ((this.env.ENVIRONMENT as string) !== "local")
@@ -1650,6 +1746,26 @@ export class MarketingOrchestrator extends AIChatAgent<
     // as real tool results, so the workspace behaves the same way.
     for (const [toolName, result] of LOCAL_FIXTURE_RESULTS)
       this.ingestToolResult(toolName, { message: "Review the sample campaign" }, result);
+    const localDraft = localFixtureDraft(utterance, this.state.workingSet.focus);
+    if (localDraft) {
+      const focus = this.updateFocus(localDraft);
+      const current = currentFocusVersion(focus);
+      return scriptedResponse(
+        [
+          `**${current.title}** (version ${current.version}) is in your workspace.\n\n`,
+          ...current.fields.map((field) => `- **${field.label}:** ${field.value}\n`),
+          "\nIt is a draft: nothing was saved to Salesforce, scheduled, or sent.",
+        ],
+        {
+          model: "local-fixture",
+          reasoning:
+            "Local development has no model: save the fictional fixture draft as the workspace focus.",
+          abortSignal,
+          onComplete: (result) =>
+            this.recordTurn(utterance, { model: "local-fixture", route: "local-fixture" }, result),
+        },
+      );
+    }
     return scriptedResponse(
       [
         "I reviewed the fictional Northstar sample campaign. The **strongest signal is stable engagement**.\n\n",

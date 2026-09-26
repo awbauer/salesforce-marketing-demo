@@ -111,21 +111,34 @@ describe("campaign-context MCP", () => {
     expect(text).toContain("get_current_weather");
   });
 
-  it("plans a push campaign as profile, weather, past pushes, then the Salesforce content tool", () => {
+  it("plans a push campaign as profile, weather, past pushes, content, then the workspace focus", () => {
     const names = [
       "context_get_restaurant_profile",
       "context_get_current_weather",
       "graph_find_similar_past_pushes",
       "tool_salesforce_ns_draft_campaign_content",
+      "workspace_update_focus",
     ];
     const plan = selectToolPlan(PUSH_PROMPT, names);
     expect(plan).toEqual(names);
-    expect(stepToolChoice(plan, 0)).toMatchObject({ activeTools: [names[0]] });
-    expect(stepToolChoice(plan, 1)).toMatchObject({ activeTools: [names[1]] });
-    expect(stepToolChoice(plan, 2)).toMatchObject({ activeTools: [names[2]] });
-    expect(stepToolChoice(plan, 3)).toMatchObject({ activeTools: [names[3]] });
-    expect(stepToolChoice(plan, 4)).toEqual({ toolChoice: "none", activeTools: [] });
+    for (const [step, name] of names.entries())
+      expect(stepToolChoice(plan, step)).toMatchObject({ activeTools: [name] });
+    // Five forced tools leave the sixth and last step for the written answer.
+    expect(stepToolChoice(plan, 5)).toEqual({ toolChoice: "none", activeTools: [] });
     expect(missingPlannedTool(PUSH_PROMPT, names.slice(0, 2))).toBe("find_similar_past_pushes");
     expect(selectToolPlan(PUSH_PROMPT, names.slice(0, 2))).toBeUndefined();
+  });
+
+  it("sends revisions of the focus straight to update_focus, and only when a focus exists", () => {
+    const names = ["workspace_update_focus", "tool_salesforce_ns_draft_campaign_content"];
+    expect(selectToolPlan("Make it warmer", names, { hasFocus: true })).toEqual([
+      "workspace_update_focus",
+    ]);
+    expect(selectToolPlan("Make it warmer", names, { hasFocus: false })).toBeUndefined();
+    expect(selectToolPlan("Draft email content for the fall audience", names)).toEqual([
+      "tool_salesforce_ns_draft_campaign_content",
+      "workspace_update_focus",
+    ]);
+    expect(selectToolPlan("Summarize the campaign", names, { hasFocus: true })).toBeUndefined();
   });
 });

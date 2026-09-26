@@ -12,6 +12,7 @@ export type DiagramId =
   | "graph-path"
   | "graph-tools"
   | "architecture"
+  | "workspace"
   | "model-guards"
   | "mcp"
   | "salesforce"
@@ -49,17 +50,16 @@ export const PART_LESSONS: Record<string, PartLesson> = {
       "Spot the context failures the demo defends against",
     ],
     check: {
-      question:
-        "A user says “looks good, create it”. Where does the orchestrator find what “it” means?",
+      question: "Which of these does the model see on every turn?",
       options: [
-        "In the model's memory from the previous call",
-        "In the conversation window sent with this turn",
-        "In the turn history (audit trail)",
-        "In the knowledge graph",
+        "The full turn history",
+        "The recent conversation and a summary of the workspace",
+        "Every earlier tool result, in full",
+        "The whole knowledge graph",
       ],
       answer: 1,
       explain:
-        "Models keep nothing between calls. The last 8 messages are sent with every turn, so the previous draft is in the context window. The audit trail is only for people, and graph memory is still planned (issue #41).",
+        "Models keep nothing between calls. Each turn sends the last 8 messages (text only) and a summary of the workspace: the draft in progress, open records, and context gathered. Turn history is for people, and the graph is queried through tools.",
     },
   },
   graphrag: {
@@ -87,7 +87,7 @@ export const PART_LESSONS: Record<string, PartLesson> = {
   concepts: {
     number: 3,
     tagline: "Every moving part of the workbench",
-    minutes: 18,
+    minutes: 20,
     outcomes: [
       "Trace one chat turn from the browser to Salesforce and back",
       "Explain why routing and guards sit around the model",
@@ -163,6 +163,14 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
     diagram: "architecture",
     keyIdea:
       "One stateful agent per user runs each turn as a short tool loop and records every event.",
+  },
+  workspace: {
+    diagram: "workspace",
+    keyIdea:
+      "Tools fill the workspace, the model drafts into it, and confirmed writes act on exactly what it shows.",
+    tryIt: [
+      { kind: "prompt", label: "Draft a push and watch the workspace fill", prompt: PUSH_PROMPT },
+    ],
   },
   model: {
     diagram: "model-guards",

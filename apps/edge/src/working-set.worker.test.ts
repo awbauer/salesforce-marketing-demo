@@ -119,7 +119,7 @@ describe("working set", () => {
     const empty = workingSetPrompt(emptyWorkingSet());
     expect(empty).toContain("No records are open in this chat yet.");
     expect(empty).toMatch(
-      /Catalog .*never what "this" or "it" refers to.*Fall Loyalty Reactivation/,
+      /Catalog .*act on one only when the user asks for it by name or id.*Fall Loyalty Reactivation/,
     );
     const opened = ingestToolResult(emptyWorkingSet(), {
       toolName: "tool_salesforce_x_summarize_campaign",

@@ -1,12 +1,13 @@
 import { z } from "zod";
+import { DAYPARTS } from "./coastline.ts";
 import {
   ACCOUNTS,
-  CAMPAIGNS,
+  ALL_CAMPAIGNS,
   CHANNELS,
   CONDITIONS,
+  consentScopeFor,
   DATASET_VERSION,
   type Dataset,
-  DAYPARTS,
   type GraphNode,
   LOCATIONS,
 } from "./dataset.ts";
@@ -22,9 +23,11 @@ export type GraphBackend =
   | { kind: "fixture"; dataset: Dataset };
 
 const MAX_PATHS = 25;
-const CAMPAIGN_IDS = CAMPAIGNS.map((campaign) => campaign.id) as [string, ...string[]];
+const CAMPAIGN_IDS = ALL_CAMPAIGNS.map((campaign) => campaign.id) as [string, ...string[]];
 const LOCATION_IDS = LOCATIONS.map((location) => location.id) as [string, ...string[]];
-const campaignHelp = CAMPAIGNS.map((campaign) => `${campaign.id} (${campaign.name})`).join(", ");
+const campaignHelp = ALL_CAMPAIGNS.map((campaign) => `${campaign.id} (${campaign.name})`).join(
+  ", ",
+);
 
 // ---------------------------------------------------------------------------------------------
 // Fixture index: a tiny in-memory traversal layer over the same dataset that seeds Neo4j.
@@ -45,7 +48,7 @@ function indexDataset(dataset: Dataset) {
   const incoming = (id: string, type: string) =>
     (into.get(id) ?? []).filter((relationship) => relationship.type === type);
   const node = (id: string) => byId.get(id) as GraphNode;
-  return { byId, outgoing, incoming, node };
+  return { byId, outgoing, incoming, node, relationships: dataset.relationships };
 }
 
 function index(dataset: Dataset) {
@@ -132,27 +135,9 @@ const getGraphOverview = define({
               count: value,
             }),
           ),
-          relationshipCounts: count(
-            [...ix.byId.keys()].flatMap((id) =>
-              [
-                "WORKS_AT",
-                "ENGAGED_WITH",
-                "INCLUDES",
-                "TARGETS",
-                "USES",
-                "BUILT_FROM",
-                "FOR",
-                "ON",
-                "HAS_CONSENT",
-                "PASSED",
-                "FAILED",
-                "PART_OF",
-                "FEATURED",
-                "SENT_DURING",
-                "UNDER",
-              ].flatMap((type) => ix.outgoing(id, type).map(() => type)),
-            ),
-          ).map(([type, value]) => ({ type, count: value })),
+          relationshipCounts: count(ix.relationships.map((relationship) => relationship.type)).map(
+            ([type, value]) => ({ type, count: value }),
+          ),
         },
       ];
     });
@@ -293,7 +278,7 @@ const findAudienceOverlap = define({
     const result = (await rows(backend, OVERLAP_CYPHER, { campaign }, (ix) => {
       const campaignNode = ix.node(campaign);
       const audience = audienceOf(ix, campaign);
-      return CAMPAIGNS.filter(
+      return ALL_CAMPAIGNS.filter(
         (other) =>
           other.id !== campaign && (other.status === "Active" || other.status === "Planned"),
       )
@@ -337,7 +322,7 @@ const findAudienceOverlap = define({
       })),
     );
     return {
-      campaign: result[0]?.campaign ?? CAMPAIGNS.find((item) => item.id === campaign)?.name,
+      campaign: result[0]?.campaign ?? ALL_CAMPAIGNS.find((item) => item.id === campaign)?.name,
       audienceSize: result[0]?.audienceSize ?? null,
       overlaps: result.map(({ other, status, shared, examples }) => ({
         campaign: other,
@@ -352,44 +337,70 @@ const findAudienceOverlap = define({
 
 export const CONSENT_CYPHER = `
 MATCH (req:ConsentScope {id: $scopeId, dataset: $dataset})
-MATCH (c:Campaign {id: $campaign, dataset: $dataset})-[:TARGETS]->(:Segment)-[:INCLUDES]->(p:Persona)
-WITH DISTINCT req, c, p ORDER BY p.name
-WITH req, c, collect(p) AS audience
+MATCH (c:Campaign {id: $campaign, dataset: $dataset})
+OPTIONAL MATCH (c)-[:TARGETS]->(:Segment)-[:INCLUDES]->(p:Persona)
+WITH req, c, p ORDER BY p.name
+WITH req, c, collect(DISTINCT p) AS personas
+OPTIONAL MATCH (c)-[:TARGETS]->(s:Segment)-[hc:HAS_CONSENT]->(req)
+WITH req, c, personas, s, hc ORDER BY s.name
+WITH req, c, personas,
+  collect(CASE WHEN s IS NULL THEN NULL ELSE {id: s.id, name: s.name, size: s.size, optedIn: hc.optedIn} END) AS cohorts
 RETURN c.id AS campaignId, c.name AS campaign, req.id AS scopeId, req.name AS requiredScope,
-  size(audience) AS audience,
-  size([p IN audience WHERE EXISTS { (p)-[:HAS_CONSENT]->(req) }]) AS covered,
-  [p IN audience WHERE NOT EXISTS { (p)-[:HAS_CONSENT]->(req) } | {id: p.id, name: p.name}][0..5] AS uncovered,
-  EXISTS { (c)-[:ON]->(:Channel {name: $channel}) } AS campaignUsesChannel`;
+  size(personas) AS personaAudience,
+  size([p IN personas WHERE EXISTS { (p)-[:HAS_CONSENT]->(req) }]) AS personaCovered,
+  [p IN personas WHERE NOT EXISTS { (p)-[:HAS_CONSENT]->(req) } | {id: p.id, name: p.name}][0..5] AS uncovered,
+  cohorts,
+  EXISTS { (c)-[:ON]->(:Channel {channelId: $channel}) } AS campaignUsesChannel`;
+
+type Cohort = { id: string; name: string; size: number; optedIn: number };
 
 const checkConsentCoverage = define({
   name: "check_consent_coverage",
   title: "Check consent coverage",
-  description: `Check how much of a campaign's audience holds the marketing consent scope a channel requires, with examples of members who lack it. Read-only; never changes consent or suppressions. Campaigns: ${campaignHelp}.`,
+  description: `Check how much of a campaign's audience holds the marketing consent a channel requires: individual personas for B2B campaigns, and aggregate app-user segments (push opt-ins) for Coastline Kitchen's mobile app campaigns, with the members or segments that fall short. Channels: email, sms, mobile-app (push notifications). Read-only; never changes consent or suppressions. Campaigns: ${campaignHelp}.`,
   input: z.object({
     campaign: z.enum(CAMPAIGN_IDS).describe("Campaign ID"),
-    channel: z.enum(CHANNELS).describe("Channel whose marketing consent is required"),
+    channel: z
+      .enum([...CHANNELS, "push"])
+      .describe("Channel whose marketing consent is required; push means mobile-app"),
   }),
-  run: async (backend, { campaign, channel }) => {
-    const scopeId = `consent-${channel}-marketing`;
+  run: async (backend, { campaign, channel: requested }) => {
+    const channel = requested === "push" ? "mobile-app" : requested;
+    const scopeId = consentScopeFor(channel);
     const [row] = (await rows(backend, CONSENT_CYPHER, { campaign, channel, scopeId }, (ix) => {
       const audience = audienceOf(ix, campaign);
       const covered = (persona: GraphNode) =>
         ix.outgoing(persona.id, "HAS_CONSENT").some((consent) => consent.to === scopeId);
+      const cohorts = ix
+        .outgoing(campaign, "TARGETS")
+        .flatMap((target) =>
+          ix
+            .outgoing(target.to, "HAS_CONSENT")
+            .filter((consent) => consent.to === scopeId)
+            .map((consent) => ({
+              id: target.to,
+              name: ix.node(target.to).name,
+              size: Number(ix.node(target.to).size),
+              optedIn: Number(consent.properties?.optedIn),
+            })),
+        )
+        .sort((a, b) => byText(a.name, b.name));
       return [
         {
           campaignId: campaign,
           campaign: ix.node(campaign).name,
           scopeId,
           requiredScope: ix.node(scopeId).name,
-          audience: audience.length,
-          covered: audience.filter(covered).length,
+          personaAudience: audience.length,
+          personaCovered: audience.filter(covered).length,
           uncovered: audience
             .filter((persona) => !covered(persona))
             .slice(0, 5)
             .map((persona) => ({ id: persona.id, name: persona.name })),
+          cohorts,
           campaignUsesChannel: ix
             .outgoing(campaign, "ON")
-            .some((on) => ix.node(on.to).name === channel),
+            .some((on) => ix.node(on.to).channelId === channel),
         },
       ];
     })) as Array<{
@@ -397,34 +408,67 @@ const checkConsentCoverage = define({
       campaign: string;
       scopeId: string;
       requiredScope: string;
-      audience: number;
-      covered: number;
+      personaAudience: number;
+      personaCovered: number;
       uncovered: PathNode[];
+      cohorts: Cohort[];
       campaignUsesChannel: boolean;
     }>;
     if (!row)
       return { campaign, channel, audience: 0, covered: 0, uncoveredExamples: [], paths: [] };
-    const paths = row.uncovered.slice(0, 3).map((persona) => ({
-      nodes: [
-        { id: row.campaignId, label: "Campaign", name: row.campaign },
-        { id: persona.id, label: "Persona", name: persona.name },
-        { id: row.scopeId, label: "ConsentScope", name: row.requiredScope },
-      ],
-      relationships: [
-        { type: "TARGETS → INCLUDES", from: row.campaignId, to: persona.id },
-        { type: "MISSING HAS_CONSENT", from: persona.id, to: row.scopeId },
-      ],
+    const cohorts = row.cohorts.map((cohort) => ({
+      ...cohort,
+      size: Number(cohort.size),
+      optedIn: Number(cohort.optedIn),
     }));
+    const audience = row.personaAudience + cohorts.reduce((sum, cohort) => sum + cohort.size, 0);
+    const covered = row.personaCovered + cohorts.reduce((sum, cohort) => sum + cohort.optedIn, 0);
+    const weakest = [...cohorts].sort(
+      (a, b) => a.optedIn / a.size - b.optedIn / b.size || byText(a.name, b.name),
+    );
+    const campaignNode = { id: row.campaignId, label: "Campaign", name: row.campaign };
+    const scopeNode = { id: row.scopeId, label: "ConsentScope", name: row.requiredScope };
+    const pct = (value: number) => `${Math.round(value * 1000) / 10}%`;
+    const paths: EvidencePath[] = [
+      ...row.uncovered.slice(0, 3).map((persona) => ({
+        nodes: [campaignNode, { id: persona.id, label: "Persona", name: persona.name }, scopeNode],
+        relationships: [
+          { type: "TARGETS → INCLUDES", from: row.campaignId, to: persona.id },
+          { type: "MISSING HAS_CONSENT", from: persona.id, to: row.scopeId },
+        ],
+      })),
+      ...weakest.slice(0, 3).map((cohort) => ({
+        nodes: [campaignNode, { id: cohort.id, label: "Segment", name: cohort.name }, scopeNode],
+        relationships: [
+          { type: "TARGETS", from: row.campaignId, to: cohort.id },
+          {
+            type: `HAS_CONSENT ${pct(cohort.optedIn / cohort.size)}`,
+            from: cohort.id,
+            to: row.scopeId,
+          },
+        ],
+      })),
+    ];
     return {
       campaign: row.campaign,
       channel,
       requiredScope: row.requiredScope,
       campaignUsesChannel: row.campaignUsesChannel,
-      audience: row.audience,
-      covered: row.covered,
-      uncovered: row.audience - row.covered,
-      coverageRate: row.audience ? Math.round((row.covered / row.audience) * 1000) / 1000 : 0,
-      uncoveredExamples: row.uncovered.map((persona) => persona.name),
+      audience,
+      covered,
+      uncovered: audience - covered,
+      coverageRate: audience ? Math.round((covered / audience) * 1000) / 1000 : 0,
+      uncoveredExamples: [
+        ...row.uncovered.map((persona) => persona.name),
+        ...weakest
+          .slice(0, 3)
+          .map((cohort) => `${cohort.name} (${pct(cohort.optedIn / cohort.size)} opted in)`),
+      ],
+      segments: cohorts.map((cohort) => ({
+        segment: cohort.name,
+        appUsers: cohort.size,
+        optedIn: cohort.optedIn,
+      })),
       paths,
     };
   },
@@ -433,13 +477,22 @@ const checkConsentCoverage = define({
 export const PUSH_HISTORY_CYPHER = `
 MATCH (s:PushSend {dataset: $dataset})-[:FOR]->(:Location {id: $locationId}),
   (s)-[:SENT_DURING]->(:Daypart {id: $daypartId}),
-  (s)-[:FEATURED]->(m:MenuItem)
+  (s)-[:FEATURED]->(m:MenuItem),
+  (s)-[:USED]->(a:ContentAsset)
 WHERE $conditionId IS NULL OR EXISTS { (s)-[:UNDER]->(:WeatherCondition {id: $conditionId}) }
-WITH m, s ORDER BY s.id
+WITH m, s, a ORDER BY s.id
 WITH m, count(s) AS sends, avg(s.orderRate) AS avgOrderRate, avg(s.openRate) AS avgOpenRate,
-  collect(s.angle) AS angles, collect(s.id)[0..1] AS exampleSends
-RETURN m.id AS itemId, m.name AS item, m.serves AS serves, sends, avgOrderRate, avgOpenRate, angles, exampleSends
+  collect(s.angle) AS angles, collect(s.id)[0..1] AS exampleSends,
+  collect({id: a.id, name: a.name}) AS assets
+RETURN m.id AS itemId, m.name AS item, m.serves AS serves, sends, avgOrderRate, avgOpenRate, angles,
+  exampleSends, assets
 ORDER BY avgOrderRate DESC, item`;
+
+export const PUSH_AUDIENCE_CYPHER = `
+MATCH (seg:Segment {dataset: $dataset})-[:NEAR]->(:Location {id: $locationId})
+MATCH (seg)-[hc:HAS_CONSENT]->(scope:ConsentScope)
+RETURN seg.id AS segmentId, seg.name AS segment, seg.size AS appUsers, hc.optedIn AS optedIn,
+  scope.id AS scopeId, scope.name AS scope`;
 
 const round4 = (value: number) => Math.round(value * 10000) / 10000;
 
@@ -468,6 +521,7 @@ const findSimilarPastPushes = define({
               continue;
             if (conditionId && !has("UNDER", conditionId)) continue;
             const itemId = ix.outgoing(send.id, "FEATURED")[0]?.to as string;
+            if (!ix.outgoing(send.id, "USED")[0]) continue;
             const group = groups.get(itemId) ?? { item: ix.node(itemId), sends: [] };
             group.sends.push(send);
             groups.set(itemId, group);
@@ -486,6 +540,10 @@ const findSimilarPastPushes = define({
                 avgOpenRate: mean("openRate"),
                 angles: sorted.map((send) => send.angle),
                 exampleSends: sorted.slice(0, 1).map((send) => send.id),
+                assets: sorted.map((send) => {
+                  const assetId = ix.outgoing(send.id, "USED")[0]?.to as string;
+                  return { id: assetId, name: ix.node(assetId).name };
+                }),
               };
             })
             .sort((a, b) => b.avgOrderRate - a.avgOrderRate || byText(a.item, b.item));
@@ -500,6 +558,7 @@ const findSimilarPastPushes = define({
           avgOpenRate: number;
           angles: string[];
           exampleSends: string[];
+          assets: Array<{ id: string; name: string }>;
         }>
       >;
     let matches = await query(`weather-${condition}`);
@@ -515,13 +574,72 @@ const findSimilarPastPushes = define({
     const topAngle = [...angleCounts.entries()].sort(
       (a, b) => b[1] - a[1] || byText(a[0], b[0]),
     )[0]?.[0];
-    const paths = top.map((row) => ({
-      nodes: [
-        { id: row.exampleSends[0] as string, label: "PushSend", name: `${row.sends} past sends` },
-        { id: row.itemId, label: "MenuItem", name: row.item },
-      ],
-      relationships: [{ type: "FEATURED", from: row.exampleSends[0] as string, to: row.itemId }],
-    }));
+    // The push content each item was sent with most often.
+    const mainAsset = (assets: Array<{ id: string; name: string }>) => {
+      const counts = new Map<string, { id: string; name: string; count: number }>();
+      for (const asset of assets)
+        counts.set(asset.id, { ...asset, count: (counts.get(asset.id)?.count ?? 0) + 1 });
+      return [...counts.values()].sort((a, b) => b.count - a.count || byText(a.name, b.name))[0];
+    };
+    const [audience] = (await rows(
+      backend,
+      PUSH_AUDIENCE_CYPHER,
+      { locationId: `location-${location}` },
+      (ix) =>
+        ix.incoming(`location-${location}`, "NEAR").flatMap(({ from: segmentId }) =>
+          ix.outgoing(segmentId, "HAS_CONSENT").map((consent) => ({
+            segmentId,
+            segment: ix.node(segmentId).name,
+            appUsers: ix.node(segmentId).size,
+            optedIn: consent.properties?.optedIn,
+            scopeId: consent.to,
+            scope: ix.node(consent.to).name,
+          })),
+        ),
+    )) as Array<{
+      segmentId: string;
+      segment: string;
+      appUsers: number;
+      optedIn: number;
+      scopeId: string;
+      scope: string;
+    }>;
+    const paths: EvidencePath[] = top.map((row) => {
+      const send = {
+        id: row.exampleSends[0] as string,
+        label: "PushSend",
+        name: `${row.sends} past sends`,
+      };
+      const asset = mainAsset(row.assets);
+      return {
+        nodes: [
+          { id: row.itemId, label: "MenuItem", name: row.item },
+          send,
+          ...(asset ? [{ id: asset.id, label: "ContentAsset", name: asset.name }] : []),
+        ],
+        relationships: [
+          { type: "FEATURED", from: send.id, to: row.itemId },
+          ...(asset ? [{ type: "USED", from: send.id, to: asset.id }] : []),
+        ],
+      };
+    });
+    const exampleSend = top[0]?.exampleSends[0];
+    if (audience && exampleSend)
+      paths.push({
+        nodes: [
+          { id: exampleSend, label: "PushSend", name: "Push send" },
+          { id: audience.segmentId, label: "Segment", name: audience.segment },
+          { id: audience.scopeId, label: "ConsentScope", name: audience.scope },
+        ],
+        relationships: [
+          { type: "SENT_TO", from: exampleSend, to: audience.segmentId },
+          {
+            type: `HAS_CONSENT ${Number(audience.optedIn).toLocaleString("en-US")} opted in`,
+            from: audience.segmentId,
+            to: audience.scopeId,
+          },
+        ],
+      });
     return {
       location,
       daypart,
@@ -534,8 +652,17 @@ const findSimilarPastPushes = define({
         sends: row.sends,
         avgOrderRate: round4(row.avgOrderRate),
         avgOpenRate: round4(row.avgOpenRate),
+        content: mainAsset(row.assets)?.name ?? null,
       })),
       bestAngle: topAngle ?? null,
+      audience: audience
+        ? {
+            segment: audience.segment,
+            appUsers: Number(audience.appUsers),
+            pushOptIns: Number(audience.optedIn),
+            consentScope: audience.scope,
+          }
+        : null,
       note: "Fictional push history for demonstration.",
       paths,
     };

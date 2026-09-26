@@ -247,11 +247,11 @@ export const LEARN_PARTS: LearnPart[] = [
 
 | Layer | Holds | Lives in | Lifetime |
 |---|---|---|---|
-| **Working memory** | The current conversation | Each user's agent Durable Object (chat messages) | Until **New chat** |
+| **Working memory** | The current conversation, plus the workspace: the focus draft, open records, and context cards | Each user's agent Durable Object | Until **New chat** |
 | **Audit trail** | What each turn did: route, tools, inputs and outputs, outcome | Agent SQLite (turn history) | 14 days |
 | **Long-term memory** | Decisions and drafts that matter across chats | Knowledge graph, linked to the entities involved | 14 days (planned, issue #41) |
 
-**Working memory** is sent to the model as a bounded window: the last 8 messages. Earlier assistant replies are reduced to their text, so old tool results and reasoning never re-enter the prompt. That's what lets "looks good, create it" understand what "it" is.
+**Working memory** is sent to the model as a bounded window: the last 8 messages. Earlier assistant replies are reduced to their text, so old tool results and reasoning never re-enter the prompt. The workspace is working memory too. The draft being built, the records the chat opened, and the context its tools gathered are summarized in every prompt, so the model works from structured state instead of re-reading old replies. See *The workspace* under the demo concepts.
 
 **The audit trail** is never sent to the model. It exists for people: the History view and the audit export.
 
@@ -335,7 +335,7 @@ GraphRAG's advantages are **multi-hop reasoning** and **explainability**. Every 
         id: "graphrag-here",
         title: "How this demo does GraphRAG",
         summary: "Six read-only, curated graph tools over Neo4j, each returning evidence paths.",
-        body: `- **The graph:** a deterministic, fictional dataset of about 1,600 nodes and 6,500 relationships, covering accounts, buying-role personas, campaigns, segments, content, brand rules, consent scopes, and Coastline Kitchen's menu, locations, dayparts, weather buckets, and 1,500 past push sends.
+        body: `- **The graph:** a deterministic, fictional dataset of about 1,650 nodes and 14,200 relationships. **Northstar** is the parent brand, with B2B accounts, buying-role personas, campaigns, segments, content, brand rules, and consent scopes. **Coastline Kitchen** is a restaurant brand under Northstar: its locations, menu, and dayparts come from the restaurant system with the same ids. Its campaigns run on the **mobile app** channel, and each of its 1,500 past push sends links to its campaign, push content, app segment, push consent, location, daypart, weather, and featured menu item.
 - **The store:** Neo4j AuraDB, reached over the HTTPS **Query API**, because Workers can't open Bolt connections. Every query runs in **read access mode**, so the database itself rejects writes.
 - **The tools:** \`explain_buyer_group\`, \`find_audience_overlap\`, \`check_consent_coverage\`, \`find_similar_past_pushes\`, \`trace_content_lineage\`, and \`get_graph_overview\`. Each returns an answer plus up to 25 **evidence paths**.
 - **Parity:** every tool also has an in-memory implementation over the same dataset. \`pnpm kg:parity\` proves both return identical results, so local development and evals match production.
@@ -368,6 +368,29 @@ A turn runs a **tool loop** of up to 6 steps. On each step the model either call
           "“Behind the scenes · technical trace” under each answer",
         ],
         resources: [R.cfAgents, R.cfChatAgents, R.durableObjects, R.aiSdk, R.react],
+      },
+      {
+        id: "workspace",
+        title: "The workspace: focus, context, and records",
+        summary:
+          "A per-chat, structured model of the work, built from tool results rather than model text.",
+        body: `Each chat has a **working set**, shown in the Workspace panel and summarized in every prompt. It starts empty with **New chat** and has three parts:
+
+- **Focus:** the draft being built (a campaign, brief, or message) as structured data: a title, labeled fields, a change note, and the context it was built from. The model saves drafts with the local \`update_focus\` tool; each revision becomes a new version, and earlier versions stay viewable.
+- **Context:** cards for what tools returned, such as weather, the restaurant profile, graph evidence, and Salesforce summaries, each with its source and fetch time.
+- **Records:** records the chat opened, created, or updated, in any connected system. Salesforce is one system and restaurant data is another; any system can join through the same reference: system, object type, and id.
+
+Three properties make it trustworthy:
+
+1. **Deterministic ingestion.** Cards and records come from tool results through code, never from model-written text, so nothing in the workspace is invented.
+2. **Open versus available.** Records the connected systems make available are listed separately as a catalog, so the model never acts on a record the chat hasn't opened.
+3. **Writes act on what you see.** *Save to Salesforce as brief* writes exactly the focus version on screen. The confirmation records that version in its request hash, and the campaign then shows as updated.`,
+        inDemo: [
+          "Workspace panel: Focus, Records, and Context",
+          "apps/edge/src/working-set.ts, apps/edge/src/focus.ts",
+          "Issue #46: session working set",
+        ],
+        resources: [R.contextEngineering, R.writingTools, R.buildingAgents],
       },
       {
         id: "model",
@@ -435,7 +458,8 @@ Metadata (Apex, fields, the permission set, and the MCP definition) deploys thro
 2. **Intent router.** Clear intents force a **tool plan**: an ordered list of tools, one forced per step.
    - "Check readiness" → \`check_campaign_readiness\`
    - "Why is X in the buyer group?" → \`explain_buyer_group\`
-   - A restaurant push campaign → profile → weather → past pushes → content draft
+   - A restaurant push campaign → profile → weather → past pushes → content draft → focus
+   - A revision of the focus ("make it warmer") → \`update_focus\`
    - The rules need specific signals and **defer to the model** when unsure, because a wrongly forced tool can't be undone within the turn.
 
 After a plan finishes, the model gets **no tools** and must write the answer.`,
@@ -547,10 +571,10 @@ Salesforce tools are fixtures, so the scores measure orchestration, not Salesfor
         summary: "External context that makes a campaign draft specific to the moment.",
         body: `The **campaign-context** MCP server gives the orchestrator facts Salesforce doesn't have:
 
-- \`get_restaurant_profile\`: a mocked profile for **Coastline Kitchen**, a fictional California fast-casual restaurant open 24/7, with its menu, favorites, dayparts, brand voice, and promotion rules.
+- \`get_restaurant_profile\`: the restaurant system's own data for **Coastline Kitchen**, a fictional fast-casual brand under Northstar that is open 24/7: its five California locations, menu, favorites, dayparts, app audience, brand voice, and promotion rules. Locations and menu items carry the same ids as their knowledge-graph nodes.
 - \`get_current_weather\`: live conditions from **Open-Meteo**, which is free, keyless, and CC BY 4.0, for a California city.
 
-The push-campaign plan chains these with the knowledge graph's past performance and the Salesforce content tool, so the draft fits the menu, the time of day, the weather, and what worked before.`,
+The push-campaign plan chains these with the knowledge graph's past performance and the Salesforce content tool, then saves the draft to the workspace **focus**. The draft fits the menu, the time of day, the weather, and what worked before, and "make it warmer" revises it as a new version.`,
         inDemo: [
           "Quickstart: the Coastline Kitchen push campaign prompt",
           "Sources: Restaurant data, Weather · Open-Meteo",

@@ -70,6 +70,10 @@ export const ConfirmationSchema = z.object({
   summary: z.string().min(1).max(500),
   expiresAt: z.string().datetime(),
   status: z.enum(["pending", "confirmed", "denied", "expired", "executed"]),
+  /** The workspace focus version this write was confirmed for, when it acts on the focus. */
+  focus: z
+    .object({ id: z.string(), version: z.number().int().positive(), title: z.string() })
+    .optional(),
 });
 export type Confirmation = z.infer<typeof ConfirmationSchema>;
 
@@ -136,6 +140,7 @@ export const KNOWLEDGE_GRAPH_TOOLS = Object.freeze([
 /** Every tool the orchestrator may call, for display names and operator kill switches. */
 export const ORCHESTRATOR_TOOLS = Object.freeze([
   ...PHASE_2_CURATED_TOOLS,
+  "update_focus",
   ...CAMPAIGN_CONTEXT_TOOLS,
   ...KNOWLEDGE_GRAPH_TOOLS,
 ] as const);
@@ -187,11 +192,56 @@ export const WorkingRecordSchema = RecordRefSchema.extend({
   title: z.string().min(1).max(200),
   systemLabel: z.string(),
   url: z.string().url().optional(),
-  relation: z.enum(["read", "created"]),
+  relation: z.enum(["read", "created", "updated"]),
   via: z.string(),
   addedAt: z.string(),
 });
 export type WorkingRecord = z.infer<typeof WorkingRecordSchema>;
+
+/** What the chat is working on: a campaign, a brief, or a message draft. */
+export const FocusKindSchema = z.enum(["campaign", "brief", "push-message", "email", "content"]);
+export type FocusKind = z.infer<typeof FocusKindSchema>;
+
+export const FocusFieldSchema = z.object({
+  label: z.string().min(1).max(60),
+  value: z.string().min(1).max(1200),
+});
+
+export const FocusVersionSchema = z.object({
+  version: z.number().int().positive(),
+  title: z.string().min(1).max(160),
+  summary: z.string().max(600),
+  fields: z.array(FocusFieldSchema).max(16),
+  changeNote: z.string().max(240),
+  /** Context cards the draft was built from, by card id. */
+  basedOn: z.array(z.string()).max(12),
+  createdAt: z.string(),
+});
+export type FocusVersion = z.infer<typeof FocusVersionSchema>;
+
+/**
+ * The focus: the one thing the chat is building, as structured data with every version kept.
+ * Revisions, references to the draft, and confirmed saves all act on it.
+ */
+export const FocusItemSchema = z.object({
+  id: z.string(),
+  kind: FocusKindSchema,
+  current: z.number().int().positive(),
+  versions: z.array(FocusVersionSchema).min(1).max(20),
+});
+export type FocusItem = z.infer<typeof FocusItemSchema>;
+
+export const FOCUS_KIND_LABELS: Record<FocusKind, string> = {
+  campaign: "Campaign",
+  brief: "Brief",
+  "push-message": "Push message",
+  email: "Email",
+  content: "Content",
+};
+
+export const currentFocusVersion = (focus: FocusItem) =>
+  focus.versions.find((version) => version.version === focus.current) ??
+  (focus.versions.at(-1) as FocusVersion);
 
 /**
  * The chat's working set: the records it has opened or created and the context its tools
@@ -200,12 +250,21 @@ export type WorkingRecord = z.infer<typeof WorkingRecordSchema>;
  */
 export const WorkingSetSchema = z.object({
   startedAt: z.string().nullable(),
+  focus: FocusItemSchema.nullable().default(null),
   cards: z.array(InsightTileSchema),
   records: z.array(WorkingRecordSchema),
 });
 export type WorkingSet = z.infer<typeof WorkingSetSchema>;
 
-export const emptyWorkingSet = (): WorkingSet => ({ startedAt: null, cards: [], records: [] });
+export const emptyWorkingSet = (): WorkingSet => ({
+  startedAt: null,
+  focus: null,
+  cards: [],
+  records: [],
+});
+
+/** Local tools that change only the workspace, never an external system. */
+export const WORKSPACE_TOOLS = Object.freeze(["update_focus"] as const);
 
 /** Systems the workbench connects to. Records from any of them can join the working set. */
 export const CONNECTED_SYSTEMS: Readonly<Record<string, { label: string }>> = Object.freeze({
@@ -222,7 +281,7 @@ export const systemLabel = (system: string) => CONNECTED_SYSTEMS[system]?.label 
 
 /**
  * Records the connected systems make available to this workspace. The model can open them by
- * name or id, but a catalog record is never what "this" means until the chat opens it.
+ * name or id, but it acts on one only when the user asks for it or the chat opens it.
  */
 export const WORKSPACE_CATALOG: ReadonlyArray<RecordRef & { title: string }> = Object.freeze([
   {
@@ -300,8 +359,8 @@ export function classifyPolicyIntent(
 }
 
 /**
- * The policy reply, naming what a follow-up such as "looks good, create it" refers to when the
- * previous assistant reply had a title. The reference is a label only, never treated as evidence.
+ * The policy reply for a write request, naming the draft it concerns: the workspace focus, or
+ * the previous reply's title. The name is a label only, never treated as evidence.
  */
 export function policyResponse(
   intent: "confirmation-required" | "unsupported",
@@ -309,7 +368,7 @@ export function policyResponse(
 ) {
   if (!referent) return POLICY_RESPONSES[intent];
   return intent === "confirmation-required"
-    ? `I can't create “${referent}” in Salesforce from chat, and nothing has been saved or created. This demo only writes through a confirmation step: use Create review request in the Workspace panel to send this draft for review, check the confirmation card, and confirm it yourself. I can keep refining the draft here.`
+    ? `I can't create “${referent}” in Salesforce from chat, and nothing has been saved or created. This demo only writes through a confirmation step: in the Workspace, use Save to Salesforce as brief or Create review request, check the confirmation card, and confirm it yourself. I can keep refining the draft here.`
     : `I can't do that with “${referent}”: publishing, sending, activating, deleting, suppressing, changing buyer groups, and revealing audience contact details are blocked in this workbench, and I didn't take the action. I can keep refining the draft for review instead.`;
 }
 

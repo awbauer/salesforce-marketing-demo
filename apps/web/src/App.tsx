@@ -113,6 +113,7 @@ export function App() {
     status: string;
     campaignId: string;
   } | null>(null);
+  const [savedBrief, setSavedBrief] = useState<{ title: string; campaignId: string } | null>(null);
   const [attachedImage, setAttachedImage] = useState<{
     contentDocumentId: string;
     contentVersionId: string;
@@ -297,6 +298,7 @@ export function App() {
   /** Clears the conversation and its working set together. */
   function startNewChat() {
     clearHistory();
+    setSavedBrief(null);
     setImages([]);
     setSelectedImageId(null);
     agentAction<OrchestratorState["workingSet"]>("working-set/reset")
@@ -313,6 +315,23 @@ export function App() {
           resetError instanceof Error ? resetError.message : "The workspace could not be cleared.",
         ),
       );
+  }
+
+  /** Saves the focus draft to the open campaign's brief, after confirmation. */
+  async function saveFocusAsBrief() {
+    if (!openCampaign) return;
+    try {
+      const confirmation = await agentAction<Confirmation>("confirmations", {
+        action: "save-draft-campaign",
+        recordId: openCampaign.recordId,
+        // The server writes the brief text from the focus; this is only a fallback.
+        summary: "Save the workspace focus draft as the campaign brief.",
+      });
+      setPendingConfirmation(confirmation);
+      setState((current) => ({ ...current, pendingConfirmation: confirmation }));
+    } catch (actionError) {
+      setActionError(actionError instanceof Error ? actionError.message : "Preflight failed.");
+    }
   }
 
   async function requestReview() {
@@ -441,6 +460,16 @@ export function App() {
             image.id === attachedId ? { ...image, lifecycle: "attached" } : image,
           ),
         );
+      } else if (
+        decision === "execute" &&
+        result.result?.readBack &&
+        action === "save-draft-campaign"
+      ) {
+        setActionError("");
+        setSavedBrief({
+          title: pendingConfirmation?.focus?.title ?? "Draft brief",
+          campaignId: result.result.campaignId,
+        });
       } else if (decision === "execute" && result.result?.readBack) {
         setActionError("");
         setCreatedRecord({
@@ -802,6 +831,21 @@ export function App() {
                 </details>
               </section>
             )}
+            {savedBrief && (
+              <section className="success-banner" role="status">
+                <div>
+                  <strong>Brief saved to the campaign</strong>
+                  <span>{` · ${savedBrief.title}`}</span>
+                </div>
+                <a
+                  href={salesforceRecordUrl("Campaign", savedBrief.campaignId)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open campaign in Salesforce <span aria-hidden="true">↗</span>
+                </a>
+              </section>
+            )}
             {attachedImage && (
               <section className="success-banner" role="status">
                 <div>
@@ -862,7 +906,7 @@ export function App() {
                 <h3 id="confirmation-title">
                   {CONFIRMATION_COPY[pendingConfirmation.action].title}
                 </h3>
-                <p>{pendingConfirmation.summary}</p>
+                <p className="confirmation-summary">{pendingConfirmation.summary}</p>
                 {pendingConfirmation.action === "attach-generated-image" &&
                   generatedImage &&
                   generatedImage.id === pendingConfirmation.imageId && (
@@ -873,6 +917,15 @@ export function App() {
                     />
                   )}
                 <dl>
+                  {pendingConfirmation.focus && (
+                    <div className="confirmation-detail">
+                      <dt>Draft</dt>
+                      <dd>
+                        {pendingConfirmation.focus.title} · version{" "}
+                        {pendingConfirmation.focus.version}
+                      </dd>
+                    </div>
+                  )}
                   <div className="confirmation-detail">
                     <dt>Campaign</dt>
                     <dd>
@@ -972,7 +1025,21 @@ export function App() {
               can be saved, created, or attached until writes are resumed.
             </div>
           )}
-          <WorkspacePanel workingSet={state.workingSet} />
+          <WorkspacePanel
+            workingSet={state.workingSet}
+            focusAction={{
+              label: "Save to Salesforce as brief",
+              hint: !openCampaign
+                ? "Open a Salesforce campaign in the chat to save this draft"
+                : (writeBlock("save-draft-campaign") ??
+                  `Saves this version to ${openCampaign.title} after you confirm`),
+              disabled:
+                !openCampaign ||
+                pendingConfirmation !== null ||
+                writeBlock("save-draft-campaign") !== null,
+              onClick: () => void saveFocusAsBrief(),
+            }}
+          />
           <section className="image-workflow" aria-labelledby="image-workflow-title">
             <div>
               <p className="kicker">External creative workflow</p>
