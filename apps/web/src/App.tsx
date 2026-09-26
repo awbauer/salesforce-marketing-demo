@@ -1085,7 +1085,7 @@ export function App() {
                 "Draft campaign content for the sample audience",
                 "Check the sample campaign readiness and explain every blocker",
                 "Recommend buyer group members using the available sample signals",
-                "Draft a push notification campaign for Sunwise Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
+                "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
               ].map((prompt) => (
                 <button
                   type="button"

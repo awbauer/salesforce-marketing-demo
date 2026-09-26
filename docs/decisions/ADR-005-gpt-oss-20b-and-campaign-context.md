@@ -19,7 +19,7 @@ gpt-oss-20b matches or beats 120b through the production pipeline, at about 60% 
 
 - `PROOF_DEFAULTS.orchestratorModel` is `@cf/openai/gpt-oss-20b` again. It is still the only place the model is set.
 - **New MCP server:** `northstar-campaign-context` is served at `/mcp/campaign-context` behind Cloudflare Access, and used in-process by the orchestrator through the MCP client. It has two read-only tools:
-  - `get_restaurant_profile`: mocked, fictional Sunwise Kitchen data with menu, favorites, location, 24/7 hours, brand voice, aggregate audience facts, and promotion rules.
+  - `get_restaurant_profile`: mocked, fictional Coastline Kitchen data with menu, favorites, location, 24/7 hours, brand voice, aggregate audience facts, and promotion rules.
   - `get_current_weather`: live current conditions for a supported California city.
 - **Weather source:** Open-Meteo (`api.open-meteo.com`). It is free for non-commercial use, needs no API key, and its data is CC BY 4.0, so answers credit "Weather data by Open-Meteo.com". Only city-center coordinates are sent; no user or customer data leaves the Worker.
 - **Scenario:** a restaurant push-campaign request runs a forced plan (restaurant profile, then weather for its city, then the governed Salesforce `draft_campaign_content` tool), and the model writes the draft. Drafting stays with the governed Salesforce tool, and nothing is scheduled or sent.

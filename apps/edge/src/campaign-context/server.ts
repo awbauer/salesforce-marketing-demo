@@ -24,7 +24,7 @@ export function createCampaignContextMcpServer(dependencies: CampaignContextDepe
       description:
         "Mocked profile for a fictional California fast-casual restaurant: concept, 24/7 hours, location city ID for weather, menu with prices, dayparts, and tags, customer favorites, brand voice, aggregate audience facts, and promotion rules.",
       inputSchema: z.object({
-        restaurant: z.enum(RESTAURANT_IDS).describe("Restaurant to look up; use sunwise-kitchen"),
+        restaurant: z.enum(RESTAURANT_IDS).describe("Restaurant to look up; use coastline-kitchen"),
       }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },

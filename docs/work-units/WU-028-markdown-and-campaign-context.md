@@ -28,6 +28,7 @@ Assistant answers render as Markdown, the orchestrator runs on gpt-oss-20b (ADR-
 - **Live smoke with gpt-oss-20b:** `artifacts/evidence/WU-028/push-scenario-smoke.json`, 14/14 demo turns.
   - Both push runs called profile → weather → content and returned Markdown drafts with live Los Angeles conditions.
   - The first smoke run found 3 failures: leaked JSON answer text, and the restaurant guidance steering unrelated prompts. Both were fixed before this result.
+- **Rename:** the fictional restaurant was later renamed from "Sunwise Kitchen" to "Coastline Kitchen". The smoke evidence file records the name used at the time of the run.
 - **Screenshots:** `artifacts/evidence/WU-028/markdown-and-sources-{chrome,edge}.png`, showing rendered Markdown and the new sources.
 
 ## Acceptance criteria

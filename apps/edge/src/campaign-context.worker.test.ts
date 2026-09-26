@@ -6,7 +6,7 @@ import { connectCampaignContextTools } from "./campaign-context/server";
 import { missingPlannedTool, selectToolPlan, stepToolChoice } from "./turn-policy";
 
 const PUSH_PROMPT =
-  "Draft a push notification campaign for Sunwise Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
+  "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
 
 const openMeteo =
   (current: Record<string, number | string> = {}) =>
@@ -55,9 +55,9 @@ describe("campaign-context MCP", () => {
         "context_get_restaurant_profile",
       ]);
       const profile = (await tools.context_get_restaurant_profile?.execute?.(
-        { restaurant: "sunwise-kitchen" },
+        { restaurant: "coastline-kitchen" },
         callOptions,
-      )) as { structuredContent: (typeof RESTAURANT_PROFILES)["sunwise-kitchen"] };
+      )) as { structuredContent: (typeof RESTAURANT_PROFILES)["coastline-kitchen"] };
       expect(profile.structuredContent).toMatchObject({
         hours: "Open 24 hours, 7 days a week",
         location: { id: "los-angeles" },
