@@ -31,6 +31,15 @@ export type FocusAction = {
   onClick: () => void;
 };
 
+/** Readable names for object types that are API names, such as Northstar_Message__c. */
+const OBJECT_LABELS: Record<string, string> = {
+  Northstar_Message__c: "Message",
+  Northstar_Brief__c: "Brief",
+  ContentDocument: "File",
+};
+export const objectLabel = (objectType: string) =>
+  OBJECT_LABELS[objectType] ?? objectType.replace(/__c$/, "").replaceAll("_", " ");
+
 const RELATION_LABELS: Record<WorkingRecord["relation"], string> = {
   read: "Opened",
   created: "Created",
@@ -161,7 +170,7 @@ export function WorkspacePanel({
                       <div>
                         <strong>{record.title}</strong>
                         <span className="record-meta">
-                          {record.objectType} ·{" "}
+                          {objectLabel(record.objectType)} ·{" "}
                           <span className={`record-relation relation-${record.relation}`}>
                             {RELATION_LABELS[record.relation]}
                           </span>{" "}

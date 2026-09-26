@@ -1,6 +1,9 @@
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import {
   type Confirmation,
+  FOCUS_KIND_LABELS,
+  type FocusItem,
+  type FocusKind,
   type GeneratedCampaignImage,
   GeneratedCampaignImageSchema,
   initialOrchestratorState,
@@ -20,6 +23,7 @@ import {
 import { useAgent } from "agents/react";
 import type { UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
+import { PermissionDetails, RecordWriteDetails } from "./ConfirmationDetails";
 import { EvaluationView } from "./EvaluationView";
 import { GraphEvidencePanel } from "./GraphEvidence";
 import { GraphView } from "./graph/GraphView";
@@ -27,7 +31,7 @@ import { HistoryView } from "./HistoryView";
 import { LearnView } from "./learn/LearnView";
 import { Markdown } from "./Markdown";
 import { executionTrace } from "./turn-trace";
-import { WorkspacePanel } from "./WorkspacePanel";
+import { type FocusAction, WorkspacePanel } from "./WorkspacePanel";
 
 function rawMessageText(message: UIMessage) {
   return message.parts
@@ -89,6 +93,9 @@ function TechnicalTrace({
 }
 
 const CONFIRMATION_COPY = {
+  "save-campaign": { title: "Save campaign to Salesforce?", confirm: "Confirm save" },
+  "save-brief": { title: "Save brief to Salesforce?", confirm: "Confirm save" },
+  "save-message": { title: "Save message to Salesforce?", confirm: "Confirm save" },
   "create-review-task": { title: "Create Salesforce review task?", confirm: "Confirm create" },
   "save-draft-campaign": { title: "Save draft brief to Salesforce?", confirm: "Confirm save" },
   "attach-generated-image": {
@@ -96,6 +103,46 @@ const CONFIRMATION_COPY = {
     confirm: "Confirm attach",
   },
 } as const;
+
+/** The Salesforce write that saves each kind of draft. */
+const FOCUS_SAVE_ACTION = {
+  campaign: "save-campaign",
+  brief: "save-brief",
+  "push-message": "save-message",
+  email: "save-message",
+  content: "save-message",
+} as const satisfies Record<FocusKind, keyof typeof WRITE_TOOL_BY_ACTION>;
+
+/** The Focus card's save action: create, update, or already saved, with why it's disabled. */
+function focusSaveAction(
+  focus: FocusItem | null,
+  confirmationPending: boolean,
+  writeBlock: (action: keyof typeof WRITE_TOOL_BY_ACTION) => string | null,
+  onClick: () => void,
+): FocusAction | undefined {
+  if (!focus) return undefined;
+  const action = FOCUS_SAVE_ACTION[focus.kind];
+  const noun = FOCUS_KIND_LABELS[focus.kind].toLowerCase();
+  const saved = focus.saved;
+  const upToDate = saved?.version === focus.current;
+  const blocked = writeBlock(action);
+  return {
+    label: saved
+      ? upToDate
+        ? "Saved to Salesforce"
+        : "Update in Salesforce"
+      : `Create ${noun} in Salesforce`,
+    hint: blocked
+      ? blocked
+      : upToDate
+        ? `Version ${saved?.version} is the Salesforce record`
+        : saved
+          ? `Updates the record saved from version ${saved.version}; Salesforce checks your permissions first`
+          : "Salesforce checks your permissions, then you confirm",
+    disabled: upToDate || confirmationPending || blocked !== null,
+    onClick,
+  };
+}
 
 export function App() {
   const [state, setState] = useState<OrchestratorState>(initialOrchestratorState);
@@ -113,7 +160,12 @@ export function App() {
     status: string;
     campaignId: string;
   } | null>(null);
-  const [savedBrief, setSavedBrief] = useState<{ title: string; campaignId: string } | null>(null);
+  const [savedRecord, setSavedRecord] = useState<{
+    label: string;
+    title: string;
+    objectType: string;
+    recordId: string;
+  } | null>(null);
   const [attachedImage, setAttachedImage] = useState<{
     contentDocumentId: string;
     contentVersionId: string;
@@ -298,7 +350,7 @@ export function App() {
   /** Clears the conversation and its working set together. */
   function startNewChat() {
     clearHistory();
-    setSavedBrief(null);
+    setSavedRecord(null);
     setImages([]);
     setSelectedImageId(null);
     agentAction<OrchestratorState["workingSet"]>("working-set/reset")
@@ -317,15 +369,13 @@ export function App() {
       );
   }
 
-  /** Saves the focus draft to the open campaign's brief, after confirmation. */
-  async function saveFocusAsBrief() {
-    if (!openCampaign) return;
+  /** Prepares the focus draft's Salesforce save; the server plans it and checks permissions. */
+  async function saveFocus() {
+    const focus = state.workingSet.focus;
+    if (!focus) return;
     try {
       const confirmation = await agentAction<Confirmation>("confirmations", {
-        action: "save-draft-campaign",
-        recordId: openCampaign.recordId,
-        // The server writes the brief text from the focus; this is only a fallback.
-        summary: "Save the workspace focus draft as the campaign brief.",
+        action: FOCUS_SAVE_ACTION[focus.kind],
       });
       setPendingConfirmation(confirmation);
       setState((current) => ({ ...current, pendingConfirmation: confirmation }));
@@ -424,6 +474,7 @@ export function App() {
         result?: {
           recordId: string;
           campaignId: string;
+          objectType?: string;
           readBack: boolean;
           status: string;
           subject: string;
@@ -463,13 +514,25 @@ export function App() {
       } else if (
         decision === "execute" &&
         result.result?.readBack &&
-        action === "save-draft-campaign"
+        (action === "save-draft-campaign" || pendingConfirmation?.write)
       ) {
         setActionError("");
-        setSavedBrief({
-          title: pendingConfirmation?.focus?.title ?? "Draft brief",
-          campaignId: result.result.campaignId,
-        });
+        const write = pendingConfirmation?.write;
+        setSavedRecord(
+          write
+            ? {
+                label: write.objectLabel,
+                title: write.title,
+                objectType: write.objectType,
+                recordId: result.result.recordId,
+              }
+            : {
+                label: "Brief",
+                title: pendingConfirmation?.focus?.title ?? "Draft brief",
+                objectType: "Campaign",
+                recordId: result.result.campaignId,
+              },
+        );
       } else if (decision === "execute" && result.result?.readBack) {
         setActionError("");
         setCreatedRecord({
@@ -831,18 +894,18 @@ export function App() {
                 </details>
               </section>
             )}
-            {savedBrief && (
+            {savedRecord && (
               <section className="success-banner" role="status">
                 <div>
-                  <strong>Brief saved to the campaign</strong>
-                  <span>{` · ${savedBrief.title}`}</span>
+                  <strong>{savedRecord.label} saved to Salesforce</strong>
+                  <span>{` · ${savedRecord.title}`}</span>
                 </div>
                 <a
-                  href={salesforceRecordUrl("Campaign", savedBrief.campaignId)}
+                  href={salesforceRecordUrl(savedRecord.objectType, savedRecord.recordId)}
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Open campaign in Salesforce <span aria-hidden="true">↗</span>
+                  Open in Salesforce <span aria-hidden="true">↗</span>
                 </a>
               </section>
             )}
@@ -907,6 +970,7 @@ export function App() {
                   {CONFIRMATION_COPY[pendingConfirmation.action].title}
                 </h3>
                 <p className="confirmation-summary">{pendingConfirmation.summary}</p>
+                <RecordWriteDetails confirmation={pendingConfirmation} />
                 {pendingConfirmation.action === "attach-generated-image" &&
                   generatedImage &&
                   generatedImage.id === pendingConfirmation.imageId && (
@@ -926,18 +990,20 @@ export function App() {
                       </dd>
                     </div>
                   )}
-                  <div className="confirmation-detail">
-                    <dt>Campaign</dt>
-                    <dd>
-                      <a
-                        href={salesforceRecordUrl("Campaign", pendingConfirmation.recordId)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {pendingConfirmation.recordId} <span aria-hidden="true">↗</span>
-                      </a>
-                    </dd>
-                  </div>
+                  {!pendingConfirmation.write && (
+                    <div className="confirmation-detail">
+                      <dt>Campaign</dt>
+                      <dd>
+                        <a
+                          href={salesforceRecordUrl("Campaign", pendingConfirmation.recordId)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {pendingConfirmation.recordId} <span aria-hidden="true">↗</span>
+                        </a>
+                      </dd>
+                    </div>
+                  )}
                   {pendingConfirmation.contentHash && (
                     <div className="confirmation-detail">
                       <dt>Image hash</dt>
@@ -951,6 +1017,7 @@ export function App() {
                     <dd>{new Date(pendingConfirmation.expiresAt).toLocaleTimeString()}</dd>
                   </div>
                 </dl>
+                <PermissionDetails confirmation={pendingConfirmation} />
                 <div className="confirmation-actions">
                   <button
                     type="button"
@@ -1027,18 +1094,12 @@ export function App() {
           )}
           <WorkspacePanel
             workingSet={state.workingSet}
-            focusAction={{
-              label: "Save to Salesforce as brief",
-              hint: !openCampaign
-                ? "Open a Salesforce campaign in the chat to save this draft"
-                : (writeBlock("save-draft-campaign") ??
-                  `Saves this version to ${openCampaign.title} after you confirm`),
-              disabled:
-                !openCampaign ||
-                pendingConfirmation !== null ||
-                writeBlock("save-draft-campaign") !== null,
-              onClick: () => void saveFocusAsBrief(),
-            }}
+            focusAction={focusSaveAction(
+              state.workingSet.focus,
+              pendingConfirmation !== null,
+              (action) => writeBlock(action),
+              () => void saveFocus(),
+            )}
           />
           <section className="image-workflow" aria-labelledby="image-workflow-title">
             <div>

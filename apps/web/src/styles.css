@@ -991,6 +991,109 @@ a {
 .confirmation-summary {
   white-space: pre-line;
 }
+/* Confirmation card: what will be written, and the permission checks Salesforce ran. */
+.write-plan {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+.write-plan-target {
+  margin: 0 0 8px;
+  line-height: 1.45;
+}
+.write-plan-fields {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.write-plan-fields > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 8px;
+}
+.write-plan-fields dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.write-plan-fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.write-plan-body dd {
+  white-space: pre-line;
+  max-height: 140px;
+  overflow: auto;
+}
+.permission-check {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #eef7ee;
+  border: 1px solid #bcdcc3;
+  font-size: 13px;
+}
+.permission-check-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 6px;
+}
+.permission-check-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+.permission-check ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.permission-item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.permission-detail {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+.permission-mark {
+  flex: none;
+  font-weight: 800;
+  color: #2f7a44;
+}
+.permission-item.is-failed .permission-mark {
+  color: #b1452f;
+}
+.delegation {
+  margin-top: 8px;
+}
+.delegation summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--forest);
+}
+.delegation dl {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.delegation dt {
+  font-weight: 700;
+  font-size: 12px;
+}
+.delegation dd {
+  margin: 1px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink);
+}
 .workspace-sections {
   display: flex;
   flex-direction: column;

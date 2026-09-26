@@ -12,7 +12,14 @@ export const PROOF_DEFAULTS = Object.freeze({
   imageRetentionDays: 7,
   roles: ["evaluator", "demo-admin"] as const,
   browsers: ["chrome", "edge"] as const,
-  allowedWrites: ["save-draft-campaign", "create-review-task", "attach-generated-image"] as const,
+  allowedWrites: [
+    "save-draft-campaign",
+    "create-review-task",
+    "attach-generated-image",
+    "save-campaign",
+    "save-brief",
+    "save-message",
+  ] as const,
 });
 
 export const PrincipalSchema = z.object({
@@ -55,10 +62,56 @@ export const ConnectorStateSchema = z.object({
 });
 export type ConnectorState = z.infer<typeof ConnectorStateSchema>;
 
+/** One Salesforce permission check, run as the signed-in user before a write is prepared. */
+export const PermissionCheckSchema = z.object({
+  label: z.string(),
+  passed: z.boolean(),
+  detail: z.string(),
+});
+export const PermissionReportSchema = z.object({
+  source: z.enum(["salesforce", "local-fixture"]),
+  user: z.string(),
+  allowed: z.boolean(),
+  checkedAt: z.string(),
+  checks: z.array(PermissionCheckSchema),
+});
+export type PermissionReport = z.infer<typeof PermissionReportSchema>;
+
+/** What a confirmed record write will send to Salesforce, authored by the server from the focus. */
+export const RecordWriteSchema = z.object({
+  objectType: z.enum(["Campaign", "Northstar_Brief__c", "Northstar_Message__c"]),
+  objectLabel: z.string(),
+  /** The record to update; absent when the write creates one. */
+  recordId: z.string().optional(),
+  campaignId: z.string().optional(),
+  newCampaignName: z.string().max(80).optional(),
+  brand: z.string().max(80).optional(),
+  title: z.string().min(1).max(80),
+  channel: z.enum(["Email", "Push", "SMS"]).optional(),
+  subject: z.string().max(255).optional(),
+  preheader: z.string().max(255).optional(),
+  objective: z.string().max(255).optional(),
+  audience: z.string().max(255).optional(),
+  sendTime: z.string().max(120).optional(),
+  body: z.string().min(1).max(32000),
+  draftFields: z.string().max(32000),
+});
+export type RecordWrite = z.infer<typeof RecordWriteSchema>;
+
 export const ConfirmationSchema = z.object({
   id: z.string().uuid(),
-  action: z.enum(["save-draft-campaign", "create-review-task", "attach-generated-image"]),
-  recordId: z.string().regex(/^[a-zA-Z0-9]{15,18}$/),
+  action: z.enum([
+    "save-draft-campaign",
+    "create-review-task",
+    "attach-generated-image",
+    "save-campaign",
+    "save-brief",
+    "save-message",
+  ]),
+  /** The record the write is bound to: the one updated, its parent campaign, or "new". */
+  recordId: z.string().regex(/^(?:[a-zA-Z0-9]{15,18}|new)$/),
+  write: RecordWriteSchema.optional(),
+  permissions: PermissionReportSchema.optional(),
   imageId: z.string().uuid().optional(),
   contentHash: z
     .string()
@@ -119,6 +172,10 @@ export const PHASE_2_CURATED_TOOLS = Object.freeze([
   "save_campaign_brief",
   "create_campaign_review_request",
   "attach_campaign_image",
+  "save_campaign",
+  "save_brief",
+  "save_message",
+  "check_write_access",
 ] as const);
 
 /** Read-only tools served by the campaign-context MCP (mocked restaurant profile and live weather). */
@@ -141,6 +198,7 @@ export const KNOWLEDGE_GRAPH_TOOLS = Object.freeze([
 export const ORCHESTRATOR_TOOLS = Object.freeze([
   ...PHASE_2_CURATED_TOOLS,
   "update_focus",
+  "propose_salesforce_save",
   ...CAMPAIGN_CONTEXT_TOOLS,
   ...KNOWLEDGE_GRAPH_TOOLS,
 ] as const);
@@ -228,6 +286,15 @@ export const FocusItemSchema = z.object({
   kind: FocusKindSchema,
   current: z.number().int().positive(),
   versions: z.array(FocusVersionSchema).min(1).max(20),
+  /** The Salesforce record this draft was saved as, so later versions update it. */
+  saved: z
+    .object({
+      objectType: z.string(),
+      recordId: z.string(),
+      version: z.number().int().positive(),
+      campaignId: z.string().optional(),
+    })
+    .optional(),
 });
 export type FocusItem = z.infer<typeof FocusItemSchema>;
 
@@ -264,7 +331,7 @@ export const emptyWorkingSet = (): WorkingSet => ({
 });
 
 /** Local tools that change only the workspace, never an external system. */
-export const WORKSPACE_TOOLS = Object.freeze(["update_focus"] as const);
+export const WORKSPACE_TOOLS = Object.freeze(["update_focus", "propose_salesforce_save"] as const);
 
 /** Systems the workbench connects to. Records from any of them can join the working set. */
 export const CONNECTED_SYSTEMS: Readonly<Record<string, { label: string }>> = Object.freeze({
@@ -482,6 +549,9 @@ export const TurnTraceSchema = z.object({
 export type TurnTrace = z.infer<typeof TurnTraceSchema>;
 
 export const WRITE_TOOL_BY_ACTION = Object.freeze({
+  "save-campaign": "save_campaign",
+  "save-brief": "save_brief",
+  "save-message": "save_message",
   "save-draft-campaign": "save_campaign_brief",
   "create-review-task": "create_campaign_review_request",
   "attach-generated-image": "attach_campaign_image",

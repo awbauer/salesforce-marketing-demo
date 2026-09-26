@@ -384,7 +384,7 @@ Three properties make it trustworthy:
 
 1. **Deterministic ingestion.** Cards and records come from tool results through code, never from model-written text, so nothing in the workspace is invented.
 2. **Open versus available.** Records the connected systems make available are listed separately as a catalog, so the model never acts on a record the chat hasn't opened.
-3. **Writes act on what you see.** *Save to Salesforce as brief* writes exactly the focus version on screen. The confirmation records that version in its request hash, and the campaign then shows as updated.`,
+3. **Writes act on what you see.** Saving writes exactly the focus version on screen to Salesforce: a new campaign, brief, or message, or an update to the record it was saved as before. The confirmation records that version in its request hash, and the saved records appear in Records as created or updated.`,
         inDemo: [
           "Workspace panel: Focus, Records, and Context",
           "apps/edge/src/working-set.ts, apps/edge/src/focus.ts",
@@ -438,12 +438,17 @@ The two local servers are called **in-process** through an in-memory MCP transpo
         body: `Salesforce is **authoritative** for campaign data. The orchestrator never invents Salesforce facts. It calls tools on a **Salesforce Hosted MCP server**:
 
 - **Agent-backed tools:** summarize a campaign, check readiness, draft content, and account discovery. These call **Agentforce** agents defined as Agent Script bundles.
-- **Write tools:** save a brief, create a review task, and attach an image. These are global **Apex invocable actions** and are never available to the model; only the confirmation flow can run them.
+- **Record writes:** save a campaign, save a brief (\`Northstar_Brief__c\`), and save an email, push, or SMS message (\`Northstar_Message__c\`). Each creates the record, or updates it when the draft was saved before, and a brief or message can create its campaign in the same confirmed write. Messages are drafts: nothing is sent or scheduled.
+- **Other writes:** save a campaign description, create a review task, and attach an image.
+- **Permission check:** \`check_write_access\` is a read-only Apex action the workbench calls before preparing any write. It runs as the signed-in user and reports each permission it checked.
+
+Every write tool is a global **Apex invocable action**, never available to the model; only the confirmation flow can run them, and each writes in user mode.
 
 Metadata (Apex, fields, the permission set, and the MCP definition) deploys through a gated CI pipeline to one approved proof org.`,
         inDemo: [
           "Quickstart prompts 1–3",
-          "salesforce/force-app",
+          "Saved campaigns, briefs, and messages in the Workspace's Records",
+          "salesforce/force-app (NorthstarSave*, NorthstarCheckWriteAccess)",
           "docs/salesforce-deployment-pipeline.md",
         ],
         resources: [R.hostedMcp, R.agentforceTrailhead, R.agentforce],
@@ -454,12 +459,13 @@ Metadata (Apex, fields, the permission set, and the MCP definition) deploys thro
         summary: "Deterministic decisions before and around the model.",
         body: `Not every decision should be left to the model. Each turn passes through two deterministic routers:
 
-1. **Policy router.** Save, create, or change requests get a fixed reply pointing to the confirmation flow. Publish, send, delete, and similar requests are refused. Neither case calls the model, so it can never claim a write happened.
+1. **Policy router.** A save or create request with a draft in the workspace prepares that write: the server plans it from the draft, Salesforce checks your permissions, and a confirmation card appears. Other save, create, or change requests get a fixed reply pointing to the confirmation flow. Publish, send, delete, and similar requests are refused. None of these calls the model, so it can never claim a write happened.
 2. **Intent router.** Clear intents force a **tool plan**: an ordered list of tools, one forced per step.
    - "Check readiness" → \`check_campaign_readiness\`
    - "Why is X in the buyer group?" → \`explain_buyer_group\`
    - A restaurant push campaign → profile → weather → past pushes → content draft → focus
    - A revision of the focus ("make it warmer") → \`update_focus\`
+   - "…as a new campaign in Salesforce" → \`update_focus\` → \`propose_salesforce_save\`, which prepares the confirmation
    - The rules need specific signals and **defer to the model** when unsure, because a wrongly forced tool can't be undone within the turn.
 
 After a plan finishes, the model gets **no tools** and must write the answer.`,
@@ -490,17 +496,29 @@ At the turn level:
       },
       {
         id: "governance",
-        title: "Governance: confirmations, allowed writes, and kill switches",
-        summary: "Humans approve every write, and operators can turn things off.",
-        body: `Only three writes exist: save a draft brief, create a review task, and attach a selected image. Each one follows the same flow:
+        title: "Governance: permissions, confirmations, and kill switches",
+        summary:
+          "Salesforce decides who may write, a person approves every write, and operators can turn things off.",
+        body: `The workbench can create and update campaigns, briefs, and email, push, or SMS messages, and it can save a brief to a campaign, create a review task, or attach an image. Every write follows the same flow:
 
-1. **Preflight:** the server creates a confirmation bound to the exact arguments with a SHA-256 request hash, an idempotency key, and a 5-minute expiry.
-2. **Human confirmation:** the confirmation card shows what will change.
-3. **Execute:** the Worker signs the confirmation with HMAC. Apex verifies the signature, the expiry, the same user, and the hash before writing.
-4. **Read-back:** Salesforce returns the authoritative record, which is checked before the UI reports success.
+1. **Plan:** the server builds the write from the draft in the workspace, so the values are exactly what you reviewed.
+2. **Permission check:** before anything is prepared, the workbench asks Salesforce, **as you**, whether you may make this write: the workbench permission set, the Marketing User feature for campaigns, create or edit access on each object, field-level security, and edit access to the record for updates. The confirmation card lists every check. If one fails, nothing is prepared and the card says why.
+3. **Confirmation:** the card shows the record to be created or updated, its values, and the draft version, bound by a SHA-256 request hash, an idempotency key, and a 5-minute expiry.
+4. **Execute:** the Worker signs the confirmation with HMAC. Apex verifies the signature, the expiry, the same user, and the hash, then writes in **user mode**, so Salesforce enforces your permissions again at write time.
+5. **Read-back:** Salesforce returns the authoritative record, and the workspace shows it as created or updated. A draft that was saved updates the same record next time instead of creating another.
+
+**Who checks what.** Each layer does one job:
+
+| Layer | Responsible for | Not responsible for |
+|---|---|---|
+| **The model** | Drafting and proposing saves | Writing anything: it has no write tools |
+| **The workbench** | Planning the write from your draft, asking Salesforce for a permission check, hashing, signing | Deciding who may write |
+| **You** | Reviewing exact values and confirming | — |
+| **Salesforce** | Authorization (profile, permission sets, field-level security, sharing), signature checks, the write, and read-back | — |
 
 **Kill switches** (\`WRITES_ENABLED\`, \`DISABLED_TOOLS\`) are Worker secrets that operators can flip without a deploy. The knowledge graph is read-only at the database level. No customer PII enters prompts, logs, or the graph.`,
         inDemo: [
+          "Focus card → Create in Salesforce → confirmation card with the permission check",
           "Create review request → confirmation card",
           "Attach to campaign on a generated image",
           "infra/cloudflare/pot/README.md (operator runbook)",

@@ -87,6 +87,33 @@
       "source": "salesforce-apex",
       "autonomous": false,
       "allowedWrite": "attach-generated-image"
+    },
+    {
+      "name": "save_campaign",
+      "riskClass": "write",
+      "source": "salesforce-apex",
+      "autonomous": false,
+      "allowedWrite": "save-campaign"
+    },
+    {
+      "name": "save_brief",
+      "riskClass": "write",
+      "source": "salesforce-apex",
+      "autonomous": false,
+      "allowedWrite": "save-brief"
+    },
+    {
+      "name": "save_message",
+      "riskClass": "write",
+      "source": "salesforce-apex",
+      "autonomous": false,
+      "allowedWrite": "save-message"
+    },
+    {
+      "name": "check_write_access",
+      "riskClass": "read",
+      "source": "salesforce-apex",
+      "autonomous": false
     }
   ]
 }
