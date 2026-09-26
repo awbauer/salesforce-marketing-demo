@@ -1,4 +1,4 @@
-import type { InsightTile } from "@northstar/contracts";
+import { type InsightTile, type RecordRef, systemLabel } from "@northstar/contracts";
 
 const SALESFORCE_SANDBOX_ORIGIN = "https://pu1788182184076.my.salesforce.com";
 
@@ -6,6 +6,22 @@ export function salesforceRecordUrl(objectApiName: string, recordId: string) {
   const objectName = encodeURIComponent(objectApiName);
   const id = encodeURIComponent(recordId);
   return `${SALESFORCE_SANDBOX_ORIGIN}/lightning/r/${objectName}/${id}/view`;
+}
+
+/** A link to a record in its own system, when that system has one. */
+export function recordUrl(ref: RecordRef & { url?: string }) {
+  if (ref.url) return ref.url;
+  if (ref.system === "salesforce") return salesforceRecordUrl(ref.objectType, ref.recordId);
+  return undefined;
+}
+
+/** "just now", "4 min ago", "2 h ago" relative to `now`. */
+export function relativeTime(iso: string, now = Date.now()) {
+  const minutes = Math.round((now - Date.parse(iso)) / 60_000);
+  if (!Number.isFinite(minutes) || minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 24 ? `${hours} h ago` : `${Math.round(hours / 24)} d ago`;
 }
 
 /** Recovers answer text from JSON envelopes some models emit, keeping Markdown intact. */
@@ -114,6 +130,7 @@ export function InsightCard({
   availableResources?: readonly string[];
 }) {
   const renderMode = resolveTileRenderMode(tile, availableResources);
+  const link = tile.recordRef ? recordUrl(tile.recordRef) : undefined;
   return (
     <article
       className={`insight-card state-${tile.state}`}
@@ -145,14 +162,14 @@ export function InsightCard({
       </ul>
       <footer>
         <span>{tile.source.label}</span>
-        <time>{tile.source.freshness}</time>
-        {tile.recordRef && (
-          <a
-            href={salesforceRecordUrl(tile.recordRef.objectApiName, tile.recordRef.recordId)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open in Salesforce <span aria-hidden="true">↗</span>
+        {tile.updatedAt ? (
+          <time dateTime={tile.updatedAt}>{relativeTime(tile.updatedAt)}</time>
+        ) : (
+          <time>{tile.source.freshness}</time>
+        )}
+        {tile.recordRef && link && (
+          <a href={link} target="_blank" rel="noreferrer">
+            Open in {systemLabel(tile.recordRef.system)} <span aria-hidden="true">↗</span>
           </a>
         )}
       </footer>
@@ -170,8 +187,8 @@ export function InsightBoard({
   if (tiles.length === 0)
     return (
       <div className="empty-state">
-        <strong>No insights yet</strong>
-        <span>Ask the orchestrator to review a sample campaign.</span>
+        <strong>No context yet</strong>
+        <span>Data your chat's tools return appears here.</span>
       </div>
     );
   return (

@@ -23,8 +23,11 @@ export const PrincipalSchema = z.object({
 });
 export type Principal = z.infer<typeof PrincipalSchema>;
 
+/** A connected system: Salesforce is one of several (weather, restaurant data, the graph, …). */
+export const SystemIdSchema = z.string().regex(/^[a-z][a-z0-9-]{1,39}$/);
+
 export const SourceSchema = z.object({
-  system: z.enum(["salesforce", "data-360", "marketing-cloud-next", "cloudflare"]),
+  system: SystemIdSchema,
   label: z.string(),
   freshness: z.string(),
   status: z.enum(["ready", "stale", "unavailable", "permission-denied"]),
@@ -137,9 +140,30 @@ export const ORCHESTRATOR_TOOLS = Object.freeze([
   ...KNOWLEDGE_GRAPH_TOOLS,
 ] as const);
 
+/** A record in any connected system, identified by system, object type, and id. */
+export const RecordRefSchema = z.object({
+  system: SystemIdSchema,
+  objectType: z.string().min(1).max(80),
+  recordId: z.string().min(1).max(120),
+});
+export type RecordRef = z.infer<typeof RecordRefSchema>;
+
+export const recordKey = (ref: RecordRef) => `${ref.system}:${ref.objectType}:${ref.recordId}`;
+
 export const InsightTileSchema = z.object({
   id: z.string(),
-  kind: z.enum(["campaign-brief", "readiness", "performance", "account-signals", "content-draft"]),
+  kind: z.enum([
+    "campaign-brief",
+    "readiness",
+    "performance",
+    "account-signals",
+    "content-draft",
+    "campaign-summary",
+    "weather",
+    "restaurant",
+    "graph",
+    "context",
+  ]),
   title: z.string(),
   eyebrow: z.string(),
   summary: z.string(),
@@ -148,12 +172,74 @@ export const InsightTileSchema = z.object({
   state: z.enum(["ready", "loading", "empty", "error", "stale", "permission-denied"]),
   source: SourceSchema,
   details: z.array(z.string()),
-  recordRef: z
-    .object({ system: z.literal("salesforce"), objectApiName: z.string(), recordId: z.string() })
-    .optional(),
+  recordRef: RecordRefSchema.optional(),
   presentation: PortableTilePresentationSchema.optional(),
+  /** When the data was fetched (ISO time); the UI shows it relative to now. */
+  updatedAt: z.string().optional(),
+  /** The tool that produced this card. */
+  toolName: z.string().optional(),
 });
 export type InsightTile = z.infer<typeof InsightTileSchema>;
+
+/** A record the chat has opened or created, in any connected system. */
+export const WorkingRecordSchema = RecordRefSchema.extend({
+  key: z.string(),
+  title: z.string().min(1).max(200),
+  systemLabel: z.string(),
+  url: z.string().url().optional(),
+  relation: z.enum(["read", "created"]),
+  via: z.string(),
+  addedAt: z.string(),
+});
+export type WorkingRecord = z.infer<typeof WorkingRecordSchema>;
+
+/**
+ * The chat's working set: the records it has opened or created and the context its tools
+ * returned. It is built from tool results by code, never from model-written text, and a new
+ * chat starts it empty.
+ */
+export const WorkingSetSchema = z.object({
+  startedAt: z.string().nullable(),
+  cards: z.array(InsightTileSchema),
+  records: z.array(WorkingRecordSchema),
+});
+export type WorkingSet = z.infer<typeof WorkingSetSchema>;
+
+export const emptyWorkingSet = (): WorkingSet => ({ startedAt: null, cards: [], records: [] });
+
+/** Systems the workbench connects to. Records from any of them can join the working set. */
+export const CONNECTED_SYSTEMS: Readonly<Record<string, { label: string }>> = Object.freeze({
+  salesforce: { label: "Salesforce" },
+  "restaurant-data": { label: "Restaurant data" },
+  "open-meteo": { label: "Open-Meteo" },
+  "knowledge-graph": { label: "Knowledge graph" },
+  "data-360": { label: "Data 360" },
+  "marketing-cloud-next": { label: "Marketing Cloud Next" },
+  cloudflare: { label: "Cloudflare" },
+});
+
+export const systemLabel = (system: string) => CONNECTED_SYSTEMS[system]?.label ?? system;
+
+/**
+ * Records the connected systems make available to this workspace. The model can open them by
+ * name or id, but a catalog record is never what "this" means until the chat opens it.
+ */
+export const WORKSPACE_CATALOG: ReadonlyArray<RecordRef & { title: string }> = Object.freeze([
+  {
+    system: "salesforce",
+    objectType: "Campaign",
+    recordId: "701jV000004GglIQAS",
+    title: "Fall Loyalty Reactivation",
+  },
+]);
+
+/** The deployed HXL card for campaign readiness results. */
+export const READINESS_PRESENTATION = {
+  kind: "hxl",
+  resourceUri: "ui://widget/lightningType/c__northstarCampaignReadinessOutput",
+  sourceStatus: "deployed",
+  fallback: "native",
+} as const satisfies PortableTilePresentation;
 
 export const ActivityEventSchema = z.object({
   id: z.string(),
@@ -166,7 +252,7 @@ export type ActivityEvent = z.infer<typeof ActivityEventSchema>;
 
 export const OrchestratorStateSchema = z.object({
   workspaceId: z.literal(PROOF_DEFAULTS.workspaceId),
-  tiles: z.array(InsightTileSchema),
+  workingSet: WorkingSetSchema,
   activity: z.array(ActivityEventSchema),
   sourcesConnected: z.number().int().nonnegative(),
   connector: ConnectorStateSchema,
@@ -223,7 +309,7 @@ export function policyResponse(
 ) {
   if (!referent) return POLICY_RESPONSES[intent];
   return intent === "confirmation-required"
-    ? `I can't create “${referent}” in Salesforce from chat, and nothing has been saved or created. This demo only writes through a confirmation step: use Create review request in the Insights panel to send this draft for review, check the confirmation card, and confirm it yourself. I can keep refining the draft here.`
+    ? `I can't create “${referent}” in Salesforce from chat, and nothing has been saved or created. This demo only writes through a confirmation step: use Create review request in the Workspace panel to send this draft for review, check the confirmation card, and confirm it yourself. I can keep refining the draft here.`
     : `I can't do that with “${referent}”: publishing, sending, activating, deleting, suppressing, changing buyer groups, and revealing audience contact details are blocked in this workbench, and I didn't take the action. I can keep refining the draft for review instead.`;
 }
 
@@ -250,7 +336,7 @@ export function referentFromReply(text: string): string | null {
 
 export const POLICY_RESPONSES = Object.freeze({
   "confirmation-required":
-    "I can't save or change Salesforce records from chat, and nothing has been saved or created. Writes go through a confirmation step: use Create review request in the Insights panel, check the confirmation card, and confirm it yourself. Salesforce then returns the created record for you to review.",
+    "I can't save or change Salesforce records from chat, and nothing has been saved or created. Writes go through a confirmation step: use Create review request in the Workspace panel, check the confirmation card, and confirm it yourself. Salesforce then returns the created record for you to review.",
   unsupported:
     "That action isn't available in this workbench, and I didn't take it. Publishing, sending, activating, deleting, suppressing, changing buyer groups, and revealing audience contact details are all blocked. I can summarize the campaign, draft content for review, or check readiness instead.",
 } as const);
@@ -435,78 +521,7 @@ export const initialOrchestratorState: OrchestratorState = {
     message: "The Salesforce MCP portal has not been configured for this environment.",
   },
   pendingConfirmation: null,
-  tiles: [
-    {
-      id: "brief",
-      kind: "campaign-brief",
-      eyebrow: "Campaign brief",
-      title: "Fall loyalty reactivation",
-      summary: "A focused re-engagement idea for fictional Northstar members who have gone quiet.",
-      state: "ready",
-      source: {
-        system: "salesforce",
-        label: "Campaign · sample data",
-        freshness: "2 min ago",
-        status: "ready",
-      },
-      details: [
-        "Audience: dormant loyalty members",
-        "Channel: email",
-        "Objective: repeat purchase",
-      ],
-      recordRef: {
-        system: "salesforce",
-        objectApiName: "Campaign",
-        recordId: "701jV000004GglIQAS",
-      },
-    },
-    {
-      id: "readiness",
-      kind: "readiness",
-      eyebrow: "Readiness",
-      title: "2 blockers before review",
-      summary:
-        "The readiness check found missing accessibility copy and an unconfirmed consent rule.",
-      metric: "7 / 9",
-      trend: "checks complete",
-      state: "stale",
-      source: {
-        system: "data-360",
-        label: "Data 360 · sample graph",
-        freshness: "12 min ago",
-        status: "stale",
-      },
-      details: ["Add image alt-text", "Confirm commercial consent scope"],
-      recordRef: {
-        system: "salesforce",
-        objectApiName: "Campaign",
-        recordId: "701jV000004GglIQAS",
-      },
-      presentation: {
-        kind: "hxl",
-        resourceUri: "ui://widget/lightningType/c__northstarCampaignReadinessOutput",
-        sourceStatus: "deployed",
-        fallback: "native",
-      },
-    },
-    {
-      id: "performance",
-      kind: "performance",
-      eyebrow: "Recent performance",
-      title: "Engagement is holding",
-      summary: "Sample campaign performance is above its fictional four-week baseline.",
-      metric: "+8.4%",
-      trend: "click-through rate",
-      state: "ready",
-      source: {
-        system: "marketing-cloud-next",
-        label: "Marketing Cloud Next · sample data",
-        freshness: "5 min ago",
-        status: "ready",
-      },
-      details: ["Open rate 38.2%", "Click rate 6.7%"],
-    },
-  ],
+  workingSet: emptyWorkingSet(),
   activity: [
     {
       id: "a1",

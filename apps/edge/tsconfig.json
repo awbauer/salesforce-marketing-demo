@@ -12,5 +12,5 @@
     "../../packages/contracts/src/**/*.ts",
     "../../packages/knowledge-graph/src/**/*.ts"
   ],
-  "exclude": ["src/**/*.worker.test.ts", "../../packages/**/*.test.ts"]
+  "exclude": ["src/**/*.worker.test.ts", "src/**/*.test-helpers.ts", "../../packages/**/*.test.ts"]
 }

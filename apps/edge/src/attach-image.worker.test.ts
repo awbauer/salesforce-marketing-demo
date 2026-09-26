@@ -1,5 +1,6 @@
 import { env, SELF } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { openCatalogCampaign } from "./worker.test-helpers";
 
 const CAMPAIGN_ID = "701jV000004GglIQAS";
 // A valid 1x1 PNG; fictional test content only.
@@ -51,6 +52,7 @@ const execute = () =>
   SELF.fetch("https://example.test/agent/confirmations/execute", { method: "POST" });
 
 describe("confirmed campaign image attachment", () => {
+  beforeEach(() => openCatalogCampaign());
   it("binds the confirmation to one draft and its hash, attaches it, and blocks reuse", async () => {
     const imageId = crypto.randomUUID();
     const { contentHash } = await seedDraft(imageId);

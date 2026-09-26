@@ -2,6 +2,7 @@ import { SELF } from "cloudflare:test";
 import { parseOperationControls } from "@northstar/contracts";
 import { describe, expect, it } from "vitest";
 import { writeBlockReason } from "./orchestrator";
+import { openCatalogCampaign } from "./worker.test-helpers";
 
 describe("operator controls", () => {
   it("defaults to writes enabled and ignores unknown tool names", () => {
@@ -35,6 +36,7 @@ describe("operator controls", () => {
   });
 
   it("exports this user's confirmed-write audit and turn summaries as a download", async () => {
+    await openCatalogCampaign();
     await SELF.fetch("https://example.test/agent/confirmations", {
       method: "POST",
       headers: { "content-type": "application/json" },

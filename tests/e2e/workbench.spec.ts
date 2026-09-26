@@ -1,25 +1,35 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
-test("opens the workspace, renders evidence tiles, and completes a durable turn", async ({
+/** Starts a new chat and asks about the sample campaign, which opens it in the workspace. */
+async function openSampleCampaign(page: Page) {
+  await page.getByRole("button", { name: "New chat" }).click();
+  await expect(page.getByText("Nothing in this chat yet")).toBeVisible();
+  await page.getByLabel("Message the orchestrator").fill("Review the sample campaign readiness");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByText(/strongest signal is stable engagement/i).last()).toBeVisible();
+  await expect(page.getByTestId("workspace-record").first()).toContainText(
+    "Fall Loyalty Reactivation",
+  );
+}
+
+test("builds the workspace from the chat and completes a durable turn", async ({
   page,
 }, testInfo) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Marketing workbench" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Workspace navigation" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Campaign intelligence" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Insights" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Workspace" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Generate campaign visual" })).toBeVisible();
   await expect(page.getByText("14 configured tools")).toBeVisible();
-  const campaignLink = page.getByRole("link", { name: /Open in Salesforce/ }).first();
-  await expect(campaignLink).toHaveAttribute(
-    "href",
-    "https://pu1788182184076.my.salesforce.com/lightning/r/Campaign/701jV000004GglIQAS/view",
-  );
+  // A new chat starts with an empty workspace and nothing to write to.
   await page.getByRole("button", { name: "New chat" }).click();
   await expect(page.locator(".messages .message.user")).toHaveCount(0);
+  await expect(page.getByText("Nothing in this chat yet")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create review request" })).toBeDisabled();
+  await expect(page.getByText("Open a campaign in the chat first")).toBeVisible();
   await page.getByLabel("Message the orchestrator").focus();
   await expect(page.getByLabel("Message the orchestrator")).toBeFocused();
-  await expect(page.getByTestId("tile-readiness")).toContainText("Needs refresh");
   const assistantMessages = page.locator(".message.assistant");
   const before = await assistantMessages.count();
   await page.getByLabel("Message the orchestrator").fill("Review the sample campaign readiness");
@@ -31,6 +41,20 @@ test("opens the workspace, renders evidence tiles, and completes a durable turn"
   await expect(reply.locator("strong").first()).toHaveText("strongest signal is stable engagement");
   await expect(reply.locator("li")).toHaveText(["Accessibility copy", "Commercial-consent scope"]);
   await expect(reply).not.toContainText("**");
+  // The turn's results fill the workspace: the campaign under Salesforce, and context cards.
+  const workspace = page.getByRole("complementary", { name: "Workspace" });
+  const campaign = workspace.getByTestId("workspace-record").first();
+  await expect(campaign).toContainText("Fall Loyalty Reactivation");
+  await expect(campaign).toContainText("Opened");
+  await expect(campaign.getByRole("link", { name: /Open in Salesforce/ })).toHaveAttribute(
+    "href",
+    "https://pu1788182184076.my.salesforce.com/lightning/r/Campaign/701jV000004GglIQAS/view",
+  );
+  await expect(workspace.getByTestId("tile-readiness")).toContainText("Salesforce · local fixture");
+  await expect(workspace.getByTestId("tile-campaign-summary")).toBeVisible();
+  await workspace.screenshot({
+    path: `artifacts/evidence/WU-035/workspace-${testInfo.project.name}.png`,
+  });
   await expect(page.getByText("Restaurant data")).toBeVisible();
   await expect(page.getByText("Weather · Open-Meteo")).toBeVisible();
   // Locally there are no Neo4j secrets, so the rail reports the in-memory demo copy.
@@ -71,6 +95,8 @@ test("opens the workspace, renders evidence tiles, and completes a durable turn"
   await page.getByRole("button", { name: "Confirm create" }).click();
   await expect.poll(() => completedReviews.count()).toBeGreaterThan(completedBefore);
   await expect(page.getByText(/Local fixture read-back/).last()).toBeVisible();
+  // The created task joins the workspace as a created record.
+  await expect(workspace.getByTestId("workspace-record").first()).toContainText("Created");
   await expect(page.getByRole("link", { name: /Open task in Salesforce/ })).toHaveAttribute(
     "href",
     /\/lightning\/r\/Task\/[a-zA-Z0-9]+\/view$/,
@@ -119,6 +145,7 @@ test("renders the accessible native fallback when the HXL resource is unavailabl
   page,
 }, testInfo) => {
   await page.goto("/");
+  await openSampleCampaign(page);
   const readiness = page.getByTestId("tile-readiness");
   await expect(readiness).toBeVisible();
   await expect(readiness).toHaveAttribute("data-render-mode", "native");
@@ -127,7 +154,7 @@ test("renders the accessible native fallback when the HXL resource is unavailabl
     "ui://widget/lightningType/c__northstarCampaignReadinessOutput",
   );
   await expect(readiness.getByText("Native fallback")).toBeVisible();
-  await expect(readiness.getByRole("heading", { name: "2 blockers before review" })).toBeVisible();
+  await expect(readiness.getByRole("heading", { name: "Fall Loyalty Reactivation" })).toBeVisible();
   await page.screenshot({
     path: `artifacts/evidence/WU-006/native-fallback-${testInfo.project.name}.png`,
     fullPage: true,
@@ -244,6 +271,7 @@ test("attaches a selected image draft only after an explicit confirmation", asyn
   );
 
   await page.goto("/");
+  await openSampleCampaign(page);
   await page.getByRole("button", { name: "Generate draft" }).click();
   await page.getByRole("button", { name: "Attach to campaign" }).click();
   expect(attachRequest).toEqual({
@@ -417,7 +445,7 @@ test("records each turn with its interpretation, reasoning, and outcome in histo
   await reviewed.locator("summary").first().click();
   await expect(reviewed.getByText(/answered from the fictional fixture/i)).toBeVisible();
   await reviewed.getByText("Show reasoning").click();
-  await expect(reviewed.getByText(/needs no Salesforce tool/i)).toBeVisible();
+  await expect(reviewed.getByText(/results also fill the workspace/i)).toBeVisible();
   await expect(reviewed.locator(".history-answer")).toContainText("strongest signal");
 
   await page.getByRole("button", { name: "Policy routed" }).click();

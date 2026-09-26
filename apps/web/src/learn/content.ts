@@ -492,7 +492,7 @@ At the turn level:
 - **Graph evidence panel.** Knowledge-graph paths render as directional chains, each with a text alternative for screen readers.
 - **Accessibility.** The UI targets WCAG 2.2 AA and is tested in Chrome and Edge.`,
         inDemo: [
-          "Insights panel (readiness card with native fallback)",
+          "Workspace panel (readiness card with native fallback)",
           "apps/web/src/Markdown.tsx, apps/web/src/GraphEvidence.tsx",
         ],
         resources: [R.hxl, R.reactMarkdown, R.wcag],
@@ -538,7 +538,7 @@ Salesforce tools are fixtures, so the scores measure orchestration, not Salesfor
 - Drafts are stored privately in **R2** for 7 days, with provenance (model, prompt version, content hash) in **D1**.
 - The variant gallery lets you select, reject, or revise.
 - **Attach to campaign** runs the confirmation flow. Apex checks the PNG's SHA-256 against the confirmed hash, creates one Salesforce file on the Campaign, and reads back its checksum and link.`,
-        inDemo: ["Insights → Generate campaign visual → Attach to campaign"],
+        inDemo: ["Workspace → Generate campaign visual → Attach to campaign"],
         resources: [R.flux, R.r2, R.d1],
       },
       {

@@ -15,6 +15,7 @@ import {
   selectRequiredTool,
   validateImageConcept,
 } from "./orchestrator";
+import { openCatalogCampaign } from "./worker.test-helpers";
 
 describe("edge runtime", () => {
   it("bounds image concepts and rejects personal data or embedded instructions", () => {
@@ -243,6 +244,7 @@ describe("edge runtime", () => {
   });
 
   it("requires a bounded server-side confirmation before the local review fixture", async () => {
+    await openCatalogCampaign();
     const missing = await SELF.fetch("https://example.test/agent/confirmations/execute", {
       method: "POST",
     });
@@ -309,6 +311,7 @@ describe("edge runtime", () => {
     });
   });
   it("binds a confirmed local draft save to its campaign and idempotency key", async () => {
+    await openCatalogCampaign();
     const preflight = await SELF.fetch("https://example.test/agent/confirmations", {
       method: "POST",
       headers: { "content-type": "application/json" },

@@ -1,19 +1,40 @@
 import { describe, expect, it } from "vitest";
-import catalog from "./tool-catalog.json";
 import { routingCases } from "../../evals/src/cases";
 import {
   classifyPolicyIntent,
   initialOrchestratorState,
-  POLICY_RESPONSES,
-  policyResponse,
-  referentFromReply,
   OrchestratorStateSchema,
+  POLICY_RESPONSES,
   PROOF_DEFAULTS,
+  policyResponse,
+  RecordRefSchema,
+  recordKey,
+  referentFromReply,
+  systemLabel,
+  WORKSPACE_CATALOG,
 } from "./index";
+import catalog from "./tool-catalog.json";
 
 describe("proof contracts", () => {
-  it("accepts the typed initial state", () => {
-    expect(OrchestratorStateSchema.parse(initialOrchestratorState).tiles).toHaveLength(3);
+  it("starts every workspace empty, with the catalog kept separate", () => {
+    expect(OrchestratorStateSchema.parse(initialOrchestratorState).workingSet).toEqual({
+      startedAt: null,
+      cards: [],
+      records: [],
+    });
+    expect(WORKSPACE_CATALOG.every((entry) => RecordRefSchema.safeParse(entry).success)).toBe(true);
+  });
+  it("identifies records in any connected system", () => {
+    const ref = {
+      system: "restaurant-data",
+      objectType: "Restaurant",
+      recordId: "coastline-kitchen",
+    };
+    expect(RecordRefSchema.parse(ref)).toEqual(ref);
+    expect(recordKey(ref)).toBe("restaurant-data:Restaurant:coastline-kitchen");
+    expect(systemLabel("restaurant-data")).toBe("Restaurant data");
+    expect(systemLabel("some-new-system")).toBe("some-new-system");
+    expect(RecordRefSchema.safeParse({ ...ref, system: "Not A Slug" }).success).toBe(false);
   });
   it("keeps the proof's forbidden write classes out", () => {
     expect(PROOF_DEFAULTS.allowedWrites).not.toContain("publish");
