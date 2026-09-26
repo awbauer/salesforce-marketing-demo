@@ -22,6 +22,10 @@ const forbidden = [
   "arbitrary-crud",
 ];
 const orchestratorSource = await readFile("apps/edge/src/orchestrator.ts", "utf8");
+const confirmationMigration = await readFile(
+  "migrations/0003_expand_confirmation_actions.sql",
+  "utf8",
+);
 const failures = required
   .filter((value) => !wrangler.includes(value))
   .map((value) => `Missing config invariant: ${value}`);
@@ -32,6 +36,15 @@ if (!orchestratorSource.includes("workersAI(PROOF_DEFAULTS.orchestratorModel)"))
 for (const value of forbidden)
   if (PROOF_DEFAULTS.allowedWrites.some((item) => item.includes(value)))
     failures.push(`Forbidden write exposed: ${value}`);
+const auditActionClause = confirmationMigration.match(/action IN \(([\s\S]*?)\)\s*\)/)?.[1] ?? "";
+const auditedActions = [...auditActionClause.matchAll(/'([^']+)'/g)]
+  .map((match) => match[1])
+  .sort();
+const allowedActions = [...PROOF_DEFAULTS.allowedWrites].sort();
+if (JSON.stringify(auditedActions) !== JSON.stringify(allowedActions))
+  failures.push(
+    `Confirmation audit actions differ from the governed write contract: expected ${allowedActions.length}, found ${auditedActions.length}`,
+  );
 for (const tool of catalog.tools) {
   if (!["read", "draft", "write"].includes(tool.riskClass))
     failures.push(`Unapproved tool risk: ${tool.name}/${tool.riskClass}`);
@@ -52,5 +65,5 @@ if (failures.length) {
   process.exit(1);
 }
 console.log(
-  `Contract invariants passed (${required.length} config checks; ${forbidden.length} forbidden classes).`,
+  `Contract invariants passed (${required.length} config checks; ${forbidden.length} forbidden classes; ${auditedActions.length} audited actions).`,
 );
