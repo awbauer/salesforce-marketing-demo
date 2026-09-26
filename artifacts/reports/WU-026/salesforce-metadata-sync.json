@@ -1,0 +1,26 @@
+{
+  "generatedAt": "2026-09-26T01:15:00Z",
+  "target": { "alias": "northstar-pot", "instanceHost": "pu1788182184076.my.salesforce.com", "apiVersion": "67.0", "classification": "ADR-003 approved non-sandbox proof org (Enterprise Edition)" },
+  "ciDeployedOnMain": {
+    "workflow": "Salesforce metadata",
+    "commit": "ba34f40",
+    "conclusion": "success",
+    "scope": ["classes", "objects", "permissionsets", "mcpServerDefinitions"]
+  },
+  "driftCheck": [
+    { "type": "AiAuthoringBundle", "components": 4, "result": "identical to source (whitespace only)" },
+    { "type": "Bot/BotVersion", "components": 8, "result": "identical to source (element order only)" },
+    { "type": "LightningTypeBundle", "components": 1, "result": "identical to source" },
+    { "type": "UiWidgetBundle", "components": 1, "result": "not retrievable with the installed CLI registry; redeployed from source" }
+  ],
+  "externalMutation": true,
+  "hxlPackage": {
+    "manifest": "salesforce/manifest/hxl-readiness-package.xml",
+    "validation": { "id": "0AfjV000002oNY9SAM", "status": "Succeeded", "components": "2/2", "errors": 0 },
+    "deployment": { "id": "0AfjV000002oNebSAE", "status": "Succeeded", "components": "2/2", "errors": 0 },
+    "readBack": [
+      { "type": "UiWidgetBundle", "fullName": "northstarCampaignReadiness", "lastModifiedDate": "2026-09-26T01:14:30.000Z" },
+      { "type": "LightningTypeBundle", "fullName": "northstarCampaignReadinessOutput", "lastModifiedDate": "2026-09-26T01:14:29.000Z", "content": "semantically identical to source" }
+    ]
+  }
+}
