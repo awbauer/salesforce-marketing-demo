@@ -5,9 +5,9 @@ import type { LocationId } from "./open-meteo";
  * figures are invented demo data; audience facts are aggregates with no customer records.
  */
 export const RESTAURANT_PROFILES = {
-  "sunwise-kitchen": {
-    id: "sunwise-kitchen",
-    name: "Sunwise Kitchen",
+  "coastline-kitchen": {
+    id: "coastline-kitchen",
+    name: "Coastline Kitchen",
     concept:
       "Fast-casual California comfort food with fresh, made-to-order bowls, burritos, and drinks",
     hours: "Open 24 hours, 7 days a week",
