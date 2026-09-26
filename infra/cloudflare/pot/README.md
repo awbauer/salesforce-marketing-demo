@@ -57,7 +57,7 @@ printf 'false' | pnpm exec wrangler secret put WRITES_ENABLED --config wrangler.
 pnpm exec wrangler secret delete WRITES_ENABLED --config wrangler.jsonc
 ```
 
-`GET /agent/operations` reports the active controls. `GET /agent/audit/export` downloads the caller's confirmed-write audit rows and turn summaries from the 14-day retention window.
+`GET /agent/operations` reports the active controls. `GET /agent/audit/export` downloads the caller's confirmed-write audit rows and turn summaries from the 24-hour retention window. Older turns and audit rows are pruned on every write and hourly by the cron.
 
 ## Neo4j knowledge graph
 

@@ -109,6 +109,8 @@ export const PART_LESSONS: Record<string, PartLesson> = {
 };
 
 const BUYER_GROUP_PROMPT = "Who should be in the buyer group for Acme Outfitters, and why?";
+const EMAIL_PROMPT =
+  "Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
 const PUSH_PROMPT =
   "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
 
@@ -169,7 +171,11 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
     keyIdea:
       "Tools fill the workspace, the model drafts into it, and confirmed writes act on exactly what it shows.",
     tryIt: [
-      { kind: "prompt", label: "Draft a push and watch the workspace fill", prompt: PUSH_PROMPT },
+      {
+        kind: "prompt",
+        label: "Draft an email and watch the workspace fill",
+        prompt: EMAIL_PROMPT,
+      },
     ],
   },
   model: {
@@ -236,6 +242,9 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
     diagram: "push-plan",
     keyIdea:
       "Outside context (menu, weather, past results) turns a generic draft into one that fits this moment.",
-    tryIt: [{ kind: "prompt", label: "Draft the Coastline Kitchen push", prompt: PUSH_PROMPT }],
+    tryIt: [
+      { kind: "prompt", label: "Draft the Coastline Kitchen email", prompt: EMAIL_PROMPT },
+      { kind: "prompt", label: "Draft the Coastline Kitchen push", prompt: PUSH_PROMPT },
+    ],
   },
 };

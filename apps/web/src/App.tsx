@@ -1,9 +1,6 @@
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import {
   type Confirmation,
-  FOCUS_KIND_LABELS,
-  type FocusItem,
-  type FocusKind,
   type GeneratedCampaignImage,
   GeneratedCampaignImageSchema,
   initialOrchestratorState,
@@ -23,6 +20,7 @@ import {
 import { useAgent } from "agents/react";
 import type { UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
+import { ActionCards } from "./ActionCards";
 import { PermissionDetails, RecordWriteDetails } from "./ConfirmationDetails";
 import { EvaluationView } from "./EvaluationView";
 import { GraphEvidencePanel } from "./GraphEvidence";
@@ -31,7 +29,7 @@ import { HistoryView } from "./HistoryView";
 import { LearnView } from "./learn/LearnView";
 import { Markdown } from "./Markdown";
 import { executionTrace } from "./turn-trace";
-import { type FocusAction, WorkspacePanel } from "./WorkspacePanel";
+import { WorkspacePanel } from "./WorkspacePanel";
 
 function rawMessageText(message: UIMessage) {
   return message.parts
@@ -103,46 +101,6 @@ const CONFIRMATION_COPY = {
     confirm: "Confirm attach",
   },
 } as const;
-
-/** The Salesforce write that saves each kind of draft. */
-const FOCUS_SAVE_ACTION = {
-  campaign: "save-campaign",
-  brief: "save-brief",
-  "push-message": "save-message",
-  email: "save-message",
-  content: "save-message",
-} as const satisfies Record<FocusKind, keyof typeof WRITE_TOOL_BY_ACTION>;
-
-/** The Focus card's save action: create, update, or already saved, with why it's disabled. */
-function focusSaveAction(
-  focus: FocusItem | null,
-  confirmationPending: boolean,
-  writeBlock: (action: keyof typeof WRITE_TOOL_BY_ACTION) => string | null,
-  onClick: () => void,
-): FocusAction | undefined {
-  if (!focus) return undefined;
-  const action = FOCUS_SAVE_ACTION[focus.kind];
-  const noun = FOCUS_KIND_LABELS[focus.kind].toLowerCase();
-  const saved = focus.saved;
-  const upToDate = saved?.version === focus.current;
-  const blocked = writeBlock(action);
-  return {
-    label: saved
-      ? upToDate
-        ? "Saved to Salesforce"
-        : "Update in Salesforce"
-      : `Create ${noun} in Salesforce`,
-    hint: blocked
-      ? blocked
-      : upToDate
-        ? `Version ${saved?.version} is the Salesforce record`
-        : saved
-          ? `Updates the record saved from version ${saved.version}; Salesforce checks your permissions first`
-          : "Salesforce checks your permissions, then you confirm",
-    disabled: upToDate || confirmationPending || blocked !== null,
-    onClick,
-  };
-}
 
 export function App() {
   const [state, setState] = useState<OrchestratorState>(initialOrchestratorState);
@@ -369,14 +327,10 @@ export function App() {
       );
   }
 
-  /** Prepares the focus draft's Salesforce save; the server plans it and checks permissions. */
-  async function saveFocus() {
-    const focus = state.workingSet.focus;
-    if (!focus) return;
+  /** Accepting an action card prepares its confirmation, with the Salesforce permission check. */
+  async function acceptSuggestion(id: string) {
     try {
-      const confirmation = await agentAction<Confirmation>("confirmations", {
-        action: FOCUS_SAVE_ACTION[focus.kind],
-      });
+      const confirmation = await agentAction<Confirmation>(`suggestions/${id}/accept`);
       setPendingConfirmation(confirmation);
       setState((current) => ({ ...current, pendingConfirmation: confirmation }));
     } catch (actionError) {
@@ -384,20 +338,15 @@ export function App() {
     }
   }
 
-  async function requestReview() {
-    const campaign = openCampaign;
-    if (!campaign) return;
+  async function dismissSuggestion(id: string) {
     try {
-      const confirmation = await agentAction<Confirmation>("confirmations", {
-        action: "create-review-task",
-        recordId: campaign.recordId,
-        summary:
-          "Create a campaign review task with current campaign context, readiness findings, a due date, and a human review checklist.",
-      });
-      setPendingConfirmation(confirmation);
-      setState((current) => ({ ...current, pendingConfirmation: confirmation }));
+      await agentAction(`suggestions/${id}/dismiss`);
+      setState((current) => ({
+        ...current,
+        suggestions: (current.suggestions ?? []).filter((item) => item.id !== id),
+      }));
     } catch (actionError) {
-      setActionError(actionError instanceof Error ? actionError.message : "Preflight failed.");
+      setActionError(actionError instanceof Error ? actionError.message : "Dismiss failed.");
     }
   }
 
@@ -959,6 +908,13 @@ export function App() {
                 </details>
               </section>
             )}
+            {!pendingConfirmation && (
+              <ActionCards
+                suggestions={state.suggestions ?? []}
+                onAccept={(id) => void acceptSuggestion(id)}
+                onDismiss={(id) => void dismissSuggestion(id)}
+              />
+            )}
             {pendingConfirmation && (
               <section
                 ref={confirmationRef}
@@ -1092,161 +1048,147 @@ export function App() {
               can be saved, created, or attached until writes are resumed.
             </div>
           )}
-          <WorkspacePanel
-            workingSet={state.workingSet}
-            focusAction={focusSaveAction(
-              state.workingSet.focus,
-              pendingConfirmation !== null,
-              (action) => writeBlock(action),
-              () => void saveFocus(),
-            )}
-          />
-          <section className="image-workflow" aria-labelledby="image-workflow-title">
-            <div>
-              <p className="kicker">External creative workflow</p>
-              <h3 id="image-workflow-title">Generate campaign visual</h3>
-              <p>
-                {openCampaign
-                  ? `For ${openCampaign.title}. Workers AI creates a private seven-day draft; nothing is attached or published.`
-                  : "Open a campaign in the chat to create a visual for it. Drafts stay private for seven days."}
-              </p>
-            </div>
-            <label htmlFor="image-concept">Creative concept</label>
-            <textarea
-              id="image-concept"
-              rows={3}
-              maxLength={280}
-              value={imageConcept}
-              onChange={(event) => setImageConcept(event.target.value)}
-            />
-            <button
-              type="button"
-              onClick={() => void generateCampaignImage()}
-              disabled={!openCampaign || imageBusy || imageConcept.trim().length < 8}
-            >
-              {imageBusy ? "Generating…" : "Generate draft"}
-            </button>
-            {(imageBusy || generatedImage) && (
-              <ol className="image-trace" aria-label="Image generation progress">
-                <li className={imageBusy ? "active" : "complete"}>
-                  Orchestrator bounded the prompt
-                </li>
-                <li className={imageBusy ? "active" : "complete"}>
-                  Workers AI generated a 1024×1024 PNG
-                </li>
-                <li className={imageBusy ? "pending" : "complete"}>
-                  R2 stored the private draft and D1 provenance
-                </li>
-              </ol>
-            )}
-            {images.length > 1 && (
-              <fieldset className="variant-gallery">
-                <legend>{`Variants (${images.length})`}</legend>
-                {images.map((image, index) => (
-                  <button
-                    type="button"
-                    key={image.id}
-                    className={`variant-thumb lifecycle-${image.lifecycle}`}
-                    aria-pressed={image.id === generatedImage?.id}
-                    aria-label={`Variant ${images.length - index}: ${image.promptSummary} (${image.lifecycle})`}
-                    onClick={() => setSelectedImageId(image.id)}
-                  >
-                    <img src={image.imageUrl} alt="" />
-                    <span className="variant-label">
-                      {image.lifecycle === "draft" ? `#${images.length - index}` : image.lifecycle}
-                    </span>
-                  </button>
-                ))}
-              </fieldset>
-            )}
-            {generatedImage && (
-              <figure className="generated-image-card">
-                <img src={generatedImage.imageUrl} alt="Generated Northstar campaign draft" />
-                <figcaption>
-                  <strong>
-                    {generatedImage.lifecycle === "attached"
-                      ? "Attached to the campaign"
-                      : generatedImage.lifecycle === "rejected"
-                        ? "Rejected variant"
-                        : "Reviewable draft"}
-                  </strong>
-                  <span className="generated-image-summary">{generatedImage.promptSummary}</span>
-                  <small className="generated-image-metadata">
-                    {generatedImage.width}×{generatedImage.height} ·{" "}
-                    {generatedImage.lifecycle === "attached"
-                      ? "Salesforce holds the attached file; this draft copy expires in seven days"
-                      : "expires in seven days · not attached to Salesforce"}
-                  </small>
-                  {generatedImage.lifecycle === "draft" && (
+          <WorkspacePanel workingSet={state.workingSet} />
+          <details className="image-workflow-toggle">
+            <summary>
+              <span className="kicker">External creative workflow</span>
+              <span className="image-workflow-summary">Generate campaign visual</span>
+            </summary>
+            <section className="image-workflow" aria-labelledby="image-workflow-title">
+              <div>
+                <h3 id="image-workflow-title" className="sr-only">
+                  Generate campaign visual
+                </h3>
+                <p>
+                  {openCampaign
+                    ? `For ${openCampaign.title}. Workers AI creates a private seven-day draft; nothing is attached or published.`
+                    : "Open a campaign in the chat to create a visual for it. Drafts stay private for seven days."}
+                </p>
+              </div>
+              <label htmlFor="image-concept">Creative concept</label>
+              <textarea
+                id="image-concept"
+                rows={3}
+                maxLength={280}
+                value={imageConcept}
+                onChange={(event) => setImageConcept(event.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => void generateCampaignImage()}
+                disabled={!openCampaign || imageBusy || imageConcept.trim().length < 8}
+              >
+                {imageBusy ? "Generating…" : "Generate draft"}
+              </button>
+              {(imageBusy || generatedImage) && (
+                <ol className="image-trace" aria-label="Image generation progress">
+                  <li className={imageBusy ? "active" : "complete"}>
+                    Orchestrator bounded the prompt
+                  </li>
+                  <li className={imageBusy ? "active" : "complete"}>
+                    Workers AI generated a 1024×1024 PNG
+                  </li>
+                  <li className={imageBusy ? "pending" : "complete"}>
+                    R2 stored the private draft and D1 provenance
+                  </li>
+                </ol>
+              )}
+              {images.length > 1 && (
+                <fieldset className="variant-gallery">
+                  <legend>{`Variants (${images.length})`}</legend>
+                  {images.map((image, index) => (
                     <button
                       type="button"
-                      className="secondary-button attach-image-button"
-                      onClick={() => void requestImageAttachment()}
-                      disabled={
-                        pendingConfirmation !== null ||
-                        writeBlock("attach-generated-image") !== null
-                      }
+                      key={image.id}
+                      className={`variant-thumb lifecycle-${image.lifecycle}`}
+                      aria-pressed={image.id === generatedImage?.id}
+                      aria-label={`Variant ${images.length - index}: ${image.promptSummary} (${image.lifecycle})`}
+                      onClick={() => setSelectedImageId(image.id)}
                     >
-                      Attach to campaign
+                      <img src={image.imageUrl} alt="" />
+                      <span className="variant-label">
+                        {image.lifecycle === "draft"
+                          ? `#${images.length - index}`
+                          : image.lifecycle}
+                      </span>
                     </button>
-                  )}
-                  {generatedImage.lifecycle === "draft" && (
-                    <button
-                      type="button"
-                      className="text-button reject-image-button"
-                      onClick={() => void rejectImage(generatedImage.id)}
-                      disabled={pendingConfirmation?.imageId === generatedImage.id}
-                    >
-                      Reject variant
-                    </button>
-                  )}
-                  <details className="payload-viewer image-payload">
-                    <summary>Technical payload and provenance</summary>
-                    <pre>
-                      {JSON.stringify(
-                        {
-                          provider: "Cloudflare Workers AI binding",
-                          model: generatedImage.model,
-                          input: {
-                            campaignId: generatedImage.campaignId,
-                            channel: generatedImage.channel,
-                            concept: generatedImage.promptSummary,
-                            width: generatedImage.width,
-                            height: generatedImage.height,
+                  ))}
+                </fieldset>
+              )}
+              {generatedImage && (
+                <figure className="generated-image-card">
+                  <img src={generatedImage.imageUrl} alt="Generated Northstar campaign draft" />
+                  <figcaption>
+                    <strong>
+                      {generatedImage.lifecycle === "attached"
+                        ? "Attached to the campaign"
+                        : generatedImage.lifecycle === "rejected"
+                          ? "Rejected variant"
+                          : "Reviewable draft"}
+                    </strong>
+                    <span className="generated-image-summary">{generatedImage.promptSummary}</span>
+                    <small className="generated-image-metadata">
+                      {generatedImage.width}×{generatedImage.height} ·{" "}
+                      {generatedImage.lifecycle === "attached"
+                        ? "Salesforce holds the attached file; this draft copy expires in seven days"
+                        : "expires in seven days · not attached to Salesforce"}
+                    </small>
+                    {generatedImage.lifecycle === "draft" && (
+                      <button
+                        type="button"
+                        className="secondary-button attach-image-button"
+                        onClick={() => void requestImageAttachment()}
+                        disabled={
+                          pendingConfirmation !== null ||
+                          writeBlock("attach-generated-image") !== null
+                        }
+                      >
+                        Attach to campaign
+                      </button>
+                    )}
+                    {generatedImage.lifecycle === "draft" && (
+                      <button
+                        type="button"
+                        className="text-button reject-image-button"
+                        onClick={() => void rejectImage(generatedImage.id)}
+                        disabled={pendingConfirmation?.imageId === generatedImage.id}
+                      >
+                        Reject variant
+                      </button>
+                    )}
+                    <details className="payload-viewer image-payload">
+                      <summary>Technical payload and provenance</summary>
+                      <pre>
+                        {JSON.stringify(
+                          {
+                            provider: "Cloudflare Workers AI binding",
+                            model: generatedImage.model,
+                            input: {
+                              campaignId: generatedImage.campaignId,
+                              channel: generatedImage.channel,
+                              concept: generatedImage.promptSummary,
+                              width: generatedImage.width,
+                              height: generatedImage.height,
+                            },
+                            output: {
+                              imageId: generatedImage.id,
+                              contentHash: generatedImage.contentHash,
+                              lifecycle: generatedImage.lifecycle,
+                              authorizedAssetUrl: generatedImage.imageUrl,
+                              expiresAt: generatedImage.expiresAt,
+                            },
+                            storage: ["R2 private object", "D1 provenance row"],
                           },
-                          output: {
-                            imageId: generatedImage.id,
-                            contentHash: generatedImage.contentHash,
-                            lifecycle: generatedImage.lifecycle,
-                            authorizedAssetUrl: generatedImage.imageUrl,
-                            expiresAt: generatedImage.expiresAt,
-                          },
-                          storage: ["R2 private object", "D1 provenance row"],
-                        },
-                        null,
-                        2,
-                      )}
-                    </pre>
-                  </details>
-                </figcaption>
-              </figure>
-            )}
-          </section>
-          <div className="insight-action">
-            <button
-              type="button"
-              onClick={() => void requestReview()}
-              disabled={!openCampaign || writeBlock("create-review-task") !== null}
-            >
-              Create review request
-            </button>
-            <span>
-              {!openCampaign
-                ? "Open a campaign in the chat first"
-                : (writeBlock("create-review-task") ??
-                  `For ${openCampaign.title} · requires confirmation`)}
-            </span>
-          </div>
+                          null,
+                          2,
+                        )}
+                      </pre>
+                    </details>
+                  </figcaption>
+                </figure>
+              )}
+            </section>
+          </details>
           <section className="activity">
             <h3>Activity</h3>
             {state.activity.length === 0 && (
@@ -1306,6 +1248,7 @@ export function App() {
                 "Draft campaign content for the sample audience",
                 "Check the sample campaign readiness and explain every blocker",
                 "Recommend buyer group members using the available sample signals",
+                "Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
                 "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
                 "Who should be in the buyer group for Acme Outfitters, and why?",
                 "Is the fall campaign audience covered for commercial email consent?",

@@ -5,7 +5,7 @@ import { readableToolName } from "./turn-trace";
 type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; turns: TurnRecord[]; retentionDays: number };
+  | { status: "ready"; turns: TurnRecord[]; retentionHours: number };
 
 type Filter = "all" | "issues" | "tools" | "policy";
 
@@ -44,12 +44,12 @@ export function HistoryView({ refreshKey, onClose }: { refreshKey: number; onClo
     fetch("/agent/turns", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error(`Turn history returned HTTP ${response.status}.`);
-        const body = (await response.json()) as { turns?: unknown[]; retentionDays?: number };
+        const body = (await response.json()) as { turns?: unknown[]; retentionHours?: number };
         const turns = (body.turns ?? []).flatMap((turn) => {
           const parsed = TurnRecordSchema.safeParse(turn);
           return parsed.success ? [parsed.data] : [];
         });
-        setState({ status: "ready", turns, retentionDays: body.retentionDays ?? 14 });
+        setState({ status: "ready", turns, retentionHours: body.retentionHours ?? 24 });
       })
       .catch((error: unknown) =>
         setState({
@@ -105,7 +105,7 @@ export function HistoryView({ refreshKey, onClose }: { refreshKey: number; onClo
           <>
             <div className="evaluation-card-heading">
               <p className="evaluation-meta">
-                {state.turns.length} turns · kept for {state.retentionDays} days · each utterance
+                {state.turns.length} turns · kept for {state.retentionHours} hours · each utterance
                 with the orchestrator's interpretation, tool calls, and outcome
               </p>
               <fieldset className="evaluation-tabs">

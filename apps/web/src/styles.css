@@ -718,6 +718,8 @@ a {
   gap: 12px;
 }
 .insight-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
   background: #fbfcf8;
   border: 1px solid #d5ddd3;
   border-radius: 12px;
@@ -860,6 +862,76 @@ a {
   font-size: 12px;
   font-weight: 600;
   color: var(--forest);
+}
+/* Action cards: approvals the chat suggests, shown in the conversation. */
+.action-cards {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.action-card {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid #d7e59a;
+  background: #f8fbea;
+}
+.action-card .kicker {
+  margin: 0 0 4px;
+  color: #5e7012;
+}
+.action-card h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.action-card p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.action-card-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+.action-card-buttons button:first-child {
+  border: 0;
+  border-radius: 8px;
+  background: var(--forest);
+  color: #fff;
+  padding: 8px 12px;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+.focus-saved {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 12px;
+  color: var(--lime);
+}
+.image-workflow-toggle {
+  margin: 12px 18px 0;
+  border: 1px solid #d5ddd3;
+  border-radius: 12px;
+  background: #fbfcf8;
+}
+.image-workflow-toggle > summary {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.image-workflow-summary {
+  font-weight: 700;
+  font-size: 14px;
+}
+.image-workflow-toggle .image-workflow {
+  margin-top: 0;
+  border: 0;
 }
 /* Focus: the draft the chat is building. */
 .focus-card {

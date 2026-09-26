@@ -593,7 +593,7 @@ For the proof, the authenticated evaluator may confirm their own reversible sand
 - Treat generated images as untrusted drafts. Require human review for brand, intellectual-property, safety, accessibility, and regional-policy concerns before attachment or publication.
 - Sanitize links and iframe resources. Enforce CSP and origin checks in MCP Apps bridges.
 - Rate-limit per user, workspace, tool, and upstream provider.
-- Retain transcripts and audit events for 14 days, all R2 image objects for seven days, and no copied customer datasets. Store only Salesforce record references where possible.
+- Retain transcripts and audit events for 24 hours, all R2 image objects for seven days, and no copied customer datasets. Store only Salesforce record references where possible.
 - Provide an admin kill switch for each connector, agent, tool, and mutation class.
 
 ## 12. Observability and operations
@@ -877,7 +877,7 @@ Exit: the proof targets pass, evidence is captured, limitations are documented, 
 4. **Identity:** Cloudflare Access email one-time PIN for an explicit evaluator allowlist; per-user Salesforce OAuth; `evaluator` and `demo-admin` roles only.
 5. **Orchestrator model:** Cloudflare-hosted `@cf/openai/gpt-oss-20b` through AI Gateway (ADR-005; briefly `gpt-oss-120b` under ADR-004), with sample sandbox data only and no customer PII in model inputs.
 6. **Image generation:** `@cf/black-forest-labs/flux-2-klein-4b`, one 1024×1024 PNG per call, no reference images, one concurrent request per user, and a hard proof cap of 100 images or USD 25.
-7. **Retention:** transcripts and audit events for 14 days; every R2 image object for seven days; Salesforce remains the only source of truth for campaign data and attached assets.
+7. **Retention:** transcripts and audit events for 24 hours; every R2 image object for seven days; Salesforce remains the only source of truth for campaign data and attached assets.
 8. **Writes:** same-user confirmation permits only saving a draft brief/campaign, creating a review task, and attaching a selected generated image. Publish, send, activate, delete, suppress, buyer-group mutation, and arbitrary CRUD are unavailable.
 9. **Evaluation slice:** the `Northstar Demo` business unit and fictional Northstar brand, United States, English only, supplied sample data, and current desktop Chrome and Edge.
 10. **Success:** the three workflows—account discovery plus campaign brief, content draft plus readiness/review request, and image generation plus attachment—each pass three consecutive runs; tool selection reaches at least 90% on 20 prompts; negative tests produce no unauthorized or duplicate write; and every allowed write has confirmation, audit, idempotency, and read-back evidence.

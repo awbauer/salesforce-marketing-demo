@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { conditionFromWmo, fetchCurrentWeather, openMeteoUrl } from "./campaign-context/open-meteo";
 import type { RESTAURANT_PROFILES } from "./campaign-context/restaurant-profile";
 import { connectCampaignContextTools } from "./campaign-context/server";
-import { missingPlannedTool, selectToolPlan, stepToolChoice } from "./turn-policy";
+import { draftIntent, missingPlannedTool, selectToolPlan, stepToolChoice } from "./turn-policy";
 
 const PUSH_PROMPT =
   "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
@@ -111,34 +111,49 @@ describe("campaign-context MCP", () => {
     expect(text).toContain("get_current_weather");
   });
 
-  it("plans a push campaign as profile, weather, past pushes, content, then the workspace focus", () => {
+  it("plans Coastline email and push campaigns as profile, weather, past pushes, then content", () => {
     const names = [
       "context_get_restaurant_profile",
       "context_get_current_weather",
       "graph_find_similar_past_pushes",
       "tool_salesforce_ns_draft_campaign_content",
-      "workspace_update_focus",
     ];
     const plan = selectToolPlan(PUSH_PROMPT, names);
     expect(plan).toEqual(names);
     for (const [step, name] of names.entries())
       expect(stepToolChoice(plan, step)).toMatchObject({ activeTools: [name] });
-    // Five forced tools leave the sixth and last step for the written answer.
-    expect(stepToolChoice(plan, 5)).toEqual({ toolChoice: "none", activeTools: [] });
+    expect(stepToolChoice(plan, 4)).toEqual({ toolChoice: "none", activeTools: [] });
+    expect(
+      selectToolPlan(
+        "Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
+        names,
+      ),
+    ).toEqual(names);
     expect(missingPlannedTool(PUSH_PROMPT, names.slice(0, 2))).toBe("find_similar_past_pushes");
     expect(selectToolPlan(PUSH_PROMPT, names.slice(0, 2))).toBeUndefined();
   });
 
-  it("sends revisions of the focus straight to update_focus, and only when a focus exists", () => {
-    const names = ["workspace_update_focus", "tool_salesforce_ns_draft_campaign_content"];
-    expect(selectToolPlan("Make it warmer", names, { hasFocus: true })).toEqual([
-      "workspace_update_focus",
-    ]);
-    expect(selectToolPlan("Make it warmer", names, { hasFocus: false })).toBeUndefined();
-    expect(selectToolPlan("Draft email content for the fall audience", names)).toEqual([
-      "tool_salesforce_ns_draft_campaign_content",
-      "workspace_update_focus",
-    ]);
-    expect(selectToolPlan("Summarize the campaign", names, { hasFocus: true })).toBeUndefined();
+  it("marks drafting and revision turns so their answers are saved to the focus", () => {
+    expect(draftIntent(PUSH_PROMPT)).toEqual({ mode: "draft", kind: "push-message" });
+    expect(draftIntent("Draft an email campaign for Coastline Kitchen")).toEqual({
+      mode: "draft",
+      kind: "email",
+    });
+    expect(draftIntent("Draft a campaign brief for the spring launch")).toEqual({
+      mode: "draft",
+      kind: "brief",
+    });
+    expect(draftIntent("Create a new campaign for the spring menu in Salesforce")).toEqual({
+      mode: "draft",
+      kind: "campaign",
+    });
+    expect(draftIntent("Make it warmer", { hasFocus: true, focusKind: "email" })).toEqual({
+      mode: "revise",
+      kind: "email",
+    });
+    expect(draftIntent("Make it warmer")).toBeNull();
+    expect(
+      draftIntent("Summarize the campaign", { hasFocus: true, focusKind: "email" }),
+    ).toBeNull();
   });
 });

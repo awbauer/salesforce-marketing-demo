@@ -8,7 +8,6 @@ import {
   recordKey,
   systemLabel,
   WORKSPACE_CATALOG,
-  WORKSPACE_TOOLS,
   type WorkingRecord,
   type WorkingSet,
 } from "../../../packages/contracts/src/index.ts";
@@ -345,22 +344,69 @@ const SALESFORCE_CARDS: Record<string, { kind: InsightTile["kind"]; eyebrow: str
   get_account_marketing_signals: { kind: "account-signals", eyebrow: "Account signals" },
 };
 
+const READABLE_KEYS = ["summary", "message", "text", "response", "answer", "result", "output"];
+
+/** "copilotActionInput/CreateOrRefineSectionWithContent_x" → "create or refine section with content". */
+const humanizeAction = (type: string) =>
+  (type.split("/").pop() ?? type)
+    .replace(/_[\w-]*$/, "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase();
+
+/**
+ * Readable text for a Salesforce agent result, never raw JSON: the agent's own summary or
+ * message when it has one, a plain description of an agent asking for confirmation, or a count
+ * of what came back.
+ */
+export function readableAgentText(data: Record<string, unknown> | null, text: string): string {
+  if (!data)
+    return /^\s*[[{]/.test(text) ? "The Salesforce agent returned a structured result." : text;
+  const messages = list(data.messages) as Array<Record<string, unknown>>;
+  const spoken = messages
+    .map((message) => str(message.message) ?? str(message.text))
+    .filter((value): value is string => Boolean(value));
+  if (spoken.length) return spoken.join(" ");
+  const confirm = messages.find((message) => /confirm/i.test(str(message.type) ?? ""));
+  if (confirm) {
+    const actions = (list(confirm.confirm) as Array<Record<string, unknown>>).map((item) => {
+      const inputs = (item.inputs ?? item.input ?? {}) as Record<string, unknown>;
+      const what = str(inputs.contentTypeFqn) ?? str(item.contentTypeFqn);
+      return `${humanizeAction(str(item.type) ?? "an action")}${what ? ` (${what})` : ""}`;
+    });
+    return `The Salesforce agent is asking to confirm before it continues: ${actions.join("; ") || "an action"}. It did not return a draft.`;
+  }
+  const search = (value: unknown, depth: number): string | undefined => {
+    if (!value || typeof value !== "object" || depth > 3) return undefined;
+    for (const key of READABLE_KEYS) {
+      const found = (value as Record<string, unknown>)[key];
+      if (typeof found === "string" && found.trim() && !/^\s*[[{]/.test(found)) return found;
+    }
+    for (const child of Object.values(value)) {
+      const found = search(child, depth + 1);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  return search(data, 0) ?? `The Salesforce agent returned ${Object.keys(data).length} fields.`;
+}
+
 function salesforceCard(payload: Payload, tool: string, input: unknown, at: Date): Ingested {
   const mapping = SALESFORCE_CARDS[tool] ?? { kind: "context" as const, eyebrow: titleCase(tool) };
   const inputText = JSON.stringify(input ?? {});
   const refs = salesforceRecordsIn(`${inputText}\n${payload.text}`);
   const campaign = refs.find((ref) => ref.objectType === "Campaign");
-  const text = payload.data ? JSON.stringify(payload.data) : payload.text;
+  const readable = readableAgentText(payload.data, payload.text);
   const structuredDetails = payload.data
     ? Object.entries(payload.data)
         .filter(
           ([key, value]) =>
-            !["source", "summary", "campaignId"].includes(key) &&
-            (typeof value === "string" || typeof value === "number"),
+            !["source", "campaignId", ...READABLE_KEYS].includes(key) &&
+            (typeof value === "number" ||
+              (typeof value === "string" && value.length <= 120 && !/^\s*[[{]/.test(value))),
         )
         .map(([key, value]) => `${titleCase(key)}: ${value}`)
     : [];
-  const details = [...bulletLines(payload.text), ...structuredDetails].slice(0, 4);
+  const details = [...bulletLines(readable), ...structuredDetails].slice(0, 4);
   return {
     cards: [
       {
@@ -368,9 +414,7 @@ function salesforceCard(payload: Payload, tool: string, input: unknown, at: Date
         kind: mapping.kind,
         eyebrow: mapping.eyebrow,
         title: campaign?.title ?? mapping.eyebrow,
-        summary:
-          leadText(payload.data ? (str(payload.data.summary) ?? payload.text) : payload.text) ||
-          clip(text, 200),
+        summary: leadText(readable) || clip(readable, 200),
         state: "ready",
         source: {
           system: "salesforce",
@@ -402,9 +446,7 @@ function salesforceCard(payload: Payload, tool: string, input: unknown, at: Date
 /** What one tool result adds to the working set; unknown or failed results add nothing. */
 export function ingestionFor(event: ToolResultEvent): Ingested {
   const tool = baseToolName(event.toolName);
-  // Workspace tools change the focus directly; they are not context.
-  if (!tool || (WORKSPACE_TOOLS as readonly string[]).includes(tool) || isFailure(event.output))
-    return { cards: [], records: [] };
+  if (!tool || isFailure(event.output)) return { cards: [], records: [] };
   const payload = toolPayload(event.output);
   if ((CAMPAIGN_CONTEXT_TOOLS as readonly string[]).includes(tool)) {
     if (!payload.data) return { cards: [], records: [] };

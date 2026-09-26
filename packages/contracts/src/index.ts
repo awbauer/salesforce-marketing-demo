@@ -8,7 +8,7 @@ export const PROOF_DEFAULTS = Object.freeze({
   imageSize: 1024,
   imageCap: 100,
   spendCapUsd: 25,
-  transcriptRetentionDays: 14,
+  transcriptRetentionHours: 24,
   imageRetentionDays: 7,
   roles: ["evaluator", "demo-admin"] as const,
   browsers: ["chrome", "edge"] as const,
@@ -197,8 +197,6 @@ export const KNOWLEDGE_GRAPH_TOOLS = Object.freeze([
 /** Every tool the orchestrator may call, for display names and operator kill switches. */
 export const ORCHESTRATOR_TOOLS = Object.freeze([
   ...PHASE_2_CURATED_TOOLS,
-  "update_focus",
-  "propose_salesforce_save",
   ...CAMPAIGN_CONTEXT_TOOLS,
   ...KNOWLEDGE_GRAPH_TOOLS,
 ] as const);
@@ -330,9 +328,6 @@ export const emptyWorkingSet = (): WorkingSet => ({
   records: [],
 });
 
-/** Local tools that change only the workspace, never an external system. */
-export const WORKSPACE_TOOLS = Object.freeze(["update_focus", "propose_salesforce_save"] as const);
-
 /** Systems the workbench connects to. Records from any of them can join the working set. */
 export const CONNECTED_SYSTEMS: Readonly<Record<string, { label: string }>> = Object.freeze({
   salesforce: { label: "Salesforce" },
@@ -376,7 +371,23 @@ export const ActivityEventSchema = z.object({
 });
 export type ActivityEvent = z.infer<typeof ActivityEventSchema>;
 
+/**
+ * Something the chat suggests the user approve, shown as an action card in the conversation:
+ * saving the draft to Salesforce, or requesting a review. Accepting one prepares its
+ * confirmation; nothing is written until the user confirms that too.
+ */
+export const SuggestedActionSchema = z.object({
+  id: z.string(),
+  action: z.enum(["save-focus", "create-review-task"]),
+  title: z.string(),
+  detail: z.string(),
+  cta: z.string(),
+  createdAt: z.string(),
+});
+export type SuggestedAction = z.infer<typeof SuggestedActionSchema>;
+
 export const OrchestratorStateSchema = z.object({
+  suggestions: z.array(SuggestedActionSchema).default([]),
   workspaceId: z.literal(PROOF_DEFAULTS.workspaceId),
   workingSet: WorkingSetSchema,
   activity: z.array(ActivityEventSchema),
@@ -435,7 +446,7 @@ export function policyResponse(
 ) {
   if (!referent) return POLICY_RESPONSES[intent];
   return intent === "confirmation-required"
-    ? `I can't create “${referent}” in Salesforce from chat, and nothing has been saved or created. This demo only writes through a confirmation step: in the Workspace, use Save to Salesforce as brief or Create review request, check the confirmation card, and confirm it yourself. I can keep refining the draft here.`
+    ? `I can't create “${referent}” in Salesforce from chat, and nothing has been saved or created. This demo only writes through a confirmation step: ask me to save the draft or request a review, and a confirmation card with Salesforce's permission check appears here in the chat for you to confirm. I can keep refining the draft here.`
     : `I can't do that with “${referent}”: publishing, sending, activating, deleting, suppressing, changing buyer groups, and revealing audience contact details are blocked in this workbench, and I didn't take the action. I can keep refining the draft for review instead.`;
 }
 
@@ -462,7 +473,7 @@ export function referentFromReply(text: string): string | null {
 
 export const POLICY_RESPONSES = Object.freeze({
   "confirmation-required":
-    "I can't save or change Salesforce records from chat, and nothing has been saved or created. Writes go through a confirmation step: use Create review request in the Workspace panel, check the confirmation card, and confirm it yourself. Salesforce then returns the created record for you to review.",
+    "I can't save or change Salesforce records without your confirmation, and nothing has been saved or created. Draft something first, or open a campaign and ask for a review; a confirmation card with Salesforce's permission check then appears here in the chat for you to confirm, and Salesforce returns the record.",
   unsupported:
     "That action isn't available in this workbench, and I didn't take it. Publishing, sending, activating, deleting, suppressing, changing buyer groups, and revealing audience contact details are all blocked. I can summarize the campaign, draft content for review, or check readiness instead.",
 } as const);
@@ -583,7 +594,9 @@ export function parseOperationControls(env: {
   };
 }
 
-export const TURN_HISTORY_RETENTION_DAYS = PROOF_DEFAULTS.transcriptRetentionDays;
+/** Turn history and the confirmation audit are kept for 24 hours. */
+export const AUDIT_RETENTION_HOURS = PROOF_DEFAULTS.transcriptRetentionHours;
+export const AUDIT_RETENTION_MS = AUDIT_RETENTION_HOURS * 3_600_000;
 
 export const TurnRecordSchema = z.object({
   id: z.string(),
@@ -650,6 +663,7 @@ export const initialOrchestratorState: OrchestratorState = {
     message: "The Salesforce MCP portal has not been configured for this environment.",
   },
   pendingConfirmation: null,
+  suggestions: [],
   workingSet: emptyWorkingSet(),
   activity: [
     {
