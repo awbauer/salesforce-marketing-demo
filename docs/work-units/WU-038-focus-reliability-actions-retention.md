@@ -35,6 +35,10 @@ Two more issues showed up alongside:
   - Asking for a review in chat prepares it directly.
   - The side review button and the Focus card's save button are removed; the Focus card shows its saved status instead.
 - **Image generation** is a collapsed section in the Workspace.
+- **Focus lifecycle follows Salesforce read-back:** the green focus card says *Draft in progress*
+  only before its first confirmed save, changes to *Saved in Salesforce* when the current version
+  is the one Salesforce read back, and becomes *Unsaved changes* after a later revision. The saved
+  state links directly to the authoritative Salesforce record.
 - **Readable context:** `readableAgentText` never shows raw JSON. It uses the agent's own message or summary, describes an agent asking for confirmation in plain words, or falls back to a count. Cards also wrap long values.
 - **Retention:**
   - Turn history and the confirmation audit are kept for **24 hours**.
@@ -43,6 +47,10 @@ Two more issues showed up alongside:
 
 ## Verification
 
-- Worker tests (84): draft intent, answer parsing, the email plan, suggestions (review after readiness, save after drafting, accept, dismiss, cleared by New chat), and readable Salesforce results, including the confirm case.
-- Unit tests (70). E2E in Chrome and Edge (30), including the review action card and the collapsed image workflow.
+- Worker tests (87): draft intent, answer parsing, the email plan, suggestions (review after readiness, save after drafting, accept, dismiss, cleared by New chat), and readable Salesforce results, including the confirm case.
+- Unit tests (71). E2E in Chrome and Edge, including the review action card, the collapsed image
+  workflow, and focus lifecycle transitions after create, revise, and update read-backs.
+- Visual evidence: `artifacts/evidence/WU-038/focus-lifecycle-chrome.png` and
+  `focus-lifecycle-edge.png` show the current focus labeled *Saved in Salesforce* after the
+  confirmed update read-back.
 - `pnpm verify` passes.

@@ -40,6 +40,12 @@ const OBJECT_LABELS: Record<string, string> = {
 export const objectLabel = (objectType: string) =>
   OBJECT_LABELS[objectType] ?? objectType.replace(/__c$/, "").replaceAll("_", " ");
 
+/** The authoritative lifecycle of the current focus version. */
+export function focusLifecycle(focus: FocusItem) {
+  if (!focus.saved) return "Draft in progress";
+  return focus.saved.version === focus.current ? "Saved in Salesforce" : "Unsaved changes";
+}
+
 const RELATION_LABELS: Record<WorkingRecord["relation"], string> = {
   read: "Opened",
   created: "Created",
@@ -63,6 +69,14 @@ export function FocusCard({
     focus.versions.find((entry) => entry.version === shown) ??
     (focus.versions.at(-1) as FocusItem["versions"][number]);
   const isCurrent = version.version === focus.current;
+  const lifecycle = focusLifecycle(focus);
+  const savedRecordLink = focus.saved
+    ? recordUrl({
+        system: "salesforce",
+        objectType: focus.saved.objectType,
+        recordId: focus.saved.recordId,
+      })
+    : undefined;
   const sources = version.basedOn
     .map((id) => cards.find((card) => card.id === id))
     .filter((card): card is InsightTile => Boolean(card));
@@ -70,7 +84,9 @@ export function FocusCard({
     <section className="focus-card" aria-labelledby="focus-title" data-testid="workspace-focus">
       <div className="focus-topline">
         <span className="focus-kind">{FOCUS_KIND_LABELS[focus.kind]}</span>
-        <span className="focus-this">Draft in progress</span>
+        <span className="focus-this" aria-live="polite">
+          {lifecycle}
+        </span>
       </div>
       <h3 id="focus-title">{version.title}</h3>
       {focus.versions.length > 1 && (
@@ -121,6 +137,20 @@ export function FocusCard({
           {focus.saved.version === focus.current
             ? `Saved to Salesforce as version ${focus.saved.version}`
             : `Salesforce has version ${focus.saved.version}; this version isn't saved yet`}
+          {savedRecordLink && (
+            <>
+              {" · "}
+              <a
+                className="focus-saved-link"
+                href={savedRecordLink}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open {objectLabel(focus.saved.objectType)} in Salesforce
+                <span aria-hidden="true"> ↗</span>
+              </a>
+            </>
+          )}
         </p>
       )}
       {action && isCurrent && (
