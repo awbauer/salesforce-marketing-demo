@@ -8,9 +8,12 @@ import {
   briefFocusFromAgent,
   briefFromFocus,
   idsFromAgentReply,
+  localAgentWrite,
+  type MarketingReadBack,
   parseMarketingReadBack,
   parsePermissionReport,
   planMarketingWrite,
+  sameBrief,
 } from "./marketing-writes";
 import { agentStubFor } from "./worker.test-helpers";
 
@@ -287,5 +290,108 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
     );
     // Once the campaign exists there is nothing more to save.
     expect((await prepare("create-marketing-campaign")).status).toBe(400);
+  });
+
+  it("links a brief or campaign an earlier attempt created instead of saving it twice", async () => {
+    await SELF.fetch("https://example.test/agent/working-set/reset", { method: "POST" });
+    const stub = await agentStubFor();
+    type Agent = {
+      updateFocus: (input: FocusInput) => unknown;
+      localMarketing: Map<string, MarketingReadBack>;
+      callMarketingAgent: (...args: unknown[]) => Promise<unknown>;
+    };
+    const brief = briefFocusFromAgent(AGENT_BRIEF, "Drafted") as FocusInput;
+    const plannedBrief = planMarketingWrite(focusFrom(brief));
+    if (plannedBrief?.write.kind !== "brief") throw new Error("expected a brief save");
+    expect(
+      sameBrief(plannedBrief.write.brief, {
+        ...plannedBrief.write.brief,
+        name: " rainy day LUNCH email campaign ",
+      }),
+    ).toBe(true);
+    expect(
+      sameBrief(plannedBrief.write.brief, { ...plannedBrief.write.brief, keyMessage: "Other" }),
+    ).toBe(false);
+    // An earlier attempt timed out after the agent saved the brief.
+    await runInDurableObject(stub, (instance) => {
+      const agent = instance as unknown as Agent;
+      agent.localMarketing.clear();
+      localAgentWrite(plannedBrief.write, agent.localMarketing);
+      agent.updateFocus(brief);
+    });
+    const prepare = (action: string) =>
+      SELF.fetch("https://example.test/agent/confirmations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+    const execute = async () =>
+      (
+        await SELF.fetch("https://example.test/agent/confirmations/execute", { method: "POST" })
+      ).json() as Promise<{
+        result?: { found?: string; brief?: { id: string }; campaign?: { id: string } };
+        error?: { message: string };
+      }>;
+    const count = () =>
+      runInDurableObject(stub, (instance) => (instance as unknown as Agent).localMarketing.size);
+
+    expect((await prepare("save-marketing-brief")).status).toBe(201);
+    const reused = await execute();
+    expect(reused.result).toMatchObject({ found: "reused", brief: { id: "21y000000000001" } });
+    expect(await count()).toBe(1);
+
+    // The campaign already exists on the brief: linked, not created again.
+    await runInDurableObject(stub, (instance) => {
+      const agent = instance as unknown as Agent;
+      localAgentWrite(
+        { kind: "campaign", briefId: "21y000000000001", briefName: "x" },
+        agent.localMarketing,
+      );
+    });
+    expect((await prepare("create-marketing-campaign")).status).toBe(201);
+    expect((await execute()).result).toMatchObject({
+      found: "reused",
+      campaign: { id: "701000000000001" },
+    });
+  });
+
+  it("recovers a save that timed out after the agent saved, and asks to retry when it didn't", async () => {
+    await SELF.fetch("https://example.test/agent/working-set/reset", { method: "POST" });
+    const stub = await agentStubFor();
+    type Agent = {
+      updateFocus: (input: FocusInput) => unknown;
+      localMarketing: Map<string, MarketingReadBack>;
+      callMarketingAgent: (...args: unknown[]) => Promise<unknown>;
+    };
+    const prepareAndExecute = async (saveBeforeFailing: boolean, keyMessage: string) => {
+      await runInDurableObject(stub, (instance) => {
+        const agent = instance as unknown as Agent;
+        agent.localMarketing.clear();
+        const input = briefFocusFromAgent(
+          AGENT_BRIEF.replace(/Key Message: .*/, `Key Message: ${keyMessage}`),
+          "Drafted",
+        ) as FocusInput;
+        agent.updateFocus(input);
+        agent.callMarketingAgent = async (_current, write) => {
+          if (saveBeforeFailing) localAgentWrite(write as never, agent.localMarketing);
+          throw new Error("The operation timed out");
+        };
+      });
+      await SELF.fetch("https://example.test/agent/confirmations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "save-marketing-brief" }),
+      });
+      return SELF.fetch("https://example.test/agent/confirmations/execute", { method: "POST" });
+    };
+    const recovered = await prepareAndExecute(true, "Soup first.");
+    expect(recovered.status).toBe(200);
+    await expect(recovered.json()).resolves.toMatchObject({ result: { found: "recovered" } });
+
+    const failed = await prepareAndExecute(false, "Soup second.");
+    expect(failed.status).toBe(502);
+    const body = (await failed.json()) as { error: { message: string } };
+    expect(body.error.message).toContain("may still be saving");
+    expect(body.error.message).toContain("links what it finds instead of saving twice");
   });
 });
