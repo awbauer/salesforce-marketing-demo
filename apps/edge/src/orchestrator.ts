@@ -80,6 +80,7 @@ import {
   type MarketingReadBack,
   parseMarketingReadBack,
   parsePermissionReport,
+  sameBrief,
   planMarketingWrite,
   toolText,
   withRefreshedPreview,
@@ -139,6 +140,11 @@ const ACTIVITY_LABELS = {
   "create-marketing-campaign": "Campaign and flow created in Marketing Cloud",
   "create-review-task": "Review request created",
   "attach-generated-image": "Campaign image attached",
+} as const;
+/** Why a write was linked to records Marketing Cloud already had, instead of saved again. */
+const FOUND_NOTES = {
+  reused: "already in Marketing Cloud from an earlier attempt; linked, not saved again",
+  recovered: "the agent didn't answer in time, but Salesforce shows it was saved",
 } as const;
 /** The Marketing Cloud agent the workbench asks to save briefs and create campaigns. */
 const CAMPAIGN_AGENT = "Northstar_Campaign_Creation";
@@ -1443,42 +1449,47 @@ export class MarketingOrchestrator extends AIChatAgent<
   /**
    * Runs a confirmed Marketing Cloud write by asking the Campaign Creation agent, through its
    * Hosted MCP tool, to run its standard actions; then reads the result back from Salesforce.
-   * The confirmation is spent before the agent is called, so a second click can't resend it.
+   *
+   * The standard actions aren't idempotent, so the write is made safe to retry here: Salesforce
+   * is checked first, and a brief or campaign an earlier attempt already created is linked rather
+   * than created again. If the agent call fails, Salesforce is checked once more before giving
+   * up, since a timeout can come after the agent saved. The confirmation is spent before the
+   * agent is called, so a second click can't resend it.
    */
   private async executeMarketingWrite(current: Confirmation) {
     const write = current.write as MarketingWrite;
     this.setState({ ...this.state, pendingConfirmation: null });
-    if ((this.env.ENVIRONMENT as string) === "local")
-      return this.completeMarketingWrite(current, localAgentWrite(write, this.localMarketing));
-    await this.mcp.waitForConnections({ timeout: 5_000 });
-    const tool = this.salesforceTool(WRITE_TOOL_BY_ACTION[current.action]);
-    if (!tool)
-      return json(
-        {
-          error: {
-            code: "UPSTREAM_UNAVAILABLE",
-            message:
-              "The Marketing Cloud Campaign Creation agent's tool isn't in the Salesforce catalog. Reconnect Salesforce and prepare the save again. Nothing was saved.",
+    const existing = await this.existingMarketingRecords(write);
+    if (existing) return this.completeMarketingWrite(current, null, existing, "reused");
+    let tool: ReturnType<MarketingOrchestrator["salesforceTool"]> = null;
+    if ((this.env.ENVIRONMENT as string) !== "local") {
+      await this.mcp.waitForConnections({ timeout: 5_000 });
+      tool = this.salesforceTool(WRITE_TOOL_BY_ACTION[current.action]);
+      if (!tool)
+        return json(
+          {
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message:
+                "The Marketing Cloud Campaign Creation agent's tool isn't in the Salesforce catalog. Reconnect Salesforce and prepare the save again. Nothing was saved.",
+            },
           },
-        },
-        { status: 503 },
-      );
+          { status: 503 },
+        );
+    }
+    // "confirmed" in the audit: sent to the agent, not yet verified in Salesforce.
+    await this.recordConfirmationAudit(current, "confirmed");
     let reply: unknown;
     try {
-      reply = await resolveToolResult(
-        tool.execute(agentToolInput(tool, agentRequest(write)), {
-          toolCallId: current.id,
-          messages: [],
-          context: undefined,
-        }),
-      );
+      reply = await this.callMarketingAgent(current, write, tool);
     } catch (error) {
-      await this.recordConfirmationAudit(current, "denied");
+      const saved = await this.existingMarketingRecords(write);
+      if (saved) return this.completeMarketingWrite(current, null, saved, "recovered");
       return json(
         {
           error: {
             code: "UPSTREAM_UNAVAILABLE",
-            message: `The Marketing Cloud agent didn't finish (${error instanceof Error ? error.message.slice(0, 160) : "unknown error"}). Check Marketing Cloud for the ${write.kind === "brief" ? "brief" : "campaign"} before preparing the save again.`,
+            message: `The Marketing Cloud agent didn't finish (${error instanceof Error ? error.message.slice(0, 160) : "unknown error"}), and Salesforce doesn't show the ${write.kind === "brief" ? "brief" : "campaign"} yet. It may still be saving: wait a minute, then prepare the save again. The workbench checks Marketing Cloud first and links what it finds instead of saving twice.`,
           },
         },
         { status: 502 },
@@ -1487,20 +1498,56 @@ export class MarketingOrchestrator extends AIChatAgent<
     return this.completeMarketingWrite(current, reply);
   }
 
+  /** Asks the Campaign Creation agent to do a confirmed write; local development uses a stand-in. */
+  private async callMarketingAgent(
+    current: Confirmation,
+    write: MarketingWrite,
+    tool: ReturnType<MarketingOrchestrator["salesforceTool"]>,
+  ): Promise<unknown> {
+    if (!tool) return localAgentWrite(write, this.localMarketing);
+    return resolveToolResult(
+      tool.execute(agentToolInput(tool, agentRequest(write)), {
+        toolCallId: current.id,
+        messages: [],
+        context: undefined,
+      }),
+    );
+  }
+
+  /**
+   * What an earlier attempt at this write already created in Marketing Cloud: the newest brief
+   * with the same name and key message, or the campaign on the brief. Null when there's none.
+   */
+  private async existingMarketingRecords(write: MarketingWrite) {
+    if (write.kind === "campaign") {
+      const readBack = await this.readMarketingRecords({ briefId: write.briefId });
+      return readBack?.campaign ? readBack : null;
+    }
+    const readBack = await this.readMarketingRecords({ briefName: write.brief.name });
+    return readBack?.brief && sameBrief(readBack.brief, write.brief) ? readBack : null;
+  }
+
   /**
    * Finishes a confirmed Marketing Cloud write: reads back from Salesforce what the Campaign
    * Creation agent says it created, and only then links the focus to the Brief (and Campaign and
    * flow) and adds them to the workspace. The agent's reply is never taken as proof.
    */
-  private async completeMarketingWrite(current: Confirmation, reply: unknown) {
+  private async completeMarketingWrite(
+    current: Confirmation,
+    reply: unknown,
+    known?: MarketingReadBack,
+    found?: "reused" | "recovered",
+  ) {
     const write = current.write as MarketingWrite;
     const local = (this.env.ENVIRONMENT as string) === "local";
     const agentReply = toolText(reply).slice(0, 4000);
     const ids = idsFromAgentReply(agentReply);
     const briefId = write.kind === "campaign" ? write.briefId : ids.briefId;
-    const readBack = await this.readMarketingRecords(
-      briefId ? { briefId } : { briefName: write.kind === "brief" ? write.brief.name : "" },
-    );
+    const readBack =
+      known ??
+      (await this.readMarketingRecords(
+        briefId ? { briefId } : { briefName: write.kind === "brief" ? write.brief.name : "" },
+      ));
     const briefOk =
       readBack?.brief &&
       (write.kind === "campaign" ||
@@ -1529,10 +1576,11 @@ export class MarketingOrchestrator extends AIChatAgent<
         {
           id: `${current.action}-${current.id}`,
           label: ACTIVITY_LABELS[current.action],
-          detail:
+          detail: `${
             write.kind === "brief"
-              ? `${SALESFORCE_AGENTS[CAMPAIGN_AGENT].label} agent · Brief ${brief.id} · ${readBack.steps.length}-step preview${local ? " (local fixture)" : ""}`
-              : `${SALESFORCE_AGENTS[CAMPAIGN_AGENT].label} agent · Campaign ${campaign?.id}${campaign?.flow ? ` · ${campaign.flow.label}` : ""}${local ? " (local fixture)" : ""}`,
+              ? `${SALESFORCE_AGENTS[CAMPAIGN_AGENT].label} agent · Brief ${brief.id} · ${readBack.steps.length}-step preview`
+              : `${SALESFORCE_AGENTS[CAMPAIGN_AGENT].label} agent · Campaign ${campaign?.id}${campaign?.flow ? ` · ${campaign.flow.label}` : ""}`
+          }${found ? ` · ${FOUND_NOTES[found]}` : ""}${local ? " (local fixture)" : ""}`,
           occurredAt: "Now",
           status: "complete",
         },
@@ -1565,6 +1613,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         agent: { name: CAMPAIGN_AGENT, ...SALESFORCE_AGENTS[CAMPAIGN_AGENT] },
         actions: SALESFORCE_TOOL_DETAILS[WRITE_TOOL_BY_ACTION[current.action]]?.actions ?? [],
         agentReply,
+        ...(found ? { found, note: FOUND_NOTES[found] } : {}),
         brief: { id: brief.id, name: brief.name },
         preview: readBack.steps,
         ...(campaign ? { campaign } : {}),
@@ -2042,7 +2091,7 @@ export class MarketingOrchestrator extends AIChatAgent<
 
   private async recordConfirmationAudit(
     confirmation: ReturnType<typeof ConfirmationSchema.parse>,
-    status: "pending" | "denied" | "expired" | "executed",
+    status: "pending" | "confirmed" | "denied" | "expired" | "executed",
     sourceRecordId?: string,
   ) {
     if ((this.env.ENVIRONMENT as string) === "local")

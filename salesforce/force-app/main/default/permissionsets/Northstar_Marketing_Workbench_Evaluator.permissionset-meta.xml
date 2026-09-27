@@ -10,7 +10,6 @@
     <classAccesses><apexClass>NorthstarAttachCampaignImage</apexClass><enabled>true</enabled></classAccesses>
     <classAccesses><apexClass>NorthstarCheckWriteAccess</apexClass><enabled>true</enabled></classAccesses>
     <classAccesses><apexClass>NorthstarGetMarketingRecords</apexClass><enabled>true</enabled></classAccesses>
-    <fieldPermissions><editable>true</editable><field>Campaign.Northstar_Idempotency_Key__c</field><readable>true</readable></fieldPermissions>
     <fieldPermissions><editable>true</editable><field>ContentVersion.Northstar_Idempotency_Key__c</field><readable>true</readable></fieldPermissions>
     <fieldPermissions><editable>true</editable><field>Campaign.Description</field><readable>true</readable></fieldPermissions>
     <fieldPermissions><editable>true</editable><field>Task.Northstar_Idempotency_Key__c</field><readable>true</readable></fieldPermissions>

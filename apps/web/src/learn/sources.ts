@@ -44,7 +44,6 @@ export const SECTION_SOURCES: Record<string, readonly string[]> = {
     "salesforce/force-app/main/default/bots/",
     "salesforce/force-app/main/default/mcpServerDefinitions/",
     "packages/contracts/src/tool-catalog.json",
-    "salesforce/force-app/main/default/objects/Campaign/",
     "salesforce/force-app/main/default/objects/Activity/",
     "salesforce/force-app/main/default/objects/ContentVersion/",
     "salesforce/force-app/main/default/classes/NorthstarGetCampaignContext.cls",
@@ -127,6 +126,7 @@ export const UNTAUGHT_SOURCES: ReadonlyArray<{ path: string; reason: string }> =
   { path: "scripts/check-invariants.mjs", reason: "Delivery gate" },
   { path: "scripts/check-learn.mjs", reason: "This gate" },
   { path: "scripts/check-salesforce-metadata.mjs", reason: "Delivery gate" },
+  { path: "scripts/check-retired-salesforce.mjs", reason: "Delivery gate" },
   { path: "scripts/install-git-hooks.mjs", reason: "Developer setup" },
   { path: "scripts/verify.mjs", reason: "Delivery gate runner" },
   { path: "scripts/lib/report.mjs", reason: "Gate report helper" },
@@ -136,5 +136,14 @@ export const UNTAUGHT_SOURCES: ReadonlyArray<{ path: string; reason: string }> =
   { path: "scripts/validate-salesforce.mjs", reason: "Salesforce CI validation" },
 ];
 
-/** Changes to these never need a Learn update: tests, fixtures, and formatting-only files. */
-export const DRIFT_IGNORED = [/\.test\.[cm]?[jt]sx?$/, /Test\.cls$/, /-meta\.xml$/, /\.snap$/];
+/**
+ * Changes to these never need a Learn update: tests, snapshots, and the metadata companions of
+ * Apex classes. Other `-meta.xml` files (objects, fields, permission sets, the MCP definition) are
+ * Salesforce source and are checked like code.
+ */
+export const DRIFT_IGNORED = [
+  /\.test\.[cm]?[jt]sx?$/,
+  /Test\.cls(?:-meta\.xml)?$/,
+  /\.cls-meta\.xml$/,
+  /\.snap$/,
+];

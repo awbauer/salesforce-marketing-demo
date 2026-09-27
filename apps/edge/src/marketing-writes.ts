@@ -178,6 +178,23 @@ function stepContent(content: unknown) {
   }
 }
 
+const normalized = (value: string | undefined) =>
+  (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+
+/**
+ * Whether a brief in Marketing Cloud is the one a save would create: the same name and key
+ * message. Used to link an earlier attempt's brief instead of saving a duplicate.
+ */
+export function sameBrief(
+  saved: Pick<MarketingBrief, "name" | "keyMessage">,
+  brief: MarketingBrief,
+) {
+  return (
+    normalized(saved.name) === normalized(brief.name) &&
+    normalized(saved.keyMessage) === normalized(brief.keyMessage)
+  );
+}
+
 /** Parses get_marketing_records: the Brief, its preview steps, and its Campaign and flow. */
 export function parseMarketingReadBack(output: unknown): MarketingReadBack | null {
   let recordsJson = findKey(output, "recordsJson");

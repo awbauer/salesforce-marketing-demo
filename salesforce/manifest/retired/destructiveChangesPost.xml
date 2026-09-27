@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Metadata retired from the workbench (WU-040, ADR-008): briefs and campaigns are created by the
+  Marketing Cloud Next Campaign Creation agent, not custom Apex. Deleted from the proof org once;
+  scripts/validate-salesforce.mjs fails if any of these exist in the org again.
+-->
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>NorthstarRecordActionsTest</members>
+        <members>NorthstarSaveBrief</members>
+        <members>NorthstarSaveCampaign</members>
+        <members>NorthstarSaveCampaignBrief</members>
+        <members>NorthstarSaveMessage</members>
+        <members>NorthstarRecordWrites</members>
+        <name>ApexClass</name>
+    </types>
+    <types>
+        <members>Campaign.Northstar_Brand__c</members>
+        <members>Campaign.Northstar_Idempotency_Key__c</members>
+        <name>CustomField</name>
+    </types>
+    <types>
+        <members>Northstar_Brief__c</members>
+        <members>Northstar_Message__c</members>
+        <name>CustomObject</name>
+    </types>
+    <version>67.0</version>
+</Package>

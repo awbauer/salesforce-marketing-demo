@@ -29,6 +29,7 @@
     "prepare": "node scripts/install-git-hooks.mjs",
     "pr:check": "pnpm security:blocked-words && pnpm verify",
     "security:blocked-words": "node scripts/check-blocked-words.mjs",
+    "sf:retired:check": "node scripts/check-retired-salesforce.mjs",
     "sf:validate": "node scripts/validate-salesforce.mjs",
     "sf:metadata:check": "node scripts/check-salesforce-metadata.mjs",
     "sf:mcp:oauth": "node scripts/prove-salesforce-mcp.mjs",

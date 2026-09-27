@@ -128,6 +128,7 @@ export function App() {
     recordId: string;
     agent: string;
     actions: string[];
+    note?: string;
   } | null>(null);
   const [attachedImage, setAttachedImage] = useState<{
     contentDocumentId: string;
@@ -444,6 +445,7 @@ export function App() {
           brief?: { id: string; name: string };
           preview?: unknown[];
           campaign?: { id: string; name: string; flow: { label: string } | null };
+          note?: string;
         };
       }>(`confirmations/${decision}`);
       setPendingConfirmation(null);
@@ -484,6 +486,7 @@ export function App() {
                 recordId: campaign.id,
                 agent: result.result.agent?.label ?? "Campaign Creation agent",
                 actions: (result.result.actions ?? []).map((item) => item.label),
+                note: result.result.note,
               }
             : {
                 label: "Brief saved in Marketing Cloud",
@@ -492,6 +495,7 @@ export function App() {
                 recordId: brief?.id ?? result.result.recordId,
                 agent: result.result.agent?.label ?? "Campaign Creation agent",
                 actions: (result.result.actions ?? []).map((item) => item.label),
+                note: result.result.note,
               },
         );
       } else if (decision === "execute" && result.result?.readBack) {
@@ -866,7 +870,7 @@ export function App() {
                   <span>{` · ${savedRecord.title}`}</span>
                   <small className="saved-agent">
                     By the {savedRecord.agent} agent · {savedRecord.actions.join(" → ")} · read back
-                    from Salesforce
+                    from Salesforce{savedRecord.note ? ` · ${savedRecord.note}` : ""}
                   </small>
                 </div>
                 <a
