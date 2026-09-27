@@ -560,8 +560,10 @@ After a plan finishes, the model gets **no tools** and must write the answer.`,
 
 - **A tool call written into reasoning or answer text.** The guard recovers the JSON arguments when they match the tool's schema, and hides leaked text from the user.
 - **Channel markup or a dropped prefix in tool names**, such as \`summarize_campaign<|channel|>analysis\`. The guard repairs the name when exactly one real tool matches.
+- **Arguments that aren't valid JSON.** The guard escapes raw newlines inside strings and reads \`<arg_key>\`/\`<arg_value>\` markup. Arguments cut off mid-call can't be repaired, so they count as no call.
 - **No usable call at all.** The step is retried once.
-- **Runaway reasoning.** Forced steps are capped at 1,024 tokens.
+- **A tool call in an answer step,** which offers no tools. The call is dropped; if it was all the step produced, the answer is retried once.
+- **Runaway reasoning.** Forced steps are capped at 2,048 tokens. Reasoning counts against the cap, and a detailed request to a Salesforce agent can take several hundred tokens on its own.
 
 At the turn level:
 - Structured timeouts cover the whole turn, gaps between chunks, and each tool call.
