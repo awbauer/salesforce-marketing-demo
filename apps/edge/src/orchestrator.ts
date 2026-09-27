@@ -81,6 +81,7 @@ import {
   agentRequest,
   agentToolInput,
   applyMarketingWrite,
+  briefAnswer,
   briefFocusFromAgent,
   fixturePermissionReport,
   idsFromAgentReply,
@@ -598,6 +599,19 @@ function findToolField(value: unknown, field: string): unknown {
   return undefined;
 }
 
+/**
+ * Logs a Salesforce or agent call that failed and was turned into a user-facing message, so
+ * the error and where it was thrown reach Workers Logs. Only the error, never request content.
+ */
+function logUpstreamFailure(call: string, error: unknown, confirmationId?: string) {
+  console.error(`[salesforce] ${call} failed`, {
+    call,
+    ...(confirmationId ? { confirmationId } : {}),
+    error: error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500),
+    stack: error instanceof Error ? error.stack?.split("\n").slice(0, 8).join("\n") : undefined,
+  });
+}
+
 async function resolveToolResult(value: unknown) {
   if (value && typeof value === "object" && Symbol.asyncIterator in value) {
     let last: unknown;
@@ -817,6 +831,8 @@ export class MarketingOrchestrator extends AIChatAgent<
           route: "model",
           timeoutSeconds: TURN_TIMEOUT.totalMs / 1000,
           userAbortSignal: abortSignal,
+          composeEmptyAnswer: () =>
+            this.agentBriefThisTurn ? briefAnswer(this.state.workingSet.focus) : null,
         });
         try {
           const result = streamText({
@@ -1730,6 +1746,17 @@ export class MarketingOrchestrator extends AIChatAgent<
   private finishProgress(ok: boolean, message?: string) {
     const progress = this.state.writeProgress;
     if (!progress || progress.finishedAt) return;
+    if (!ok)
+      console.warn(`[write] ${progress.phase} ${progress.action} failed`, {
+        phase: progress.phase,
+        action: progress.action,
+        step:
+          progress.steps.find((step) => step.status === "active")?.id ??
+          progress.steps.find((step) => step.status === "pending")?.id,
+        confirmationId: progress.confirmationId,
+        message: message?.slice(0, 300),
+        ms: Date.now() - Date.parse(progress.startedAt),
+      });
     const now = new Date().toISOString();
     const failedAt = ok
       ? -1
@@ -1819,7 +1846,8 @@ export class MarketingOrchestrator extends AIChatAgent<
             { toolCallId: current.id, messages: [], context: undefined },
           ),
         );
-      } catch {
+      } catch (error) {
+        logUpstreamFailure(`${current.action} call`, error, current.id);
         return json(
           {
             error: {
@@ -2209,7 +2237,8 @@ export class MarketingOrchestrator extends AIChatAgent<
             { toolCallId: current.id, messages: [], context: undefined },
           ),
         );
-      } catch {
+      } catch (error) {
+        logUpstreamFailure(`${current.action} call`, error, current.id);
         return json(
           {
             error: {
@@ -2330,8 +2359,11 @@ export class MarketingOrchestrator extends AIChatAgent<
         ),
       );
       const permissions = parsePermissionReport(output, new Date());
+      if (!permissions)
+        console.warn("[salesforce] check_write_access returned an unreadable report");
       return permissions ? { permissions } : { failure: "invalid-response" };
-    } catch {
+    } catch (error) {
+      logUpstreamFailure(`check_write_access for ${action}`, error);
       return { failure: "call-failed" };
     }
   }
@@ -2398,6 +2430,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     try {
       reply = await this.callMarketingAgent(current, write, tool);
     } catch (error) {
+      logUpstreamFailure(`${current.action} agent call`, error, current.id);
       this.stepProgress(
         "readback",
         "The agent call didn't finish; checking Salesforce in case it saved.",
@@ -2607,7 +2640,8 @@ export class MarketingOrchestrator extends AIChatAgent<
         ),
       );
       return parseMarketingReadBack(output);
-    } catch {
+    } catch (error) {
+      logUpstreamFailure("get_marketing_records", error);
       return null;
     }
   }

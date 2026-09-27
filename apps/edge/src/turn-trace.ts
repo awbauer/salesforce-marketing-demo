@@ -54,6 +54,11 @@ export type TurnTraceOptions = {
   requiredTool?: string;
   route?: TurnRoute;
   timeoutSeconds: number;
+  /**
+   * The answer to use when a completed turn wrote no text but the caller can say what happened
+   * from a tool's result, instead of the generic recovery message.
+   */
+  composeEmptyAnswer?: () => string | null;
   /** The caller's own signal; an abort here means the user stopped the turn. */
   userAbortSignal?: AbortSignal;
   now?: () => number;
@@ -304,7 +309,18 @@ export function createTurnTracer(writer: UIMessageStreamWriter, options: TurnTra
             ? "failed"
             : "completed";
 
-      if (!userStopped) {
+      const composed =
+        !userStopped && outcome === "completed" && visibleChars === 0
+          ? (options.composeEmptyAnswer?.() ?? null)
+          : null;
+      if (composed) {
+        record({ kind: "fallback-text", reason: "composed" });
+        const id = crypto.randomUUID();
+        writer.write({ type: "text-start", id });
+        writer.write({ type: "text-delta", id, delta: composed });
+        answerText += composed;
+        writer.write({ type: "text-end", id });
+      } else if (!userStopped) {
         const notice = fallbackNotice({
           outcome,
           failureMessage: failure?.message,

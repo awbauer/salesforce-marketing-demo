@@ -401,6 +401,32 @@ BRIEF_LABELS.set("primary calls-to-action", "Primary CTAs");
 BRIEF_LABELS.set("primary calls to action", "Primary CTAs");
 
 /**
+ * The turn's answer when the model wrote none after the Campaign Creation agent drafted a
+ * brief: the brief's own fields, so the chat still says what was drafted.
+ */
+export function briefAnswer(focus: FocusItem | null): string | null {
+  if (focus?.kind !== "brief") return null;
+  const lines = (
+    [
+      ["Key message", /^(key message)$/i],
+      ["Target audience", /^(target audience|audience)$/i],
+      ["Primary goal", /^(primary goal|goal|objective)$/i],
+      ["Primary CTAs", /^(primary ctas?|ctas?)$/i],
+      ["Primary KPI", /^(primary kpi|kpi)$/i],
+    ] as const
+  ).flatMap(([label, pattern]) => {
+    const value = clip(field(focus, pattern)?.trim(), 400);
+    return value ? [`- **${label}:** ${value}`] : [];
+  });
+  return [
+    `The Marketing Cloud Campaign Creation agent drafted **${currentFocusVersion(focus).title}**.`,
+    ...(lines.length ? ["", ...lines] : []),
+    "",
+    "The full brief is in the workspace. Nothing is saved in Marketing Cloud until you confirm the save.",
+  ].join("\n");
+}
+
+/**
  * A brief the Campaign Creation agent drafted (its "Name: … / Description: …" lines) as focus
  * input, so the workspace holds the agent's brief rather than a model paraphrase of it.
  */

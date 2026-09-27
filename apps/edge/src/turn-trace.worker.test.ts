@@ -4,7 +4,9 @@ import { stepToolChoice } from "./orchestrator";
 import { MAX_TURN_STEPS } from "./turn-policy";
 import { createTurnTracer, describeTurnError } from "./turn-trace";
 
-function harness(options: { userAbortSignal?: AbortSignal } = {}) {
+function harness(
+  options: { userAbortSignal?: AbortSignal; composeEmptyAnswer?: () => string | null } = {},
+) {
   const written: UIMessageChunk[] = [];
   const writer = {
     write: (chunk: UIMessageChunk) => written.push(chunk),
@@ -88,6 +90,21 @@ describe("turn tracer", () => {
     expect(outcome).toBe("completed");
     expect(text()).toMatch(/did not write a summary/);
     expect(trace.events.map((event) => event.kind)).toContain("fallback-text");
+  });
+
+  it("answers an empty turn with the caller's composed answer when it has one", async () => {
+    const { tracer, text } = harness({ composeEmptyAnswer: () => "The agent drafted a brief." });
+    const { outcome, trace, answer } = await tracer.pipe(source([...toolTurn, { type: "finish" }]));
+    expect(outcome).toBe("completed");
+    expect(text()).toBe("The agent drafted a brief.");
+    expect(answer).toBe("The agent drafted a brief.");
+    expect(trace.events).toContainEqual(
+      expect.objectContaining({ kind: "fallback-text", reason: "composed" }),
+    );
+    // Without a composed answer, the generic recovery message is used.
+    const generic = harness({ composeEmptyAnswer: () => null });
+    await generic.tracer.pipe(source([...toolTurn, { type: "finish" }]));
+    expect(generic.text()).toMatch(/did not write a summary/);
   });
 
   it("converts stream errors into a visible explanation without forwarding the error chunk", async () => {

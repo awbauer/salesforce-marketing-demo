@@ -6,6 +6,7 @@ import { applyFocusUpdate, type FocusInput } from "./focus";
 import {
   agentRequest,
   agentToolInput,
+  briefAnswer,
   briefFocusFromAgent,
   briefFromFocus,
   idsFromAgentReply,
@@ -55,6 +56,16 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
       "Priority",
     ]);
     expect(briefFocusFromAgent("I need more details about the campaign.", "x")).toBeNull();
+  });
+
+  it("answers from the drafted brief when the model wrote nothing", () => {
+    const answer = briefAnswer(
+      focusFrom(briefFocusFromAgent(AGENT_BRIEF, "Drafted") as FocusInput),
+    );
+    expect(answer).toContain("drafted **Rainy Day Lunch Email Campaign**");
+    expect(answer).toContain("- **Target audience:** App users in Los Angeles who order at lunch.");
+    expect(answer).toContain("Nothing is saved in Marketing Cloud until you confirm the save.");
+    expect(briefAnswer(null)).toBeNull();
   });
 
   it("plans the brief save, then the campaign, then nothing once the campaign exists", () => {
