@@ -1266,6 +1266,9 @@ a {
 .record-relation.relation-created {
   color: #2f7a44;
 }
+.record-relation.relation-remembered {
+  color: var(--muted);
+}
 .record-link {
   flex: none;
   font-size: 12px;
@@ -1916,6 +1919,7 @@ a {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.memory-reopen,
 .memory-forget {
   flex: none;
 }

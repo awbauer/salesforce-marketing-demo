@@ -58,6 +58,7 @@ const RELATION_LABELS: Record<WorkingRecord["relation"], string> = {
   read: "Opened",
   created: "Created",
   updated: "Updated",
+  remembered: "Remembered",
 };
 
 /** The draft the chat is building, with every version and what it was built from. */
@@ -276,8 +277,10 @@ export function WorkspacePanel({
                           <span className={`record-relation relation-${record.relation}`}>
                             {RELATION_LABELS[record.relation]}
                           </span>{" "}
-                          by {readableToolName(record.via)} ·{" "}
-                          <time dateTime={record.addedAt}>{relativeTime(record.addedAt)}</time>
+                          {record.relation === "remembered"
+                            ? "from memory"
+                            : `by ${readableToolName(record.via)}`}{" "}
+                          · <time dateTime={record.addedAt}>{relativeTime(record.addedAt)}</time>
                         </span>
                       </div>
                       {link && (

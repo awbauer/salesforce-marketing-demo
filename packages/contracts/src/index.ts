@@ -463,7 +463,8 @@ export const WorkingRecordSchema = RecordRefSchema.extend({
   title: z.string().min(1).max(200),
   systemLabel: z.string(),
   url: z.string().url().optional(),
-  relation: z.enum(["read", "created", "updated"]),
+  /** "remembered": reopened from long-term memory, not re-read from its system in this chat. */
+  relation: z.enum(["read", "created", "updated", "remembered"]),
   via: z.string(),
   addedAt: z.string(),
 });

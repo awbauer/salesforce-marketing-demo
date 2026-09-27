@@ -803,6 +803,23 @@ test("remembers a draft, recalls it in a new chat, and forgets it", async ({ pag
     fullPage: true,
   });
 
+  // Reopen puts the remembered draft back in this chat's workspace as the focus.
+  await expect(page.getByTestId("workspace-focus")).toHaveCount(0);
+  await page.getByRole("button", { name: "History" }).first().click();
+  await page.getByRole("button", { name: "Memory", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Reopen Rainy-day comfort: Spicy Tortilla Soup in the workspace" })
+    .first()
+    .click();
+  await expect(page.getByTestId("workspace-focus")).toContainText(
+    "Rainy-day comfort: Spicy Tortilla Soup",
+  );
+  await expect(page.getByTestId("workspace-focus")).toContainText("Reopened from memory");
+  await page.screenshot({
+    path: `artifacts/evidence/WU-046/reopen-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+
   // History → Memory lists it with its provenance, and Forget removes it.
   await page.getByRole("button", { name: "History" }).first().click();
   await page.getByRole("button", { name: "Memory", exact: true }).click();

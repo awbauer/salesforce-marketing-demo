@@ -1,7 +1,7 @@
 ---
 id: WU-035
 title: Session working set, phase 1 (records in any system, context from tools)
-status: active
+status: complete
 plan_sections: [9, 15]
 owners: [agent]
 issue: 46

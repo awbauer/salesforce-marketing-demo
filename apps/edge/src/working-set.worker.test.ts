@@ -1,6 +1,7 @@
 import { runInDurableObject, SELF } from "cloudflare:test";
 import { emptyWorkingSet, type WorkingSet } from "@northstar/contracts";
 import { describe, expect, it } from "vitest";
+import type { MemoryView } from "../../../packages/knowledge-graph/src/index.ts";
 import { connectCampaignContextTools } from "./campaign-context/server";
 import { connectKnowledgeGraphTools, knowledgeGraphBackend } from "./knowledge-graph/server";
 import { agentStubFor, CATALOG_CAMPAIGN_ID, openCatalogCampaign } from "./worker.test-helpers";
@@ -8,6 +9,7 @@ import {
   baseToolName,
   ingestToolResult,
   openCampaign,
+  reopenFromMemory,
   salesforceRecordsIn,
   workingSetPrompt,
 } from "./working-set";
@@ -173,6 +175,79 @@ describe("working set", () => {
       ["Task", "created"],
       ["Campaign", "read"],
     ]);
+  });
+});
+
+describe("reopening remembered work", () => {
+  const memory = (overrides: Partial<MemoryView>): MemoryView => ({
+    id: "11111111-1111-4111-8111-111111111111",
+    type: "Draft",
+    kind: "push-message",
+    title: "Rainy-day comfort",
+    summary: "Soup push for the lunch crowd.",
+    at: "2026-09-20T12:00:00Z",
+    expiresAt: "2026-10-04T12:00:00Z",
+    author: "you",
+    source: "Remembered from the chat",
+    about: [],
+    records: [],
+    fields: [{ label: "Headline", value: "Soup is on" }],
+    version: 3,
+    focusId: "focus-1",
+    ...overrides,
+  });
+
+  it("makes a remembered draft the focus again, at its remembered version", () => {
+    const set = reopenFromMemory(emptyWorkingSet(), memory({}), memory({}), at);
+    expect(set.focus).toMatchObject({ id: "focus-1", kind: "push-message", current: 3 });
+    expect(set.focus?.saved).toBeUndefined();
+    expect(set.focus?.versions[0]?.changeNote).toBe(
+      "Reopened from memory (remembered from the chat, 2026-09-20)",
+    );
+    expect(set.focus?.versions[0]?.fields).toEqual([{ label: "Headline", value: "Soup is on" }]);
+  });
+
+  it("adds a decision's records as remembered, never as a write target", () => {
+    const draft = memory({});
+    const decision = memory({
+      id: "22222222-2222-4222-8222-222222222222",
+      type: "Decision",
+      kind: "confirmed-write",
+      fields: [],
+      draft: { id: draft.id, title: draft.title, version: 3 },
+      records: [
+        {
+          system: "salesforce",
+          objectType: "Campaign",
+          recordId: "701000000000001AAA",
+          title: "Rainy Day Comfort",
+        },
+      ],
+    });
+    const set = reopenFromMemory(emptyWorkingSet(), decision, draft, at);
+    expect(set.focus?.id).toBe("focus-1");
+    expect(set.records.map((entry) => [entry.objectType, entry.relation, entry.via])).toEqual([
+      ["Campaign", "remembered", "memory"],
+    ]);
+    expect(openCampaign(set)).toBeUndefined();
+    expect(workingSetPrompt(set)).toContain("reopened from memory, not re-read");
+    // Reading the record again in this chat makes it the open campaign.
+    const reread = ingestToolResult(set, {
+      toolName: "tool_salesforce_x_summarize_campaign",
+      input: { campaignId: "701000000000001AAA" },
+      output: text("Rainy Day Comfort (701000000000001AAA) is planned."),
+      at,
+    });
+    expect(openCampaign(reread)?.relation).toBe("read");
+  });
+
+  it("reopens a memory from the Memory tab through the Worker", async () => {
+    await SELF.fetch("https://example.test/agent/working-set/reset", { method: "POST" });
+    const missing = await SELF.fetch(
+      "https://example.test/agent/memory/33333333-3333-4333-8333-333333333333/reopen",
+      { method: "POST" },
+    );
+    expect(missing.status).toBe(404);
   });
 });
 
