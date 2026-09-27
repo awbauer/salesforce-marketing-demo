@@ -1,10 +1,10 @@
-import type { MemoryView } from "../../../packages/knowledge-graph/src/index.ts";
 import {
   CAMPAIGN_CONTEXT_TOOLS,
+  EXTERNAL_SERVICE_TOOLS,
   type FocusItem,
   FocusKindSchema,
-  EXTERNAL_SERVICE_TOOLS,
   type InsightTile,
+  type InventoryRisk,
   KNOWLEDGE_GRAPH_TOOLS,
   MEMORY_TOOLS,
   ORCHESTRATOR_TOOLS,
@@ -16,6 +16,7 @@ import {
   type WorkingRecord,
   type WorkingSet,
 } from "../../../packages/contracts/src/index.ts";
+import type { MemoryView } from "../../../packages/knowledge-graph/src/index.ts";
 import { focusPrompt } from "./focus.ts";
 
 /**
@@ -66,7 +67,7 @@ export function toolPayload(output: unknown): Payload {
   return { data: structured ?? parseJson(text), text };
 }
 
-const isFailure = (output: unknown) =>
+export const isFailure = (output: unknown) =>
   Boolean(
     output &&
       typeof output === "object" &&
@@ -203,6 +204,74 @@ function weatherCard(data: Record<string, unknown>, tool: string, at: Date): Ing
 }
 
 /** Public holidays (Nager.Date) or weather alerts (National Weather Service) as a context card. */
+function forecastCard(data: Record<string, unknown>, tool: string, at: Date): Ingested {
+  const city = str(data.city) ?? "California";
+  const days = list(data.days).map((day) => day as Record<string, unknown>);
+  return {
+    cards: [
+      {
+        id: `forecast:${city.toLowerCase().replace(/\W+/g, "-")}`,
+        kind: "weather",
+        eyebrow: "Forecast",
+        title: city,
+        summary: days
+          .map(
+            (day) =>
+              `${str(day.date)?.slice(5)}: ${str(day.demandCondition)}, high ${num(day.highF)}°F`,
+          )
+          .join(" · "),
+        metric: String(days.length),
+        trend: "days",
+        state: "ready",
+        source: {
+          system: "open-meteo",
+          label: "Open-Meteo · forecast",
+          freshness: "just now",
+          status: "ready",
+        },
+        details: list(data.demandConditions).map(
+          (condition) => `Demand planning: ${String(condition)}`,
+        ),
+        updatedAt: at.toISOString(),
+        toolName: tool,
+      },
+    ],
+    records: [],
+  };
+}
+
+function inventoryCard(data: Record<string, unknown>, tool: string, at: Date): Ingested {
+  const city = str(data.city) ?? "Location";
+  const items = list(data.items).map((item) => item as Record<string, unknown>);
+  const thin = items
+    .filter((item) => (num(item.daysOfCover) ?? 99) < 1.5)
+    .map((item) => `${str(item.name)}: ${num(item.daysOfCover)} days of cover`);
+  return {
+    cards: [
+      {
+        id: `inventory:${str(data.location) ?? city}`,
+        kind: "context",
+        eyebrow: "Store inventory",
+        title: `Coastline Kitchen ${city}`,
+        summary: `${items.length} items counted ${str(data.countedAt) ?? "today"}; ${thin.length} under a day and a half of typical use.`,
+        metric: String(items.length),
+        trend: "items",
+        state: "ready",
+        source: {
+          system: "store-inventory",
+          label: "Store inventory · randomized mock",
+          freshness: "just now",
+          status: "ready",
+        },
+        details: thin.slice(0, 6),
+        updatedAt: at.toISOString(),
+        toolName: tool,
+      },
+    ],
+    records: [],
+  };
+}
+
 function externalCard(data: Record<string, unknown>, tool: string, at: Date): Ingested {
   if (tool === "get_public_holidays") {
     const country = str(data.country) ?? "?";
@@ -331,6 +400,7 @@ const GRAPH_TITLES: Record<string, string> = {
   trace_content_lineage: "Content lineage",
   plan_account_outreach: "Outreach plan",
   assess_location_impact: "Location impact",
+  map_weather_demand: "Weather demand map",
   recall_decisions: "Remembered",
   recall_recent_work: "Recent work",
   explain_memory: "Memory provenance",
@@ -361,6 +431,8 @@ function graphSummary(tool: string, data: Record<string, unknown>, count: number
       return `${count} content assets built from ${str(data.brief) ?? "the brief"}.`;
     case "plan_account_outreach":
       return `${list(data.contacts).length} contacts at ${str(data.account) ?? "the account"} (${str(data.countryName) ?? str(data.country) ?? "?"}), with the channels each has consented to.`;
+    case "map_weather_demand":
+      return `${list(data.menuItems).length} dishes lifted by ${list(data.conditions).join(", ") || "the forecast"} at ${str(data.city) ?? "the location"}, made with ${list(data.inventoryItems).length} inventory items.`;
     case "assess_location_impact":
       return `${num(data.affectedAppUsers) ?? 0} app users near ${str(data.city) ?? "the location"}; ${num(data.reachableByPush) ?? 0} can be notified by push; ${list(data.campaignsToReview).length} active campaigns target them.`;
     default:
@@ -556,9 +628,10 @@ export function ingestionFor(event: ToolResultEvent): Ingested {
   const payload = toolPayload(event.output);
   if ((CAMPAIGN_CONTEXT_TOOLS as readonly string[]).includes(tool)) {
     if (!payload.data) return { cards: [], records: [] };
-    return tool === "get_current_weather"
-      ? weatherCard(payload.data, tool, event.at)
-      : restaurantCard(payload.data, tool, event.at);
+    if (tool === "get_current_weather") return weatherCard(payload.data, tool, event.at);
+    if (tool === "get_weather_forecast") return forecastCard(payload.data, tool, event.at);
+    if (tool === "get_location_inventory") return inventoryCard(payload.data, tool, event.at);
+    return restaurantCard(payload.data, tool, event.at);
   }
   if ((EXTERNAL_SERVICE_TOOLS as readonly string[]).includes(tool))
     return payload.data ? externalCard(payload.data, tool, event.at) : { cards: [], records: [] };
@@ -599,6 +672,35 @@ export function mergeIntoWorkingSet(set: WorkingSet, added: Ingested, at: Date):
 
 export const ingestToolResult = (set: WorkingSet, event: ToolResultEvent) =>
   mergeIntoWorkingSet(set, ingestionFor(event), event.at);
+
+/** A context card for a weather-driven inventory check: which items won't cover the forecast. */
+export function inventoryRiskCard(risk: InventoryRisk, at: Date): InsightTile {
+  const low = risk.lowItems.length;
+  return {
+    id: `inventory-risk:${risk.locationId}`,
+    kind: "context",
+    eyebrow: "Inventory risk",
+    title: `Coastline Kitchen ${risk.city}`,
+    summary: low
+      ? `${low} of ${risk.checkedItems} weather-driven items won't cover the ${risk.window.days}-day forecast (${risk.conditions.join(", ")}). Store manager: ${risk.manager.name}.`
+      : `All ${risk.checkedItems} weather-driven items cover the ${risk.window.days}-day forecast (${risk.conditions.join(", ")}).`,
+    metric: String(low),
+    trend: low === 1 ? "item low" : "items low",
+    state: "ready",
+    source: {
+      system: "store-inventory",
+      label: "Forecast · graph · store inventory (mock)",
+      freshness: "just now",
+      status: "ready",
+    },
+    details: risk.lowItems.map(
+      (item) =>
+        `${item.name}: ${item.onHand} ${item.unit} on hand + ${item.onOrder} on order, ${item.projectedNeed} needed (${item.menuItems.join(", ")})`,
+    ),
+    updatedAt: at.toISOString(),
+    toolName: "map_weather_demand",
+  };
+}
 
 /** Adds a record the chat created or updated through a confirmed write. */
 export function addCreatedRecord(

@@ -187,3 +187,75 @@ export const slug = (value: string) =>
 
 export const menuItemId = (name: string) => `menu-${slug(name)}`;
 export const locationNodeId = (id: string) => `location-${id}`;
+
+/**
+ * Stock each restaurant keeps for the menu, in the units the kitchen counts. The store inventory
+ * system (a randomized mock) reports on-hand amounts for these; the graph maps them to the menu
+ * items that use them and, through past push results, to the weather that lifts those items.
+ */
+export const COASTLINE_INVENTORY = [
+  { id: "tortillas", name: "Flour tortillas", unit: "each" },
+  { id: "eggs", name: "Eggs", unit: "each" },
+  { id: "chile-verde", name: "Chile verde (prepped)", unit: "lb" },
+  { id: "acai", name: "Açaí packs", unit: "pack" },
+  { id: "cold-brew", name: "Cold brew concentrate", unit: "qt" },
+  { id: "horchata-base", name: "Horchata base", unit: "qt" },
+  { id: "chicken", name: "Citrus chicken (marinated)", unit: "lb" },
+  { id: "grains", name: "Rice and grains (cooked)", unit: "lb" },
+  { id: "fish", name: "Fish fillets", unit: "lb" },
+  { id: "soup-base", name: "Tortilla soup base", unit: "gal" },
+  { id: "noodles", name: "Garlic noodles", unit: "lb" },
+  { id: "carne-asada", name: "Carne asada", unit: "lb" },
+  { id: "fries", name: "Fries (frozen)", unit: "lb" },
+  { id: "watermelon", name: "Watermelon", unit: "lb" },
+  { id: "mango", name: "Mango purée", unit: "qt" },
+] as const;
+export type InventoryItemId = (typeof COASTLINE_INVENTORY)[number]["id"];
+
+/** What one serving of each menu item uses, by inventory item. */
+export const COASTLINE_RECIPES: Record<string, ReadonlyArray<[InventoryItemId, number]>> = {
+  "Chile Verde Breakfast Burrito": [
+    ["tortillas", 1],
+    ["eggs", 2],
+    ["chile-verde", 0.25],
+  ],
+  "Açaí Sunrise Bowl": [["acai", 2]],
+  "Horchata Cold Brew": [
+    ["cold-brew", 0.1],
+    ["horchata-base", 0.1],
+  ],
+  "Citrus Chicken Grain Bowl": [
+    ["chicken", 0.35],
+    ["grains", 0.4],
+  ],
+  "Baja Fish Tacos": [
+    ["fish", 0.3],
+    ["tortillas", 3],
+  ],
+  "Spicy Tortilla Soup": [
+    ["soup-base", 0.1],
+    ["tortillas", 1],
+  ],
+  "Garlic Noodle Bowl": [["noodles", 0.5]],
+  "Carne Asada Fries": [
+    ["carne-asada", 0.3],
+    ["fries", 0.5],
+  ],
+  "Watermelon Mint Agua Fresca": [["watermelon", 0.6]],
+  "Mango Chili Smoothie": [["mango", 0.25]],
+};
+
+/**
+ * Each restaurant's store manager, by name only: fictional people. The graph holds no contact
+ * data; Salesforce finds the manager's Contact by title and restaurant when a case is opened.
+ */
+export const COASTLINE_STORE_MANAGERS: Record<CoastlineLocationId, { name: string }> = {
+  "los-angeles": { name: "Rosa Delgado" },
+  "san-francisco": { name: "Marcus Lee" },
+  "san-diego": { name: "Priya Nair" },
+  sacramento: { name: "Tom Okafor" },
+  fresno: { name: "Elena Ruiz" },
+};
+
+export const inventoryItemId = (id: string) => `inventory-${id}`;
+export const storeManagerId = (location: string) => `manager-${location}`;

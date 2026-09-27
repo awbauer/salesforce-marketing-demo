@@ -23,6 +23,7 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
   const refinePlan = toolPlan?.some((name) => name.endsWith("refine_campaign_preview"));
   const outreachPlan = toolPlan?.some((name) => name.endsWith("plan_account_outreach"));
   const impactPlan = toolPlan?.some((name) => name.endsWith("assess_location_impact"));
+  const inventoryPlan = toolPlan?.some((name) => name.endsWith("map_weather_demand"));
   const graphPlan = toolPlan?.some((name) => name.startsWith("graph_"));
   const memoryPlan = toolPlan?.some((name) =>
     /_(?:recall_decisions|recall_recent_work)$/.test(name),
@@ -55,6 +56,11 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
     ...(impactPlan
       ? [
           "For this service disruption, first check active weather alerts for the Coastline Kitchen location, then assess the impact in the knowledge graph. Present: the alerts at that location (or say plainly there are none there right now, and mention any elsewhere in California); the impact from the graph in aggregate only (app users near the location, how many can be notified by push under their consent, and the active campaigns targeting them that should be paused); then draft a short customer push notice (under 120 characters) and a note for the store team. Never name individual customers. It is a draft: never say anything was sent or paused.",
+        ]
+      : []),
+    ...(inventoryPlan
+      ? [
+          "For this inventory check, first get the weather forecast for the Coastline Kitchen location, then map the forecast's demand-planning conditions (pass its demandConditions) to menu demand and inventory in the knowledge graph, then read the location's stock counts. The workbench then computes which items are low (on hand below the forecast need: typical daily use, raised by the graph's demand lift on the days whose weather lifts a dish made with the item). Present: the forecast by day; the dishes the weather lifts, with the lift from past results; the low items exactly as the workbench's inventory check lists them, each with its on-hand amount, the amount needed, and the dishes it goes into; and the store manager. Say that an action card can open a Salesforce case for the store manager, and that nothing is ordered or created until the user confirms it. Stock counts come from a randomized mock of the store inventory system.",
         ]
       : []),
     ...(refinePlan
@@ -147,7 +153,21 @@ const INTENT_RULES: ReadonlyArray<readonly [string, (prompt: string) => boolean]
 ];
 
 // Multi-tool plans for requests that need context before drafting. Each step forces one tool.
+/** A request to check a location's stock against what its forecast weather will lift. */
+export function isInventoryCheck(prompt: string) {
+  return (
+    /\b(?:inventory|stock(?:ed|s)?|par levels?|running low|run out|supplies|ingredients?)\b/i.test(
+      prompt,
+    ) &&
+    /\b(?:weather|forecast|demand|coastline|location|restaurant|store|los angeles|san francisco|san diego|sacramento|fresno)\b/i.test(
+      prompt,
+    )
+  );
+}
+
 const TOOL_PLANS: ReadonlyArray<readonly [readonly string[], (prompt: string) => boolean]> = [
+  // Service: stock at a location against the dishes its forecast weather will lift.
+  [["get_weather_forecast", "map_weather_demand", "get_location_inventory"], isInventoryCheck],
   // Sales: who to contact at an account and when, around its local public holidays.
   [
     ["plan_account_outreach", "get_public_holidays"],

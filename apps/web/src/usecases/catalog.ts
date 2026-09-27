@@ -409,6 +409,92 @@ export const USE_CASES: UseCase[] = [
     },
   },
   {
+    id: "weather-inventory",
+    title: "Weather-driven inventory check",
+    team: "Service",
+    status: "available",
+    summary:
+      "Check each restaurant's stock against the dishes the forecast will lift, and open a Salesforce case for the store manager when something is running low.",
+    scenario:
+      "Before a hot or rainy stretch, operations wants to know whether each Coastline Kitchen has enough of what the weather will sell, and to get a case to the store manager for anything that won't last.",
+    prompts: [
+      {
+        text: "Check inventory for our Sacramento store against the forecast",
+        demonstrates:
+          "Live forecast, the graph's weather → dish → inventory map, stock counts, and a case action card",
+      },
+      {
+        text: "Are any ingredients running low at our Fresno location for this week's weather?",
+        demonstrates: "The same check for another restaurant and its manager",
+      },
+    ],
+    systems: [
+      ORCHESTRATOR,
+      {
+        name: "Open-Meteo forecast",
+        kind: "External API",
+        role: "Daily conditions, highs, and chance of rain (free, no key)",
+      },
+      GRAPH,
+      {
+        name: "Store inventory (randomized mock)",
+        kind: "MCP server",
+        role: "On-hand stock, par levels, and typical daily use per restaurant",
+      },
+      {
+        name: "Create Inventory Case (Apex)",
+        kind: "Salesforce action",
+        role: "Opens one confirmed Case for the store manager's Contact and reads it back",
+      },
+    ],
+    flow: [
+      { from: "You", to: "Orchestrator", carries: "Location to check" },
+      { from: "Orchestrator", to: "Open-Meteo", carries: "get_weather_forecast(location)" },
+      {
+        from: "Open-Meteo",
+        to: "Orchestrator",
+        carries: "Each day's weather and its demand-planning bucket (heat, rain, …)",
+      },
+      {
+        from: "Orchestrator",
+        to: "Knowledge graph",
+        carries: "map_weather_demand(location, conditions)",
+      },
+      {
+        from: "Knowledge graph",
+        to: "Orchestrator",
+        carries: "Lifted dishes, what they're made with, and the store manager",
+      },
+      { from: "Orchestrator", to: "Store inventory", carries: "get_location_inventory(location)" },
+      { from: "Store inventory", to: "Workbench", carries: "On-hand stock and typical daily use" },
+      {
+        from: "Workbench",
+        to: "You",
+        carries: "Low items (computed by code) and a case action card",
+      },
+      {
+        from: "You",
+        to: "Salesforce",
+        carries: "Confirmed case → create_inventory_case → Case read back",
+      },
+    ],
+    graphRole:
+      "The key element: WeatherCondition → LIFTS_DEMAND → MenuItem → MADE_WITH → InventoryItem says which stock the forecast will draw down and by how much (lift learned from past push results), and Location → MANAGED_BY → StoreManager says who gets the case.",
+    writes:
+      "One Salesforce Case for the store manager, only after you confirm it. The case contents are hashed into the signed confirmation, and Apex checks them before creating the Case. Nothing is ordered.",
+    watch: [
+      "Workspace context: Forecast, Store inventory, and Inventory risk cards",
+      "Graph evidence: LIFTS_DEMAND → MADE_WITH and MANAGED_BY paths",
+      "The action card and confirmation list exactly the items the workbench found low",
+      "Stock counts are a randomized mock that changes daily",
+    ],
+    newService: {
+      name: "Open-Meteo forecast API",
+      url: "https://open-meteo.com/en/docs",
+      note: "Free, keyless daily forecast, called live through the campaign-context MCP server alongside a randomized store inventory mock.",
+    },
+  },
+  {
     id: "consent-coverage",
     title: "Consent coverage audit",
     team: "Marketing",

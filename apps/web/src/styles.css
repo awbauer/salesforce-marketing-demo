@@ -1376,6 +1376,36 @@ a {
   justify-self: start;
   margin-top: 6px;
 }
+.inventory-case {
+  margin: 10px 0;
+  font-size: 13px;
+}
+.inventory-case p {
+  margin: 0 0 8px;
+}
+.inventory-case table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.inventory-case th,
+.inventory-case td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #dfe6dc;
+  text-align: left;
+  vertical-align: top;
+}
+.inventory-case thead th {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+@media (max-width: 650px) {
+  .inventory-case table {
+    display: block;
+    overflow-x: auto;
+  }
+}
 .confirmation-image {
   display: block;
   width: 160px;

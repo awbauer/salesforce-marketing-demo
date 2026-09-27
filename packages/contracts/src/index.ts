@@ -17,6 +17,7 @@ export const PROOF_DEFAULTS = Object.freeze({
     "create-marketing-campaign",
     "create-review-task",
     "attach-generated-image",
+    "create-inventory-case",
   ] as const,
 });
 
@@ -124,8 +125,34 @@ export type MarketingWrite = z.infer<typeof MarketingWriteSchema>;
 export const ConfirmationSchema = z.object({
   id: z.string().uuid(),
   action: z.enum(PROOF_DEFAULTS.allowedWrites),
-  /** The record the write is bound to: the campaign, the brief a campaign comes from, or "new". */
-  recordId: z.string().regex(/^(?:[a-zA-Z0-9]{15,18}|new)$/),
+  /**
+   * The record the write is bound to: the campaign, the brief a campaign comes from, "new", or,
+   * for an inventory case, the Coastline Kitchen location it's about.
+   */
+  recordId: z.string().regex(/^(?:[a-zA-Z0-9]{15,18}|new|location:[a-z-]{2,40})$/),
+  /** An inventory case's contents, bound by the request hash so Salesforce can verify them. */
+  inventoryCase: z
+    .object({
+      locationId: z.string(),
+      city: z.string(),
+      manager: z.object({ name: z.string() }),
+      conditions: z.array(z.string()),
+      items: z
+        .array(
+          z.object({
+            name: z.string(),
+            unit: z.string(),
+            onHand: z.number(),
+            onOrder: z.number(),
+            projectedNeed: z.number(),
+            menuItems: z.array(z.string()),
+          }),
+        )
+        .min(1)
+        .max(15),
+      detailsJson: z.string(),
+    })
+    .optional(),
   write: MarketingWriteSchema.optional(),
   permissions: PermissionReportSchema.optional(),
   imageId: z.string().uuid().optional(),
@@ -191,6 +218,7 @@ export const PHASE_2_CURATED_TOOLS = Object.freeze([
   "create_campaign_review_request",
   "attach_campaign_image",
   "check_write_access",
+  "create_inventory_case",
 ] as const);
 
 /** The Salesforce agents behind the Hosted MCP tools, as published in the org. */
@@ -366,6 +394,10 @@ export const SALESFORCE_TOOL_DETAILS: Record<string, SalesforceToolDetail> = {
     actions: [apex("NorthstarGetMarketingRecords", "Get Marketing Records")],
   },
   check_write_access: { actions: [apex("NorthstarCheckWriteAccess", "Check Write Access")] },
+  create_inventory_case: {
+    actions: [apex("NorthstarCreateInventoryCase", "Create Inventory Case")],
+    creates: ["Case"],
+  },
   create_campaign_review_request: {
     actions: [apex("NorthstarCreateCampaignReviewRequest", "Create Campaign Review Request")],
     creates: ["Task"],
@@ -376,10 +408,15 @@ export const SALESFORCE_TOOL_DETAILS: Record<string, SalesforceToolDetail> = {
   },
 };
 
-/** Read-only tools served by the campaign-context MCP (mocked restaurant profile and live weather). */
+/**
+ * Read-only tools served by the campaign-context MCP: the mocked restaurant profile and store
+ * inventory, and live Open-Meteo weather and forecasts.
+ */
 export const CAMPAIGN_CONTEXT_TOOLS = Object.freeze([
   "get_restaurant_profile",
   "get_current_weather",
+  "get_weather_forecast",
+  "get_location_inventory",
 ] as const);
 
 /** Read-only tools served by the external-services MCP (Nager.Date holidays, NWS weather alerts). */
@@ -398,6 +435,7 @@ export const KNOWLEDGE_GRAPH_TOOLS = Object.freeze([
   "trace_content_lineage",
   "plan_account_outreach",
   "assess_location_impact",
+  "map_weather_demand",
 ] as const);
 
 /** Read-only recall tools over the workspace's long-term memory in the graph. See ADR-007. */
@@ -582,6 +620,7 @@ export const emptyWorkingSet = (): WorkingSet => ({
 export const CONNECTED_SYSTEMS: Readonly<Record<string, { label: string }>> = Object.freeze({
   salesforce: { label: "Salesforce" },
   "restaurant-data": { label: "Restaurant data" },
+  "store-inventory": { label: "Store inventory" },
   "open-meteo": { label: "Open-Meteo" },
   "nager-date": { label: "Nager.Date" },
   nws: { label: "National Weather Service" },
@@ -630,7 +669,7 @@ export type ActivityEvent = z.infer<typeof ActivityEventSchema>;
  */
 export const SuggestedActionSchema = z.object({
   id: z.string(),
-  action: z.enum(["save-focus", "create-review-task"]),
+  action: z.enum(["save-focus", "create-review-task", "create-inventory-case"]),
   title: z.string(),
   detail: z.string(),
   cta: z.string(),
@@ -638,8 +677,34 @@ export const SuggestedActionSchema = z.object({
 });
 export type SuggestedAction = z.infer<typeof SuggestedActionSchema>;
 
+/**
+ * Weather-driven low stock at one Coastline Kitchen location, computed by code from the forecast,
+ * the graph's weather → dish → inventory mapping, and the store's stock counts.
+ */
+export const InventoryRiskSchema = z.object({
+  locationId: z.string(),
+  city: z.string(),
+  manager: z.object({ name: z.string() }),
+  window: z.object({ from: z.string(), to: z.string(), days: z.number().int() }),
+  conditions: z.array(z.string()),
+  lowItems: z.array(
+    z.object({
+      name: z.string(),
+      unit: z.string(),
+      onHand: z.number(),
+      onOrder: z.number(),
+      projectedNeed: z.number(),
+      menuItems: z.array(z.string()),
+    }),
+  ),
+  checkedItems: z.number().int(),
+});
+export type InventoryRisk = z.infer<typeof InventoryRiskSchema>;
+
 export const OrchestratorStateSchema = z.object({
   suggestions: z.array(SuggestedActionSchema).default([]),
+  /** The latest weather-driven inventory check in this chat, which a case can be opened from. */
+  inventoryRisk: InventoryRiskSchema.nullable().default(null),
   workspaceId: z.literal(PROOF_DEFAULTS.workspaceId),
   workingSet: WorkingSetSchema,
   activity: z.array(ActivityEventSchema),
@@ -816,6 +881,7 @@ export const WRITE_TOOL_BY_ACTION = Object.freeze({
   "create-marketing-campaign": "create_marketing_campaign",
   "create-review-task": "create_campaign_review_request",
   "attach-generated-image": "attach_campaign_image",
+  "create-inventory-case": "create_inventory_case",
 } as const);
 
 export const OperationControlsSchema = z.object({
@@ -914,6 +980,7 @@ export const ErrorEnvelopeSchema = z.object({
 
 export const initialOrchestratorState: OrchestratorState = {
   workspaceId: "northstar-demo",
+  inventoryRisk: null,
   sourcesConnected: 3,
   connector: {
     id: "salesforce",

@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { DAYPARTS } from "./coastline.ts";
-import type { MemoryStore } from "./memory.ts";
 import {
   ACCOUNTS,
   ALL_CAMPAIGNS,
@@ -12,6 +11,7 @@ import {
   type GraphNode,
   LOCATIONS,
 } from "./dataset.ts";
+import type { MemoryStore } from "./memory.ts";
 
 export type Row = Record<string, unknown>;
 export type PathNode = { id: string; label: string; name: string };
@@ -998,6 +998,174 @@ const assessLocationImpact = define({
   },
 });
 
+export const WEATHER_DEMAND_CYPHER = `
+MATCH (l:Location {dataset: $dataset, weatherLocation: $location})
+OPTIONAL MATCH (l)-[:MANAGED_BY]->(m:StoreManager)
+CALL () {
+  MATCH (w:WeatherCondition {dataset: $dataset})-[d:LIFTS_DEMAND]->(item:MenuItem)-[u:MADE_WITH]->(inv:InventoryItem)
+  WHERE w.name IN $conditions
+  RETURN collect({conditionId: w.id, condition: w.name, lift: d.lift, sends: d.sends,
+    itemId: item.id, item: item.name, inventoryId: inv.id, inventory: inv.name, unit: inv.unit,
+    perServing: u.perServing}) AS links
+}
+RETURN l.id AS locationId, l.name AS location, l.city AS city,
+  m.id AS managerId, m.name AS manager, links`;
+
+type DemandLink = {
+  conditionId: string;
+  condition: string;
+  lift: number;
+  sends: number;
+  itemId: string;
+  item: string;
+  inventoryId: string;
+  inventory: string;
+  unit: string;
+  perServing: number;
+};
+type DemandRow = {
+  locationId: string;
+  location: string;
+  city: string;
+  managerId: string | null;
+  manager: string | null;
+  links: DemandLink[];
+};
+
+const mapWeatherDemand = define({
+  name: "map_weather_demand",
+  title: "Map weather to menu demand and inventory",
+  description:
+    "For a Coastline Kitchen location and the weather conditions in its forecast: the menu items whose demand those conditions lift (learned from past push results), the inventory items each one is made with and how much a serving uses, and the location's store manager, each with its evidence path. Read-only; it does not read stock levels.",
+  input: z.object({
+    location: z.enum(LOCATION_IDS).describe("Coastline Kitchen location (city id)"),
+    conditions: z
+      .array(z.enum(CONDITIONS))
+      .min(1)
+      .max(3)
+      .describe("Forecast weather conditions: clear, cloudy, fog, rain, or heat"),
+  }),
+  run: async (backend, { location, conditions }) => {
+    const [row] = (await rows(backend, WEATHER_DEMAND_CYPHER, { location, conditions }, (ix) => {
+      const locationNode = [...ix.byId.values()].find(
+        (node) => node.label === "Location" && node.weatherLocation === location,
+      );
+      if (!locationNode) return [];
+      const managerEdge = ix.outgoing(locationNode.id, "MANAGED_BY")[0];
+      const manager = managerEdge ? ix.node(managerEdge.to) : null;
+      const links: DemandLink[] = [];
+      for (const condition of conditions) {
+        const weather = ix.node(`weather-${condition}`);
+        for (const lifts of ix.outgoing(weather.id, "LIFTS_DEMAND")) {
+          const item = ix.node(lifts.to);
+          for (const made of ix.outgoing(item.id, "MADE_WITH")) {
+            const inventory = ix.node(made.to);
+            links.push({
+              conditionId: weather.id,
+              condition: weather.name,
+              lift: Number(lifts.properties?.lift),
+              sends: Number(lifts.properties?.sends),
+              itemId: item.id,
+              item: item.name,
+              inventoryId: inventory.id,
+              inventory: inventory.name,
+              unit: String(inventory.unit),
+              perServing: Number(made.properties?.perServing),
+            });
+          }
+        }
+      }
+      return [
+        {
+          locationId: locationNode.id,
+          location: locationNode.name,
+          city: locationNode.city,
+          managerId: manager?.id ?? null,
+          manager: manager?.name ?? null,
+          links,
+        },
+      ];
+    })) as DemandRow[];
+    if (!row) return { location, found: false, conditions, paths: [] };
+    const links = [...row.links].sort(
+      (a, b) =>
+        b.lift - a.lift ||
+        byText(a.item, b.item) ||
+        byText(a.condition, b.condition) ||
+        byText(a.inventory, b.inventory),
+    );
+    const menuItems = new Map<
+      string,
+      { name: string; lift: number; conditions: Array<{ condition: string; lift: number }> }
+    >();
+    const inventory = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        unit: string;
+        maxLift: number;
+        usedBy: Array<{ menuItem: string; perServing: number }>;
+      }
+    >();
+    for (const link of links) {
+      const item = menuItems.get(link.itemId) ?? { name: link.item, lift: 0, conditions: [] };
+      if (!item.conditions.some((entry) => entry.condition === link.condition))
+        item.conditions.push({ condition: link.condition, lift: link.lift });
+      item.lift = Math.max(item.lift, link.lift);
+      menuItems.set(link.itemId, item);
+      const stock = inventory.get(link.inventoryId) ?? {
+        id: link.inventoryId.replace(/^inventory-/, ""),
+        name: link.inventory,
+        unit: link.unit,
+        maxLift: 0,
+        usedBy: [],
+      };
+      if (!stock.usedBy.some((use) => use.menuItem === link.item))
+        stock.usedBy.push({ menuItem: link.item, perServing: link.perServing });
+      stock.maxLift = Math.max(stock.maxLift, link.lift);
+      inventory.set(link.inventoryId, stock);
+    }
+    const locationNode = { id: row.locationId, label: "Location", name: row.location };
+    const seen = new Set<string>();
+    const paths: EvidencePath[] = [];
+    if (row.managerId && row.manager)
+      paths.push({
+        nodes: [locationNode, { id: row.managerId, label: "StoreManager", name: row.manager }],
+        relationships: [{ type: "MANAGED_BY", from: locationNode.id, to: row.managerId }],
+      });
+    for (const link of links) {
+      const key = `${link.conditionId}|${link.itemId}|${link.inventoryId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      paths.push({
+        nodes: [
+          { id: link.conditionId, label: "WeatherCondition", name: link.condition },
+          { id: link.itemId, label: "MenuItem", name: link.item },
+          { id: link.inventoryId, label: "InventoryItem", name: link.inventory },
+        ],
+        relationships: [
+          { type: "LIFTS_DEMAND", from: link.conditionId, to: link.itemId },
+          { type: "MADE_WITH", from: link.itemId, to: link.inventoryId },
+        ],
+      });
+    }
+    return {
+      location: row.location,
+      locationId: location,
+      city: row.city,
+      found: true,
+      conditions,
+      manager: row.manager ? { name: row.manager } : null,
+      menuItems: [...menuItems.values()].sort((a, b) => b.lift - a.lift || byText(a.name, b.name)),
+      inventoryItems: [...inventory.values()].sort(
+        (a, b) => b.maxLift - a.maxLift || byText(a.name, b.name),
+      ),
+      paths: paths.slice(0, MAX_PATHS),
+    };
+  },
+});
+
 export const KNOWLEDGE_GRAPH_TOOL_SPECS = [
   getGraphOverview,
   explainBuyerGroup,
@@ -1007,6 +1175,7 @@ export const KNOWLEDGE_GRAPH_TOOL_SPECS = [
   traceContentLineage,
   planAccountOutreach,
   assessLocationImpact,
+  mapWeatherDemand,
 ] as const;
 
 export { pathNode };

@@ -108,7 +108,9 @@ describe("edge runtime", () => {
       errorCode: "UPSTREAM_UNAVAILABLE",
       toolCount: 1,
     });
-    expect(connector.message).toContain("1 of 17 governed Salesforce tools");
+    expect(connector.message).toContain(
+      `1 of ${PHASE_2_CURATED_TOOLS.length} governed Salesforce tools`,
+    );
     // The message names what's missing, so an administrator knows which tools to enable.
     expect(connector.message).toContain("Missing: draft_campaign_brief, refine_campaign_preview,");
     expect(connector.message).not.toMatch(/Missing:[^.]*summarize_campaign/);
@@ -121,7 +123,7 @@ describe("edge runtime", () => {
         { serverId: "salesforce", name: "tool_salesforce_check_write_access" },
       ],
     } as never);
-    expect(connector).toMatchObject({ state: "ready", toolCount: 17 });
+    expect(connector).toMatchObject({ state: "ready", toolCount: PHASE_2_CURATED_TOOLS.length });
   });
   it("runs the browserless Salesforce write preflight in local mode", async () => {
     const response = await SELF.fetch(

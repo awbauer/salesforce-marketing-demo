@@ -10,14 +10,19 @@
  */
 import {
   COASTLINE,
+  COASTLINE_INVENTORY,
   COASTLINE_LOCATIONS,
   COASTLINE_MENU,
+  COASTLINE_RECIPES,
+  COASTLINE_STORE_MANAGERS,
   DAYPART_HOURS,
   DAYPARTS,
+  inventoryItemId,
   locationNodeId,
   menuItemId,
   NORTHSTAR_BRAND,
   slug,
+  storeManagerId,
 } from "./coastline.ts";
 
 export const DATASET_VERSION = "northstar-kg-v2";
@@ -330,6 +335,12 @@ export function buildDataset(seed = 20260926): Dataset {
     for (const daypart of item.dayparts) rel("AVAILABLE_DURING", id, `daypart-${daypart}`);
     return id;
   });
+  // What each dish is made with, per serving, from the stock each restaurant keeps.
+  for (const item of COASTLINE_INVENTORY)
+    node("InventoryItem", inventoryItemId(item.id), item.name, { unit: item.unit });
+  for (const item of COASTLINE_MENU)
+    for (const [inventory, perServing] of COASTLINE_RECIPES[item.name] ?? [])
+      rel("MADE_WITH", menuItemId(item.name), inventoryItemId(inventory), { perServing });
   for (const [rank, favorite] of COASTLINE.favorites.entries())
     rel("FAVORITE", COASTLINE.id, menuItemId(favorite.item), {
       note: favorite.note,
@@ -351,6 +362,9 @@ export function buildDataset(seed = 20260926): Dataset {
       },
     );
     rel("OPERATES", COASTLINE.id, locationId);
+    const manager = COASTLINE_STORE_MANAGERS[location.id];
+    node("StoreManager", storeManagerId(location.id), manager.name, { role: "Store manager" });
+    rel("MANAGED_BY", locationId, storeManagerId(location.id));
     rel("SERVES", locationId, COASTLINE.menu.id);
     const segment = node(
       "Segment",
@@ -394,6 +408,7 @@ export function buildDataset(seed = 20260926): Dataset {
   }
 
   // Fictional push history: order rates rise when the item suits the weather and daypart.
+  const rates = new Map<string, number[]>();
   for (let index = 0; index < 1500; index += 1) {
     const location = pick(COASTLINE_LOCATIONS).id;
     const daypart = pick(DAYPARTS);
@@ -434,6 +449,23 @@ export function buildDataset(seed = 20260926): Dataset {
     rel("FOR", push, locationNodeId(location));
     rel("SENT_DURING", push, `daypart-${daypart}`);
     rel("UNDER", push, `weather-${condition}`);
+    for (const key of [item.name, `${item.name}|${condition}`])
+      rates.set(key, [...(rates.get(key) ?? []), orderRate]);
   }
+
+  // Weather that lifts a dish's demand, learned from that history: the dish's average order rate
+  // under the condition against its average overall, kept when it's at least 15% higher.
+  const mean = (values: number[] = []) =>
+    values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
+  for (const condition of CONDITIONS)
+    for (const item of COASTLINE_MENU) {
+      const under = rates.get(`${item.name}|${condition}`) ?? [];
+      const lift = mean(under) / mean(rates.get(item.name));
+      if (under.length >= 10 && lift >= 1.15)
+        rel("LIFTS_DEMAND", `weather-${condition}`, menuItemId(item.name), {
+          lift: Math.round(lift * 100) / 100,
+          sends: under.length,
+        });
+    }
   return { nodes, relationships };
 }

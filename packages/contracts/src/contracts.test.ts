@@ -43,12 +43,13 @@ describe("proof contracts", () => {
   });
   it("keeps every Salesforce write outside autonomous model execution", () => {
     const writes = catalog.tools.filter((tool) => tool.riskClass === "write");
-    expect(writes).toHaveLength(4);
+    expect(writes).toHaveLength(5);
     expect(writes.every((tool) => tool.autonomous === false)).toBe(true);
     expect(writes.map((tool) => tool.allowedWrite)).toEqual([
       "save-marketing-brief",
       "create-marketing-campaign",
       "create-review-task",
+      "create-inventory-case",
       "attach-generated-image",
     ]);
     // Briefs and campaigns are created by the Marketing Cloud Campaign Creation agent.

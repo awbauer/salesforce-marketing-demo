@@ -28,10 +28,10 @@ import { GraphEvidencePanel } from "./GraphEvidence";
 import { GraphView } from "./graph/GraphView";
 import { HistoryView } from "./HistoryView";
 import { LearnView } from "./learn/LearnView";
-import { UseCasesView } from "./usecases/UseCasesView";
 import { Markdown } from "./Markdown";
 import { SalesforceAgentsPanel } from "./SalesforceAgents";
 import { executionTrace } from "./turn-trace";
+import { UseCasesView } from "./usecases/UseCasesView";
 import { WorkspacePanel } from "./WorkspacePanel";
 
 function rawMessageText(message: UIMessage) {
@@ -104,7 +104,54 @@ const CONFIRMATION_COPY = {
     title: "Attach image to the Salesforce campaign?",
     confirm: "Confirm attach",
   },
+  "create-inventory-case": {
+    title: "Open a Salesforce case for the store manager?",
+    confirm: "Confirm case",
+  },
 } as const;
+
+/** What an inventory case will list: the store manager, the forecast, and each low item. */
+function InventoryCaseDetails({ confirmation }: { confirmation: Confirmation }) {
+  const details = confirmation.inventoryCase;
+  if (!details) return null;
+  return (
+    <div className="inventory-case">
+      <p>
+        <strong>For {details.manager.name}</strong>, store manager, Coastline Kitchen {details.city}{" "}
+        · forecast: {details.conditions.join(", ")}
+      </p>
+      <table>
+        <caption className="sr-only">Items that won't cover the forecast</caption>
+        <thead>
+          <tr>
+            <th scope="col">Item</th>
+            <th scope="col">On hand</th>
+            <th scope="col">On order</th>
+            <th scope="col">Needed</th>
+            <th scope="col">Dishes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {details.items.map((item) => (
+            <tr key={item.name}>
+              <th scope="row">{item.name}</th>
+              <td>
+                {item.onHand} {item.unit}
+              </td>
+              <td>
+                {item.onOrder} {item.unit}
+              </td>
+              <td>
+                {item.projectedNeed} {item.unit}
+              </td>
+              <td>{item.menuItems.join(", ")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export function App() {
   const [state, setState] = useState<OrchestratorState>(initialOrchestratorState);
@@ -121,6 +168,14 @@ export function App() {
     dueDate: string;
     status: string;
     campaignId: string;
+  } | null>(null);
+  const [openedCase, setOpenedCase] = useState<{
+    recordId: string;
+    caseNumber: string;
+    subject: string;
+    priority: string;
+    contactName: string;
+    source: string;
   } | null>(null);
   const [savedRecord, setSavedRecord] = useState<{
     label: string;
@@ -310,6 +365,7 @@ export function App() {
   function startNewChat() {
     clearHistory();
     setSavedRecord(null);
+    setOpenedCase(null);
     setImages([]);
     setSelectedImageId(null);
     setResetting(true);
@@ -434,6 +490,9 @@ export function App() {
           preview?: unknown[];
           campaign?: { id: string; name: string; flow: { label: string } | null };
           note?: string;
+          caseNumber?: string;
+          contactName?: string;
+          source?: string;
         };
       }>(`confirmations/${decision}`);
       setPendingConfirmation(null);
@@ -441,7 +500,17 @@ export function App() {
         ...current,
         pendingConfirmation: null,
       }));
-      if (
+      if (decision === "execute" && result.result?.readBack && action === "create-inventory-case") {
+        setActionError("");
+        setOpenedCase({
+          recordId: result.result.recordId,
+          caseNumber: result.result.caseNumber ?? "",
+          subject: result.result.subject,
+          priority: result.result.priority,
+          contactName: result.result.contactName ?? "",
+          source: result.result.source ?? "salesforce",
+        });
+      } else if (
         decision === "execute" &&
         result.result?.readBack &&
         action === "attach-generated-image"
@@ -877,6 +946,28 @@ export function App() {
                 </details>
               </section>
             )}
+            {openedCase && (
+              <section className="success-banner" role="status">
+                <div>
+                  <strong>
+                    Case {openedCase.caseNumber} opened for {openedCase.contactName}
+                  </strong>
+                  <span>{` · ${openedCase.subject} · ${openedCase.priority} priority`}</span>
+                  <small className="saved-agent">
+                    create_inventory_case · Apex verified the signed confirmation and the case
+                    contents · read back from{" "}
+                    {openedCase.source === "salesforce" ? "Salesforce" : "the local fixture"}
+                  </small>
+                </div>
+                <a
+                  href={salesforceRecordUrl("Case", openedCase.recordId)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open case in Salesforce <span aria-hidden="true">↗</span>
+                </a>
+              </section>
+            )}
             {savedRecord && (
               <section className="success-banner" role="status">
                 <div>
@@ -965,6 +1056,7 @@ export function App() {
                 </h3>
                 <p className="confirmation-summary">{pendingConfirmation.summary}</p>
                 <MarketingWriteDetails confirmation={pendingConfirmation} />
+                <InventoryCaseDetails confirmation={pendingConfirmation} />
                 {pendingConfirmation.action === "attach-generated-image" &&
                   generatedImage &&
                   generatedImage.id === pendingConfirmation.imageId && (
@@ -984,7 +1076,7 @@ export function App() {
                       </dd>
                     </div>
                   )}
-                  {!pendingConfirmation.write && (
+                  {!pendingConfirmation.write && !pendingConfirmation.inventoryCase && (
                     <div className="confirmation-detail">
                       <dt>Campaign</dt>
                       <dd>

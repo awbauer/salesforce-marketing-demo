@@ -127,6 +127,11 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
     "Confirmed write: creates a Salesforce review task with context and a checklist.",
   ),
   tool(
+    "create_inventory_case",
+    "use-cases",
+    "Confirmed write: opens a Salesforce Case for a store manager listing items that won't cover the forecast.",
+  ),
+  tool(
     "attach_campaign_image",
     "images",
     "Confirmed write: attaches a generated image to a campaign after Salesforce verifies its hash.",
@@ -141,6 +146,16 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
     "get_current_weather",
     "campaign-context",
     "Live weather from Open-Meteo for a California city.",
+  ),
+  tool(
+    "get_weather_forecast",
+    "use-cases",
+    "The daily Open-Meteo forecast for a city, with each day's demand-planning weather.",
+  ),
+  tool(
+    "get_location_inventory",
+    "use-cases",
+    "Stock counts for a Coastline Kitchen restaurant from a randomized store inventory mock.",
   ),
   // External-services MCP tools.
   tool(
@@ -185,6 +200,11 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
     "An account's contacts in priority order, their consented channels, and the account's country.",
   ),
   tool(
+    "map_weather_demand",
+    "use-cases",
+    "The dishes forecast weather lifts, what they're made with, and the location's store manager.",
+  ),
+  tool(
     "assess_location_impact",
     "use-cases",
     "The app audience near a location, how many can be notified by push, and campaigns to pause.",
@@ -223,13 +243,21 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
       ],
       ["create-review-task", "Create a Salesforce review task for the open campaign."],
       ["attach-generated-image", "Attach an approved generated image to the open campaign."],
+      [
+        "create-inventory-case",
+        "Open a Salesforce case for a store manager from an inventory check's low items.",
+      ],
     ] as const
   ).map(
     ([name, summary]): ReferenceEntry => ({
       kind: "Write action",
       name,
       summary: `${summary} Needs a permission check and your confirmation.`,
-      section: name.includes("marketing") ? "marketing-cloud" : "governance",
+      section: name.includes("marketing")
+        ? "marketing-cloud"
+        : name === "create-inventory-case"
+          ? "use-cases"
+          : "governance",
     }),
   ),
 
@@ -257,6 +285,8 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   node("Menu", "Coastline Kitchen's menu.", "campaign-context"),
   node("MenuItem", "A dish on the menu, with its order rate.", "campaign-context"),
   node("Location", "A Coastline Kitchen restaurant in California.", "campaign-context"),
+  node("InventoryItem", "Stock a restaurant keeps, counted in kitchen units.", "use-cases"),
+  node("StoreManager", "A restaurant's store manager, by name only.", "use-cases"),
   node("PushSend", "One past push notification send and how it performed."),
   // Graph nodes: long-term memory.
   node("Workspace", "The workspace that owns a memory.", "long-term-memory"),
@@ -294,6 +324,13 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   edge("OPERATES", "A brand operating a location.", "campaign-context"),
   edge("SERVES", "A location serving a menu.", "campaign-context"),
   edge("NEAR", "An app segment near a location."),
+  edge("MADE_WITH", "A menu item made with an inventory item, per serving.", "use-cases"),
+  edge(
+    "LIFTS_DEMAND",
+    "Weather that raises a menu item's orders, learned from past pushes.",
+    "use-cases",
+  ),
+  edge("MANAGED_BY", "A location managed by its store manager.", "use-cases"),
   edge("USED", "A push send that used a content asset."),
   edge("SENT_TO", "A push send delivered to a segment."),
   edge("SENT_UNDER", "A push send made under a consent scope."),
@@ -340,6 +377,10 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
       [
         "NorthstarCreateCampaignReviewRequest",
         "Apex action behind create_campaign_review_request.",
+      ],
+      [
+        "NorthstarCreateInventoryCase",
+        "Apex action behind create_inventory_case; checks the contents' hash.",
       ],
       [
         "NorthstarAttachCampaignImage",
