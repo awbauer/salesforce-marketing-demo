@@ -37,6 +37,8 @@ export const COASTLINE_LOCATIONS = [
     address: "100 Example Street, Los Angeles, CA (fictional)",
     appUsers: 18400,
     pushOptIns: 11900,
+    emailOptIns: 13100,
+    smsOptIns: 5200,
   },
   {
     id: "san-francisco",
@@ -45,6 +47,8 @@ export const COASTLINE_LOCATIONS = [
     address: "200 Example Street, San Francisco, CA (fictional)",
     appUsers: 12100,
     pushOptIns: 7300,
+    emailOptIns: 8900,
+    smsOptIns: 3100,
   },
   {
     id: "san-diego",
@@ -53,6 +57,8 @@ export const COASTLINE_LOCATIONS = [
     address: "300 Example Street, San Diego, CA (fictional)",
     appUsers: 9800,
     pushOptIns: 6600,
+    emailOptIns: 7000,
+    smsOptIns: 2600,
   },
   {
     id: "sacramento",
@@ -61,6 +67,8 @@ export const COASTLINE_LOCATIONS = [
     address: "400 Example Street, Sacramento, CA (fictional)",
     appUsers: 6200,
     pushOptIns: 3500,
+    emailOptIns: 4300,
+    smsOptIns: 1500,
   },
   {
     id: "fresno",
@@ -69,6 +77,8 @@ export const COASTLINE_LOCATIONS = [
     address: "500 Example Street, Fresno, CA (fictional)",
     appUsers: 4700,
     pushOptIns: 2400,
+    emailOptIns: 3100,
+    smsOptIns: 1200,
   },
 ] as const;
 export type CoastlineLocationId = (typeof COASTLINE_LOCATIONS)[number]["id"];

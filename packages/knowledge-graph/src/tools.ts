@@ -498,7 +498,7 @@ ORDER BY avgOrderRate DESC, item`;
 
 export const PUSH_AUDIENCE_CYPHER = `
 MATCH (seg:Segment {dataset: $dataset})-[:NEAR]->(:Location {id: $locationId})
-MATCH (seg)-[hc:HAS_CONSENT]->(scope:ConsentScope)
+MATCH (seg)-[hc:HAS_CONSENT]->(scope:ConsentScope {id: $scopeId})
 RETURN seg.id AS segmentId, seg.name AS segment, seg.size AS appUsers, hc.optedIn AS optedIn,
   scope.id AS scopeId, scope.name AS scope`;
 
@@ -508,13 +508,20 @@ const findSimilarPastPushes = define({
   name: "find_similar_past_pushes",
   title: "Find similar past pushes",
   description:
-    "Look up Coastline Kitchen's fictional push history for the same location, daypart, and weather condition, and return the best-performing menu items and message angle by average order rate. Condition must be clear, cloudy, fog, rain, or heat (use heat when feels-like is 85°F or more; rain for drizzle or storms). If fewer than 5 matching sends exist, it widens to all weather for that location and daypart.",
+    "Look up Coastline Kitchen's fictional push history for the same location, daypart, and weather condition, and return the best-performing menu items and message angle by average order rate, plus the location's audience and how many of them hold marketing consent for the campaign's channel. Condition must be clear, cloudy, fog, rain, or heat (use heat when feels-like is 85°F or more; rain for drizzle or storms). If fewer than 5 matching sends exist, it widens to all weather for that location and daypart.",
   input: z.object({
     location: z.enum(LOCATION_IDS).describe("Restaurant location (same IDs as the weather tool)"),
     daypart: z.enum(DAYPARTS).describe("Local daypart"),
     condition: z.enum(CONDITIONS).describe("Weather bucket"),
+    channel: z
+      .enum(["push", "email", "sms"])
+      .default("push")
+      .describe(
+        "Channel of the campaign being planned: its consent is the one reported for the audience",
+      ),
   }),
-  run: async (backend, { location, daypart, condition }) => {
+  run: async (backend, { location, daypart, condition, channel = "push" }) => {
+    const scopeId = consentScopeFor(channel === "push" ? "mobile-app" : channel);
     const query = (conditionId: string | null) =>
       rows(
         backend,
@@ -592,17 +599,20 @@ const findSimilarPastPushes = define({
     const [audience] = (await rows(
       backend,
       PUSH_AUDIENCE_CYPHER,
-      { locationId: `location-${location}` },
+      { locationId: `location-${location}`, scopeId },
       (ix) =>
         ix.incoming(`location-${location}`, "NEAR").flatMap(({ from: segmentId }) =>
-          ix.outgoing(segmentId, "HAS_CONSENT").map((consent) => ({
-            segmentId,
-            segment: ix.node(segmentId).name,
-            appUsers: ix.node(segmentId).size,
-            optedIn: consent.properties?.optedIn,
-            scopeId: consent.to,
-            scope: ix.node(consent.to).name,
-          })),
+          ix
+            .outgoing(segmentId, "HAS_CONSENT")
+            .filter((consent) => consent.to === scopeId)
+            .map((consent) => ({
+              segmentId,
+              segment: ix.node(segmentId).name,
+              appUsers: ix.node(segmentId).size,
+              optedIn: consent.properties?.optedIn,
+              scopeId: consent.to,
+              scope: ix.node(consent.to).name,
+            })),
         ),
     )) as Array<{
       segmentId: string;
@@ -632,7 +642,23 @@ const findSimilarPastPushes = define({
       };
     });
     const exampleSend = top[0]?.exampleSends[0];
-    if (audience && exampleSend)
+    const consentPath = audience
+      ? {
+          type: `HAS_CONSENT ${Number(audience.optedIn).toLocaleString("en-US")} opted in`,
+          from: audience.segmentId,
+          to: audience.scopeId,
+        }
+      : null;
+    // The pushes were sent to this audience; another channel's consent stands on its own.
+    if (audience && consentPath && channel !== "push")
+      paths.push({
+        nodes: [
+          { id: audience.segmentId, label: "Segment", name: audience.segment },
+          { id: audience.scopeId, label: "ConsentScope", name: audience.scope },
+        ],
+        relationships: [consentPath],
+      });
+    else if (audience && consentPath && exampleSend)
       paths.push({
         nodes: [
           { id: exampleSend, label: "PushSend", name: "Push send" },
@@ -641,11 +667,7 @@ const findSimilarPastPushes = define({
         ],
         relationships: [
           { type: "SENT_TO", from: exampleSend, to: audience.segmentId },
-          {
-            type: `HAS_CONSENT ${Number(audience.optedIn).toLocaleString("en-US")} opted in`,
-            from: audience.segmentId,
-            to: audience.scopeId,
-          },
+          consentPath,
         ],
       });
     return {
@@ -667,11 +689,15 @@ const findSimilarPastPushes = define({
         ? {
             segment: audience.segment,
             appUsers: Number(audience.appUsers),
-            pushOptIns: Number(audience.optedIn),
+            channel,
+            optedIn: Number(audience.optedIn),
             consentScope: audience.scope,
           }
         : null,
-      note: "Fictional push history for demonstration.",
+      note:
+        channel === "push"
+          ? "Fictional push history for demonstration."
+          : `Fictional push history for demonstration: menu performance comes from past pushes, and the audience count is ${channel} marketing consent, not push.`,
       paths,
     };
   },
@@ -889,7 +915,8 @@ const planAccountOutreach = define({
 export const LOCATION_IMPACT_CYPHER = `
 MATCH (l:Location {dataset: $dataset, weatherLocation: $location})<-[:NEAR]-(s:Segment)
 OPTIONAL MATCH (s)-[c:HAS_CONSENT]->(scope:ConsentScope)
-WITH l, s, head(collect(CASE WHEN scope IS NULL THEN NULL ELSE {scopeId: scope.id, scope: scope.name, optedIn: c.optedIn, coverageRate: c.coverageRate} END)) AS consent
+WITH l, s, scope, c ORDER BY scope.id
+WITH l, s, collect(CASE WHEN scope IS NULL THEN NULL ELSE {scopeId: scope.id, scope: scope.name, channel: scope.channel, optedIn: c.optedIn, coverageRate: c.coverageRate} END) AS consents
 CALL (s) {
   OPTIONAL MATCH (camp:Campaign)-[:TARGETS]->(s)
   WITH camp ORDER BY camp.name
@@ -900,7 +927,7 @@ CALL (s) {
   RETURN count(p) AS pastSends
 }
 RETURN l.id AS locationId, l.name AS location, l.city AS city, l.address AS address,
-  s.id AS segmentId, s.name AS segment, s.size AS size, consent, campaigns, pastSends`;
+  s.id AS segmentId, s.name AS segment, s.size AS size, consents, campaigns, pastSends`;
 
 type ImpactRow = {
   locationId: string;
@@ -910,7 +937,13 @@ type ImpactRow = {
   segmentId: string;
   segment: string;
   size: number;
-  consent: { scopeId: string; scope: string; optedIn: number; coverageRate: number } | null;
+  consents: Array<{
+    scopeId: string;
+    scope: string;
+    channel: string;
+    optedIn: number;
+    coverageRate: number;
+  }>;
   campaigns: Array<{ id: string; name: string; status: string }>;
   pastSends: number;
 };
@@ -919,7 +952,7 @@ const assessLocationImpact = define({
   name: "assess_location_impact",
   title: "Assess location impact",
   description:
-    "For a Coastline Kitchen location: the app audience near it (aggregate counts, no individuals), how many can be notified by push under their consent, and the campaigns that target that audience and may need pausing during a disruption, each with its evidence path. Read-only.",
+    "For a Coastline Kitchen location: the app audience near it (aggregate counts, no individuals), how many can be reached on each channel (push, email, SMS) under that channel's marketing consent, and the campaigns that target that audience and may need pausing during a disruption, each with its evidence path. Read-only.",
   input: z.object({
     location: z.enum(LOCATION_IDS).describe("Coastline Kitchen location (city id)"),
   }),
@@ -931,8 +964,6 @@ const assessLocationImpact = define({
       if (!locationNode) return [];
       return ix.incoming(locationNode.id, "NEAR").map(({ from }) => {
         const segment = ix.node(from);
-        const consentEdge = ix.outgoing(segment.id, "HAS_CONSENT")[0];
-        const scope = consentEdge ? ix.node(consentEdge.to) : null;
         return {
           locationId: locationNode.id,
           location: locationNode.name,
@@ -941,15 +972,19 @@ const assessLocationImpact = define({
           segmentId: segment.id,
           segment: segment.name,
           size: segment.size,
-          consent:
-            scope && consentEdge
-              ? {
-                  scopeId: scope.id,
-                  scope: scope.name,
-                  optedIn: consentEdge.properties?.optedIn,
-                  coverageRate: consentEdge.properties?.coverageRate,
-                }
-              : null,
+          consents: ix
+            .outgoing(segment.id, "HAS_CONSENT")
+            .sort((a, b) => byText(a.to, b.to))
+            .map((edge) => {
+              const scope = ix.node(edge.to);
+              return {
+                scopeId: scope.id,
+                scope: scope.name,
+                channel: scope.channel,
+                optedIn: edge.properties?.optedIn,
+                coverageRate: edge.properties?.coverageRate,
+              };
+            }),
           campaigns: ix
             .incoming(segment.id, "TARGETS")
             .map(({ from }) => ix.node(from))
@@ -967,17 +1002,16 @@ const assessLocationImpact = define({
         nodes: [segment, locationNode],
         relationships: [{ type: "NEAR", from: segment.id, to: locationNode.id }],
       },
-      ...(row.consent
-        ? [
-            {
-              nodes: [
-                segment,
-                { id: row.consent.scopeId, label: "ConsentScope", name: row.consent.scope },
-              ],
-              relationships: [{ type: "HAS_CONSENT", from: segment.id, to: row.consent.scopeId }],
-            },
-          ]
-        : []),
+      ...row.consents.map((consent) => ({
+        nodes: [segment, { id: consent.scopeId, label: "ConsentScope", name: consent.scope }],
+        relationships: [
+          {
+            type: `HAS_CONSENT ${Number(consent.optedIn).toLocaleString("en-US")} opted in`,
+            from: segment.id,
+            to: consent.scopeId,
+          },
+        ],
+      })),
       ...row.campaigns.map((campaign) => ({
         nodes: [{ id: campaign.id, label: "Campaign", name: campaign.name }, segment],
         relationships: [{ type: "TARGETS", from: campaign.id, to: segment.id }],
@@ -989,8 +1023,12 @@ const assessLocationImpact = define({
       address: row.address,
       found: true,
       affectedAppUsers: row.size,
-      reachableByPush: row.consent?.optedIn ?? 0,
-      pushCoverageRate: row.consent?.coverageRate ?? 0,
+      reachableByChannel: row.consents.map((consent) => ({
+        channel: consent.channel === "mobile-app" ? "push" : consent.channel,
+        consentScope: consent.scope,
+        optedIn: Number(consent.optedIn),
+        coverageRate: Number(consent.coverageRate),
+      })),
       campaignsToReview: row.campaigns.filter((campaign) => campaign.status === "Active"),
       pastPushSends: row.pastSends,
       paths: paths.slice(0, MAX_PATHS),

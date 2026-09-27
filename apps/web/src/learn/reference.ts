@@ -192,7 +192,7 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   tool(
     "find_similar_past_pushes",
     "graphrag-here",
-    "Past Coastline pushes for a location, daypart, and weather, and which menu items performed best.",
+    "Past Coastline pushes for a location, daypart, and weather, which menu items performed best, and the audience's opt-ins for the campaign's channel.",
   ),
   tool(
     "plan_account_outreach",
@@ -207,7 +207,7 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   tool(
     "assess_location_impact",
     "use-cases",
-    "The app audience near a location, how many can be notified by push, and campaigns to pause.",
+    "The app audience near a location, how many can be reached on each channel, and campaigns to pause.",
   ),
   tool(
     "trace_content_lineage",
@@ -316,7 +316,10 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   edge("WORKS_AT", "A persona at its account."),
   edge("ENGAGED_WITH", "A persona that engaged with a content asset."),
   edge("INCLUDES", "A segment including a persona."),
-  edge("HAS_CONSENT", "A persona or segment holding a consent scope."),
+  edge(
+    "HAS_CONSENT",
+    "A persona or segment holding a consent scope; segments carry opt-in counts per channel.",
+  ),
   edge("MENU_OF", "A menu belonging to its brand.", "campaign-context"),
   edge("ON_MENU", "A menu item on the menu.", "campaign-context"),
   edge("AVAILABLE_DURING", "A menu item offered during a daypart.", "campaign-context"),

@@ -19,22 +19,24 @@ import {
   connectExternalServiceTools,
   EXTERNAL_SERVICES_TOOL_PREFIX,
 } from "../apps/edge/src/external-services/server.ts";
+import { applyFocusUpdate } from "../apps/edge/src/focus.ts";
 import { forcedToolCallMiddleware } from "../apps/edge/src/forced-tool-middleware.ts";
 import {
   connectKnowledgeGraphTools,
   KNOWLEDGE_GRAPH_TOOL_PREFIX,
   knowledgeGraphBackend,
 } from "../apps/edge/src/knowledge-graph/server.ts";
+import { pinBriefToRefinement } from "../apps/edge/src/marketing-writes.ts";
 import {
   MAX_OUTPUT_TOKENS,
   MAX_TURN_STEPS,
   orchestratorSystemPrompt,
+  pinCampaignChannel,
+  requestedChannel,
   selectToolPlan,
   stepToolChoice,
   TURN_TIMEOUT,
 } from "../apps/edge/src/turn-policy.ts";
-import { applyFocusUpdate } from "../apps/edge/src/focus.ts";
-import { pinBriefToRefinement } from "../apps/edge/src/marketing-writes.ts";
 import { workingSetPrompt } from "../apps/edge/src/working-set.ts";
 import {
   classifyPolicyIntent,
@@ -54,8 +56,8 @@ import {
 } from "../packages/evals/src/scoring.ts";
 import {
   buildDataset,
-  rememberDraft,
   recordDecision,
+  rememberDraft,
 } from "../packages/knowledge-graph/src/index.ts";
 import { buildMethodology } from "./lib/eval-methodology.mjs";
 import { summarize } from "./lib/eval-summary.mjs";
@@ -294,9 +296,12 @@ async function runCase(model, tools, suite, testCase, trial) {
         prompt: testCase.prompt,
         // The same server-side pinning production applies to refinements of a saved brief, with
         // each request recorded as the agent receives it.
-        tools: pinBriefToRefinement(
-          recordAgentRequests(tools, sent),
-          workspace?.context.briefSaved ? SAVED_BRIEF_ID : undefined,
+        tools: pinCampaignChannel(
+          pinBriefToRefinement(
+            recordAgentRequests(tools, sent),
+            workspace?.context.briefSaved ? SAVED_BRIEF_ID : undefined,
+          ),
+          requestedChannel(testCase.prompt),
         ),
         prepareStep: ({ stepNumber }) => stepToolChoice(toolPlan, stepNumber),
         stopWhen: stepCountIs(MAX_TURN_STEPS),

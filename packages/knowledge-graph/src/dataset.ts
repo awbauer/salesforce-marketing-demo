@@ -347,7 +347,8 @@ export function buildDataset(seed = 20260926): Dataset {
       rank: rank + 1,
     });
 
-  // Each location has an app audience segment with aggregate push consent (no individuals).
+  // Each location has an app audience segment with aggregate marketing consent per channel
+  // (no individuals): push, email, and SMS opt-ins are counted separately.
   for (const location of COASTLINE_LOCATIONS) {
     const locationId = node(
       "Location",
@@ -376,10 +377,15 @@ export function buildDataset(seed = 20260926): Dataset {
       },
     );
     rel("NEAR", segment, locationId);
-    rel("HAS_CONSENT", segment, CONSENT_IDS["mobile-app"], {
-      optedIn: location.pushOptIns,
-      coverageRate: Math.round((location.pushOptIns / location.appUsers) * 1000) / 1000,
-    });
+    for (const [channel, optedIn] of [
+      ["mobile-app", location.pushOptIns],
+      ["email", location.emailOptIns],
+      ["sms", location.smsOptIns],
+    ] as const)
+      rel("HAS_CONSENT", segment, CONSENT_IDS[channel], {
+        optedIn,
+        coverageRate: Math.round((optedIn / location.appUsers) * 1000) / 1000,
+      });
   }
 
   // Coastline's push campaigns: brief, push content per angle, location segments, mobile app.

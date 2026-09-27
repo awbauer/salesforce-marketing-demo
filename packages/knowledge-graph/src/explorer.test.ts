@@ -9,7 +9,7 @@ describe("graph explorer", () => {
   it("returns every node except push sends, with counts for the whole graph", async () => {
     const overview = await graphOverview(fixture);
     expect(overview.nodes).toHaveLength(177);
-    expect(overview.relationships).toHaveLength(733);
+    expect(overview.relationships).toHaveLength(743);
     expect(overview.labelCounts.PushSend).toBe(1500);
     expect(overview.nodes.every((node) => node.label !== "PushSend")).toBe(true);
     // The seed's dataset stamp and identity fields never appear as properties.
