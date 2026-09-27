@@ -705,12 +705,19 @@ test("builds a versioned focus draft that follow-ups and confirmed saves act on"
   const records = page.getByTestId("workspace-record");
   await expect(records.filter({ hasText: "Coastline Weather Moments" })).toContainText("Created");
   await expect(records.filter({ hasText: "Rainy-day comfort" })).toContainText("Created");
+  await expect(focus).toContainText("Saved in Salesforce");
+  await expect(focus).not.toContainText("Draft in progress");
   await expect(focus).toContainText("Saved to Salesforce as version 2");
+  await expect(focus.getByRole("link", { name: /Open Message in Salesforce/ })).toHaveAttribute(
+    "href",
+    /Northstar_Message__c\/a0C000000000001\/view$/,
+  );
 
   // A new version updates the same record instead of creating another.
   await composer.fill("Make it warmer");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(focus).toContainText("Version 3 · current");
+  await expect(focus).toContainText("Unsaved changes");
   await page.getByTestId("action-card").getByRole("button", { name: "Review update" }).click();
   await expect(card).toContainText("Update message “Rainy-day comfort: Spicy Tortilla Soup”");
   await card.getByRole("button", { name: "Confirm save" }).click();

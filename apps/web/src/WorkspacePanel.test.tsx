@@ -1,7 +1,13 @@
 import { emptyWorkingSet, type FocusItem, type WorkingRecord } from "@northstar/contracts";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { FocusCard, objectLabel, recordsBySystem, WorkspacePanel } from "./WorkspacePanel";
+import {
+  FocusCard,
+  focusLifecycle,
+  objectLabel,
+  recordsBySystem,
+  WorkspacePanel,
+} from "./WorkspacePanel";
 
 afterEach(cleanup);
 
@@ -124,6 +130,52 @@ describe("workspace panel", () => {
     fireEvent.click(within(card).getByRole("button", { name: "v1" }));
     expect(within(card).queryByText("Soup's on.")).not.toBeNull();
     expect(within(card).queryByRole("button", { name: "Save to Salesforce as brief" })).toBeNull();
+  });
+
+  it("updates the focus lifecycle from Salesforce read-back and links the saved record", () => {
+    const focus: FocusItem = {
+      id: "f1",
+      kind: "email",
+      current: 2,
+      versions: [
+        {
+          version: 2,
+          title: "Coastline afternoon email",
+          summary: "A weather-aware email.",
+          fields: [{ label: "Subject", value: "A sunny afternoon treat" }],
+          changeNote: "Approved draft",
+          basedOn: [],
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      saved: {
+        objectType: "Northstar_Message__c",
+        recordId: "a0C000000000001",
+        version: 2,
+        campaignId: "701000000000001",
+      },
+    };
+    const { rerender } = render(<FocusCard focus={focus} cards={[]} />);
+    const card = screen.getByTestId("workspace-focus");
+    expect(within(card).getByText("Saved in Salesforce")).not.toBeNull();
+    expect(within(card).queryByText("Draft in progress")).toBeNull();
+    expect(
+      within(card)
+        .getByRole("link", { name: /Open Message in Salesforce/ })
+        .getAttribute("href"),
+    ).toContain("/lightning/r/Northstar_Message__c/a0C000000000001/view");
+
+    const revised: FocusItem = {
+      ...focus,
+      current: 3,
+      versions: [
+        ...focus.versions,
+        { ...(focus.versions[0] as FocusItem["versions"][number]), version: 3 },
+      ],
+    };
+    rerender(<FocusCard focus={revised} cards={[]} />);
+    expect(within(card).getByText("Unsaved changes")).not.toBeNull();
+    expect(focusLifecycle({ ...focus, saved: undefined })).toBe("Draft in progress");
   });
 
   it("names Salesforce objects in plain words", () => {
