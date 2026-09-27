@@ -2,6 +2,7 @@ import {
   CAMPAIGN_CONTEXT_TOOLS,
   type InsightTile,
   KNOWLEDGE_GRAPH_TOOLS,
+  MEMORY_TOOLS,
   ORCHESTRATOR_TOOLS,
   READINESS_PRESENTATION,
   type RecordRef,
@@ -249,12 +250,24 @@ const GRAPH_TITLES: Record<string, string> = {
   check_consent_coverage: "Consent coverage",
   find_similar_past_pushes: "Similar past pushes",
   trace_content_lineage: "Content lineage",
+  recall_decisions: "Remembered",
+  recall_recent_work: "Recent work",
+  explain_memory: "Memory provenance",
 };
 
 function graphSummary(tool: string, data: Record<string, unknown>, count: number) {
   const pct = (value: unknown) =>
     typeof value === "number" ? `${Math.round(value * 1000) / 10}%` : "?";
   switch (tool) {
+    case "recall_decisions":
+    case "recall_recent_work":
+      return count
+        ? `${count} remembered item${count === 1 ? "" : "s"} from earlier chats, dated and sourced; re-check Salesforce before reusing.`
+        : "Nothing remembered for this in the workspace.";
+    case "explain_memory":
+      return data.found === false
+        ? "No memory with that id in this workspace."
+        : "Where a remembered item came from: its record, draft versions, and subjects.";
     case "find_similar_past_pushes":
       return `${num(data.totalSends) ?? 0} past sends in ${[data.location, data.daypart, data.condition].filter(Boolean).join(", ")}${str(data.bestAngle) ? `; best angle: ${data.bestAngle}` : ""}.`;
     case "check_consent_coverage":
@@ -278,8 +291,14 @@ function graphCard(
 ): Ingested {
   const paths = list(data.paths).length;
   const subject =
-    str(data.account) ?? str(data.campaign) ?? str((input as Record<string, unknown>)?.account);
+    str(data.account) ??
+    str(data.campaign) ??
+    str(data.subject) ??
+    str((input as Record<string, unknown>)?.account);
+  const memory = (MEMORY_TOOLS as readonly string[]).includes(tool);
   const items = [
+    ...list(data.items),
+    ...(data.item ? [data.item] : []),
     ...list(data.candidates),
     ...list(data.overlaps),
     ...list(data.pushes),
@@ -312,7 +331,7 @@ function graphCard(
       {
         id: `graph:${tool}:${clip(inputKey, 60)}`,
         kind: "graph",
-        eyebrow: "Knowledge graph",
+        eyebrow: memory ? "Memory" : "Knowledge graph",
         title: subject ? `${title}: ${subject}` : title,
         summary: clip(graphSummary(tool, data, items.length), 200),
         metric: paths ? String(paths) : undefined,
@@ -454,7 +473,7 @@ export function ingestionFor(event: ToolResultEvent): Ingested {
       ? weatherCard(payload.data, tool, event.at)
       : restaurantCard(payload.data, tool, event.at);
   }
-  if ((KNOWLEDGE_GRAPH_TOOLS as readonly string[]).includes(tool))
+  if ([...KNOWLEDGE_GRAPH_TOOLS, ...MEMORY_TOOLS].includes(tool as never))
     return payload.data
       ? graphCard(payload.data, tool, event.input, event.at)
       : { cards: [], records: [] };

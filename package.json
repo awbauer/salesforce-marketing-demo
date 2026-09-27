@@ -23,6 +23,7 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "hxl:check": "node scripts/check-hxl.mjs",
+    "learn:check": "node scripts/check-learn.mjs",
     "lint": "biome lint .",
     "preview": "vite preview",
     "prepare": "node scripts/install-git-hooks.mjs",

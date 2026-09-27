@@ -170,12 +170,11 @@ function MemoryLayers() {
     },
     {
       name: "Long-term memory",
-      where: "Knowledge graph · linked to entities",
-      reader: "Read by the model, through tools",
-      life: "Across chats (planned, #41)",
+      where: "Knowledge graph · linked to campaigns and brands",
+      reader: "Recalled by the model, through tools",
+      life: "14 days, across chats",
       width: 100,
       tone: "tool",
-      planned: true,
     },
   ] as const;
   return (
@@ -193,7 +192,7 @@ function MemoryLayers() {
             <span className="memory-reader">{layer.reader}</span>
             <span className="memory-life">
               <span
-                className={`memory-bar ${"planned" in layer ? "is-planned" : ""}`}
+                className="memory-bar"
                 style={{ width: `${layer.width}%` }}
                 aria-hidden="true"
               />
@@ -497,6 +496,65 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
           { title: "Retrieve", caption: "search your data", tone: "tool", glyph: "⌕" },
           { title: "Augment", caption: "add facts to the context", tone: "store", glyph: "+" },
           { title: "Generate", caption: "answer from those facts", tone: "model", glyph: "◆" },
+        ]}
+      />
+    </Figure>
+  ),
+  "long-term-memory": () => (
+    <Figure
+      label="How long-term memory is written, recalled, and forgotten"
+      caption="The server writes memory on events it verified; the model can only recall it, for this workspace, and must re-check Salesforce."
+    >
+      <Lanes
+        lanes={[
+          {
+            label: "Remember",
+            steps: [
+              {
+                title: "Confirmed write or “remember this”",
+                caption: "read back from Salesforce",
+                tone: "person",
+                glyph: "✓",
+              },
+              {
+                title: "Server writes fixed Cypher",
+                caption: "never the model",
+                tone: "edge",
+                glyph: "⚙",
+              },
+              {
+                title: "Draft · Decision nodes",
+                caption: "ABOUT campaigns and brands",
+                tone: "store",
+                glyph: "◇",
+              },
+            ],
+          },
+          {
+            label: "Recall",
+            steps: [
+              { title: "“What did we decide…?”", tone: "person", glyph: "?" },
+              {
+                title: "recall_decisions",
+                caption: "workspace set by the server",
+                tone: "tool",
+                glyph: "⌕",
+              },
+              {
+                title: "Dated, sourced answer",
+                caption: "re-check Salesforce before reuse",
+                tone: "guard",
+                glyph: "✓",
+              },
+            ],
+          },
+          {
+            label: "Forget",
+            steps: [
+              { title: "History → Memory → Forget", tone: "person", glyph: "×" },
+              { title: "Hourly sweep", caption: "after 14 days", tone: "edge", glyph: "⏱" },
+            ],
+          },
         ]}
       />
     </Figure>

@@ -3,6 +3,7 @@ import { Markdown } from "../Markdown";
 import { GLOSSARY, LEARN_PARTS, type LearnPart, type LearnSection } from "./content";
 import { Diagram } from "./diagrams";
 import { PART_LESSONS, type PartLesson, SECTION_LESSONS, type TryIt } from "./lessons";
+import { LEARN_REFERENCE, REFERENCE_KINDS, type ReferenceKind } from "./reference";
 import "./learn.css";
 
 type View = "graph" | "history" | "evaluations";
@@ -162,6 +163,11 @@ export function LearnView({
                 Glossary
               </button>
             </li>
+            <li>
+              <button type="button" className="learn-toc-part" onClick={() => jumpTo("reference")}>
+                Reference
+              </button>
+            </li>
           </ol>
         </nav>
 
@@ -170,6 +176,7 @@ export function LearnView({
             <Part key={part.id} part={part} read={read} onRead={toggleRead} onTry={tryIt} />
           ))}
           <Glossary />
+          <ReferenceIndex onJump={jumpTo} />
         </div>
       </div>
     </section>
@@ -448,6 +455,93 @@ function Glossary() {
             <div key={entry.term}>
               <dt>{entry.term}</dt>
               <dd>{entry.definition}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
+  );
+}
+
+const SECTION_TITLES = new Map(
+  LEARN_PARTS.flatMap((part) => part.sections.map((section) => [section.id, section.title])),
+);
+
+/**
+ * Every tool, write action, graph type, operator control, and Salesforce component in the code,
+ * each linked to the section that teaches it. `pnpm learn:check` keeps this list complete.
+ */
+function ReferenceIndex({ onJump }: { onJump: (id: string) => void }) {
+  const [kind, setKind] = useState<ReferenceKind>("Tool");
+  const [query, setQuery] = useState("");
+  const entries = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return LEARN_REFERENCE.filter((entry) =>
+      term ? `${entry.name} ${entry.summary}`.toLowerCase().includes(term) : entry.kind === kind,
+    );
+  }, [kind, query]);
+  return (
+    <section
+      id="learn-reference"
+      className="learn-glossary learn-reference"
+      tabIndex={-1}
+      aria-labelledby="learn-reference-title"
+    >
+      <header className="learn-glossary-header">
+        <div>
+          <p className="kicker">Reference</p>
+          <h3 id="learn-reference-title">Every concept in the code</h3>
+        </div>
+        <label className="learn-glossary-search">
+          <span className="sr-only">Search the reference</span>
+          <input
+            type="search"
+            placeholder="Search all…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      </header>
+      {!query.trim() && (
+        <fieldset className="learn-reference-kinds">
+          <legend className="sr-only">Kind</legend>
+          {REFERENCE_KINDS.map((option) => (
+            <button
+              type="button"
+              key={option}
+              aria-pressed={option === kind}
+              onClick={() => setKind(option)}
+            >
+              {option}s{" "}
+              <span className="learn-muted">
+                {LEARN_REFERENCE.filter((entry) => entry.kind === option).length}
+              </span>
+            </button>
+          ))}
+        </fieldset>
+      )}
+      {entries.length === 0 ? (
+        <p className="learn-muted" role="status">
+          Nothing matches “{query.trim()}”.
+        </p>
+      ) : (
+        <dl className="learn-glossary-grid learn-reference-grid">
+          {entries.map((entry) => (
+            <div key={`${entry.kind}:${entry.name}`}>
+              <dt>
+                <code>{entry.name}</code>
+                {query.trim() && <span className="learn-muted"> · {entry.kind}</span>}
+              </dt>
+              <dd>{entry.summary}</dd>
+              <dd>
+                <button
+                  type="button"
+                  className="learn-reference-link"
+                  onClick={() => onJump(entry.section)}
+                >
+                  {SECTION_TITLES.get(entry.section) ?? entry.section} →
+                </button>
+              </dd>
             </div>
           ))}
         </dl>

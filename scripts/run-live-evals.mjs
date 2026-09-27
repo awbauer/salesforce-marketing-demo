@@ -3,6 +3,7 @@
 // fictional tool fixtures, then writes a typed report that the demo UI renders.
 //
 // Usage: pnpm eval:live [--models id,id] [--trials-demo 5] [--trials-routing 2] [--out path] [--live-graph]
+//                       [--cases id,id]   (only these case ids; for cheap targeted re-runs)
 // Cost: a default three-model run is about 550 model calls; check Workers AI usage before adding models.
 // Credentials: CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, or an authenticated wrangler login.
 import { execFileSync } from "node:child_process";
@@ -32,13 +33,24 @@ import { workingSetPrompt } from "../apps/edge/src/working-set.ts";
 import {
   classifyPolicyIntent,
   emptyWorkingSet,
+  KNOWLEDGE_GRAPH_TOOLS,
+  MEMORY_TOOLS,
   PHASE_2_AUTONOMOUS_TOOLS,
   POLICY_RESPONSES,
   PROOF_DEFAULTS,
 } from "../packages/contracts/src/index.ts";
 import { demoScenarios, routingCases } from "../packages/evals/src/cases.ts";
 import { EvalReportSchema } from "../packages/evals/src/report.ts";
-import { claimsWrite } from "../packages/evals/src/scoring.ts";
+import {
+  claimsWrite,
+  groundingEntities,
+  ungroundedEntities,
+} from "../packages/evals/src/scoring.ts";
+import {
+  buildDataset,
+  rememberDraft,
+  recordDecision,
+} from "../packages/knowledge-graph/src/index.ts";
 import { buildMethodology } from "./lib/eval-methodology.mjs";
 import { summarize } from "./lib/eval-summary.mjs";
 
@@ -201,6 +213,7 @@ async function runCase(model, tools, suite, testCase, trial) {
   let text = "";
   let toolCalled = null;
   let toolErrors = 0;
+  let evidence = "";
   let inputTokens = 0;
   let outputTokens = 0;
   let steps = "";
@@ -237,6 +250,15 @@ async function runCase(model, tools, suite, testCase, trial) {
         .flatMap((step) => step.toolCalls)
         .map((call) => shortName(call.toolName));
       toolCalled = called.length ? called.join(" → ") : null;
+      // Grounding applies when a graph or memory tool ran; any tool's result counts as evidence,
+      // since a restaurant menu item can come from the restaurant profile, not the graph.
+      const results = resultSteps.flatMap((step) => step.toolResults);
+      if (
+        results.some((result) =>
+          [...KNOWLEDGE_GRAPH_TOOLS, ...MEMORY_TOOLS].includes(shortName(result.toolName)),
+        )
+      )
+        evidence = results.map((result) => JSON.stringify(result.output)).join("\n");
       toolErrors = resultSteps
         .flatMap((step) => step.content)
         .filter((part) => part.type === "tool-error").length;
@@ -263,6 +285,8 @@ async function runCase(model, tools, suite, testCase, trial) {
     textProduced: text.length > 0,
     noToolErrors: toolErrors === 0 && route !== "error",
     noFalseWriteClaim: !claimsWrite(text),
+    // A graph or memory answer names only entities its tool results contain.
+    graphGrounded: !evidence || ungroundedEntities(text, evidence, GRAPH_ENTITIES).length === 0,
   };
   const passed = Object.values(checks).every(Boolean);
   if (!passed && !failure)
@@ -283,6 +307,51 @@ async function runCase(model, tools, suite, testCase, trial) {
     excerpt: text.replace(/\s+/g, " ").slice(0, 240),
     ...(failure ? { failure } : {}),
   };
+}
+
+const GRAPH_ENTITIES = groundingEntities(buildDataset().nodes);
+
+async function seedEvalMemory(backend, workspaceId) {
+  const stamp = (daysAgo) => {
+    const at = new Date(Date.now() - daysAgo * 86_400_000);
+    return {
+      workspaceId,
+      actorHash: "eval0000eval0000",
+      at: at.toISOString(),
+      expiresAt: new Date(at.getTime() + 14 * 86_400_000).toISOString(),
+      eventId: crypto.randomUUID(),
+      id: crypto.randomUUID(),
+    };
+  };
+  const subjects = { salesforceIds: [], names: ["Coastline Kitchen"] };
+  const draft = {
+    focusId: "eval-focus",
+    kind: "push-message",
+    title: "Rainy-day comfort",
+    summary: "Lunch push for Los Angeles app users on rainy days.",
+    fields: [
+      { label: "Headline", value: "Rain outside? Soup's on." },
+      { label: "Brand", value: "Coastline Kitchen" },
+    ],
+    version: 2,
+  };
+  await rememberDraft(backend, { ...stamp(3), source: "saved-to-salesforce", draft, subjects });
+  await recordDecision(backend, {
+    ...stamp(3),
+    decision: {
+      kind: "confirmed-write",
+      outcome: "Created Message “Rainy-day comfort” (a0C000000000001).",
+      note: "Saved from version 2 of the draft.",
+    },
+    record: {
+      system: "salesforce",
+      objectType: "Northstar_Message__c",
+      recordId: "a0C000000000001",
+      title: "Rainy-day comfort",
+    },
+    draftRef: { focusId: "eval-focus", version: 2 },
+    subjects,
+  });
 }
 
 async function pool(tasks, limit) {
@@ -314,11 +383,13 @@ const provider = createWorkersAI({ accountId, apiKey });
 // live Open-Meteo weather) through the same in-process MCP client as production.
 const campaignContext = await connectCampaignContextTools();
 // The knowledge graph uses its local fictional copy unless --live-graph points it at Neo4j.
-const graph = await connectKnowledgeGraphTools(
-  process.argv.includes("--live-graph")
-    ? knowledgeGraphBackend(process.env)
-    : knowledgeGraphBackend({}),
-);
+// Memory recall reads an evaluation workspace, seeded locally with one remembered decision.
+const graphBackend = process.argv.includes("--live-graph")
+  ? knowledgeGraphBackend(process.env)
+  : knowledgeGraphBackend({});
+const memoryContext = { workspaceId: `eval-${Date.now()}`, now: () => new Date() };
+if (graphBackend.kind === "fixture") await seedEvalMemory(graphBackend, memoryContext.workspaceId);
+const graph = await connectKnowledgeGraphTools(graphBackend, memoryContext);
 const tools = { ...fixtureTools(), ...campaignContext.tools, ...graph.tools };
 const suites = [
   { id: "demo-scenarios", cases: demoScenarios, trials: trialsDemo },
@@ -326,6 +397,10 @@ const suites = [
   { id: "routing-model-only", cases: routingCases, trials: trialsRouting },
 ];
 
+const onlyCases = argument("cases", "").split(",").filter(Boolean);
+if (onlyCases.length)
+  for (const suite of suites)
+    suite.cases = suite.cases.filter((test) => onlyCases.includes(test.id));
 const models = MODELS.filter((model) => selected.includes(model.id));
 const results = (
   await Promise.all(

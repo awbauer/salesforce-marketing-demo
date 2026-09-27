@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DAYPARTS } from "./coastline.ts";
+import type { MemoryStore } from "./memory.ts";
 import {
   ACCOUNTS,
   ALL_CAMPAIGNS,
@@ -17,10 +18,17 @@ export type PathNode = { id: string; label: string; name: string };
 export type PathRelationship = { type: string; from: string; to: string };
 export type EvidencePath = { nodes: PathNode[]; relationships: PathRelationship[] };
 
-/** Runs a read-only statement; the Neo4j backend and the fixture backend implement this. */
+/**
+ * Runs graph statements. `query` is always read-only; `write` is used only by the server's fixed
+ * long-term memory statements. The fixture backend keeps memory in an in-process store.
+ */
 export type GraphBackend =
-  | { kind: "neo4j"; query: (statement: string, parameters: Row) => Promise<Row[]> }
-  | { kind: "fixture"; dataset: Dataset };
+  | {
+      kind: "neo4j";
+      query: (statement: string, parameters: Row) => Promise<Row[]>;
+      write?: (statement: string, parameters: Row) => Promise<Row[]>;
+    }
+  | { kind: "fixture"; dataset: Dataset; memory?: MemoryStore };
 
 const MAX_PATHS = 25;
 const CAMPAIGN_IDS = ALL_CAMPAIGNS.map((campaign) => campaign.id) as [string, ...string[]];

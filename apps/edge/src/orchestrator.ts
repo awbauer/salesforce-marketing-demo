@@ -12,6 +12,8 @@ import {
   type FocusItem,
   GeneratedCampaignImageSchema,
   initialOrchestratorState,
+  MEMORY_RETENTION_DAYS,
+  MEMORY_TOOLS,
   type OrchestratorState,
   type PermissionReport,
   PHASE_2_AUTONOMOUS_TOOLS,
@@ -46,10 +48,25 @@ import {
 import { applyFocusUpdate, type FocusInput, focusBriefText, focusFromAnswer } from "./focus";
 import { forcedToolCallMiddleware } from "./forced-tool-middleware";
 import {
+  forgetMemory,
+  type GraphBackend,
+  listMemory,
+  type MemoryRecordRef,
+  recordDecision,
+  rememberDraft,
+} from "../../../packages/knowledge-graph/src/index.ts";
+import {
   connectKnowledgeGraphTools,
   KNOWLEDGE_GRAPH_TOOL_PREFIX,
   knowledgeGraphBackend,
 } from "./knowledge-graph/server";
+import {
+  focusMemoryDraft,
+  localRecallAnswer,
+  memoryActorHash,
+  memoryStamp,
+  memorySubjects,
+} from "./memory";
 import {
   applyRecordWrite,
   fixturePermissionReport,
@@ -60,6 +77,8 @@ import { buildTurnRecord } from "./turn-history";
 import {
   type DraftIntent,
   draftIntent,
+  isRecallRequest,
+  isRememberRequest,
   isRevisionRequest,
   MAX_OUTPUT_TOKENS,
   MAX_TURN_STEPS,
@@ -93,6 +112,7 @@ type OrchestratorBindings = CloudflareBindings & {
   // Operator kill switches, set as Worker secrets so deploys do not reset them.
   WRITES_ENABLED?: string;
   DISABLED_TOOLS?: string;
+  MEMORY_ENABLED?: string;
   // Neo4j Aura Query API credentials (Worker secrets); without them the fixture graph is used.
   NEO4J_QUERY_URL?: string;
   NEO4J_USERNAME?: string;
@@ -654,10 +674,18 @@ export class MarketingOrchestrator extends AIChatAgent<
     const turnMessages = conversationWindow(messages);
     await this.mcp.waitForConnections({ timeout: 10_000 });
     const discoveredTools = this.mcp.getAITools();
-    const { disabledTools } = parseOperationControls(this.env);
+    const controls = parseOperationControls(this.env);
+    const memory = this.memoryBackend();
+    // With memory off, the recall tools are withheld and reported as turned off by an operator.
+    const disabledTools = memory
+      ? controls.disabledTools
+      : [...controls.disabledTools, ...MEMORY_TOOLS];
     // The campaign-context and knowledge-graph MCPs run in-process; both close when the turn ends.
     const context = await connectCampaignContextTools();
-    const graph = await connectKnowledgeGraphTools(knowledgeGraphBackend(this.env));
+    const graph = await connectKnowledgeGraphTools(
+      memory ?? knowledgeGraphBackend(this.env),
+      memory ? { workspaceId: this.state.workspaceId, now: () => new Date() } : undefined,
+    );
     const tools = guardToolResults(
       {
         ...Object.fromEntries(
@@ -858,6 +886,7 @@ export class MarketingOrchestrator extends AIChatAgent<
           retentionHours: AUDIT_RETENTION_HOURS,
           operations: parseOperationControls(this.env),
           confirmations,
+          memory: this.listMemoryAudit(),
           turns: this.listTurns().map((turn) => ({
             id: turn.id,
             startedAt: turn.startedAt,
@@ -1498,6 +1527,20 @@ export class MarketingOrchestrator extends AIChatAgent<
         ...this.state.activity,
       ],
     });
+    await this.rememberConfirmedWrite(
+      current,
+      {
+        system: "salesforce",
+        objectType: write.objectType,
+        recordId,
+        title: write.title,
+      },
+      {
+        outcome: `${result.created ? "Created" : "Updated"} ${write.objectLabel} “${write.title}” (${recordId}), confirmed and read back from ${local ? "the local fixture" : "Salesforce"}.`,
+        note: current.focus ? `Saved from version ${current.focus.version} of the draft.` : "",
+        campaignId: result.campaignId,
+      },
+    );
     return json({
       confirmation: executed,
       result: {
@@ -1686,6 +1729,200 @@ export class MarketingOrchestrator extends AIChatAgent<
     });
   }
 
+  /**
+   * The graph backend for long-term memory, or null when an operator turned memory off or the
+   * graph can't be written. Memory is written only here, on server events; see ADR-007.
+   */
+  private memoryBackend(): GraphBackend | null {
+    if (!parseOperationControls(this.env).memoryEnabled) return null;
+    const backend = knowledgeGraphBackend(this.env);
+    return backend.kind === "neo4j" && !backend.write ? null : backend;
+  }
+
+  private ensureMemoryAudit() {
+    this.sql`CREATE TABLE IF NOT EXISTS northstar_memory_audit (
+      id TEXT PRIMARY KEY,
+      at INTEGER NOT NULL,
+      action TEXT NOT NULL,
+      memory_id TEXT NOT NULL,
+      detail TEXT NOT NULL
+    )`;
+  }
+
+  /** Notes a remember or forget in this user's agent storage, kept as long as the audit. */
+  private auditMemory(
+    action: "remember" | "decision" | "forget",
+    memoryId: string,
+    detail: string,
+  ) {
+    try {
+      this.ensureMemoryAudit();
+      const now = Date.now();
+      this.sql`INSERT INTO northstar_memory_audit (id, at, action, memory_id, detail)
+        VALUES (${crypto.randomUUID()}, ${now}, ${action}, ${memoryId}, ${detail.slice(0, 240)})`;
+      this.sql`DELETE FROM northstar_memory_audit WHERE at < ${now - AUDIT_RETENTION_MS}`;
+    } catch (error) {
+      console.warn("[memory] audit row failed", error instanceof Error ? error.message : error);
+    }
+  }
+
+  private listMemoryAudit() {
+    this.ensureMemoryAudit();
+    return this.sql<{ at: number; action: string; memory_id: string; detail: string }>`
+      SELECT at, action, memory_id, detail FROM northstar_memory_audit
+      WHERE at >= ${Date.now() - AUDIT_RETENTION_MS} ORDER BY at DESC LIMIT 200`.map((row) => ({
+      at: new Date(row.at).toISOString(),
+      action: row.action,
+      memoryId: row.memory_id,
+      detail: row.detail,
+    }));
+  }
+
+  /** Remembers the draft in focus at its current version, on the user's request. */
+  private async rememberFocus(): Promise<
+    | { ok: true; id: string; created: boolean; title: string; version: number }
+    | { ok: false; status: number; code: string; message: string }
+  > {
+    const backend = this.memoryBackend();
+    if (!backend)
+      return {
+        ok: false,
+        status: 503,
+        code: "MEMORY_DISABLED",
+        message: "Long-term memory is turned off by an operator. Nothing was remembered.",
+      };
+    const focus = this.state.workingSet.focus;
+    if (!focus)
+      return {
+        ok: false,
+        status: 409,
+        code: "CONFLICT",
+        message: "There's no draft in the workspace to remember yet.",
+      };
+    const draft = focusMemoryDraft(focus);
+    const stamp = memoryStamp(this.state.workspaceId, await memoryActorHash(this.principalSubject));
+    const result = await rememberDraft(backend, {
+      ...stamp,
+      source: "remembered",
+      draft,
+      // Only what the draft itself names: the campaign open in the chat may be unrelated.
+      subjects: memorySubjects({ focus }),
+    });
+    if (result.created) this.auditMemory("remember", result.id, `${draft.title} v${draft.version}`);
+    return { ok: true, ...result, title: draft.title, version: draft.version };
+  }
+
+  /**
+   * Remembers a confirmed, read-back Salesforce write as a decision, with the draft version it
+   * saved. Memory never blocks or fails the write it describes.
+   */
+  private async rememberConfirmedWrite(
+    confirmation: Confirmation,
+    record: MemoryRecordRef,
+    detail: { outcome: string; note: string; campaignId?: string },
+  ) {
+    const backend = this.memoryBackend();
+    if (!backend) return;
+    try {
+      const actorHash = await memoryActorHash(this.principalSubject);
+      const focus = this.state.workingSet.focus;
+      const onFocus = Boolean(confirmation.write && focus && confirmation.focus?.id === focus.id);
+      const subjects = memorySubjects({
+        focus: onFocus ? focus : null,
+        confirmation,
+        campaignIds: [detail.campaignId],
+      });
+      if (onFocus && focus && confirmation.focus) {
+        const saved = await rememberDraft(backend, {
+          ...memoryStamp(this.state.workspaceId, actorHash),
+          source: "saved-to-salesforce",
+          draft: focusMemoryDraft(focus, confirmation.focus.version),
+          subjects,
+        });
+        if (saved.created)
+          this.auditMemory(
+            "remember",
+            saved.id,
+            `${confirmation.focus.title} v${confirmation.focus.version}`,
+          );
+      }
+      const kind =
+        confirmation.action === "create-review-task"
+          ? ("review" as const)
+          : confirmation.action === "attach-generated-image"
+            ? ("asset-attached" as const)
+            : ("confirmed-write" as const);
+      const decision = await recordDecision(backend, {
+        ...memoryStamp(this.state.workspaceId, actorHash),
+        decision: { kind, outcome: detail.outcome, note: detail.note },
+        record,
+        ...(onFocus && confirmation.focus
+          ? { draftRef: { focusId: confirmation.focus.id, version: confirmation.focus.version } }
+          : {}),
+        subjects,
+      });
+      this.auditMemory("decision", decision.id, `${kind}: ${record.objectType} ${record.recordId}`);
+    } catch (error) {
+      console.warn(
+        "[memory] could not remember the confirmed write",
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
+
+  /** The Memory tab's routes: list, remember the current draft, and forget one memory. */
+  private async memoryRoute(request: Request, url: URL): Promise<Response | null> {
+    if (url.pathname.endsWith("/memory") && request.method === "GET") {
+      const backend = this.memoryBackend();
+      if (!backend)
+        return json({ enabled: false, retentionDays: MEMORY_RETENTION_DAYS, items: [] });
+      try {
+        return json({
+          enabled: true,
+          retentionDays: MEMORY_RETENTION_DAYS,
+          items: await listMemory(backend, this.state.workspaceId, new Date()),
+        });
+      } catch (error) {
+        return json(
+          {
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message: `Memory is unavailable: ${error instanceof Error ? error.message : "unknown error"}.`,
+            },
+          },
+          { status: 502 },
+        );
+      }
+    }
+    if (url.pathname.endsWith("/memory/remember") && request.method === "POST") {
+      const result = await this.rememberFocus();
+      return result.ok
+        ? json(result)
+        : json(
+            { error: { code: result.code, message: result.message } },
+            { status: result.status },
+          );
+    }
+    const forget = url.pathname.match(/\/memory\/([a-f0-9-]{36})$/);
+    if (forget?.[1] && request.method === "DELETE") {
+      const backend = this.memoryBackend();
+      if (!backend)
+        return json(
+          { error: { code: "MEMORY_DISABLED", message: "Long-term memory is turned off." } },
+          { status: 503 },
+        );
+      const deleted = await forgetMemory(backend, this.state.workspaceId, forget[1]);
+      if (!deleted)
+        return json(
+          { error: { code: "NOT_FOUND", message: "That memory is not in this workspace." } },
+          { status: 404 },
+        );
+      this.auditMemory("forget", forget[1], "Forgotten from the Memory tab");
+      return json({ forgotten: forget[1] });
+    }
+    return null;
+  }
+
   private syncConnector() {
     const connector = connectorFromMcp(Boolean(this.env.SALESFORCE_MCP_URL), this.getMcpServers());
     this.setState({
@@ -1801,6 +2038,8 @@ export class MarketingOrchestrator extends AIChatAgent<
       });
     if (url.pathname.endsWith("/audit/export") && request.method === "GET")
       return this.exportAudit();
+    const memoryResponse = await this.memoryRoute(request, url);
+    if (memoryResponse) return memoryResponse;
     if (url.pathname.endsWith("/turns") && request.method === "GET")
       return json({ retentionHours: AUDIT_RETENTION_HOURS, turns: this.listTurns() });
     if (url.pathname.endsWith("/images/generate") && request.method === "POST")
@@ -2060,6 +2299,33 @@ export class MarketingOrchestrator extends AIChatAgent<
             ...this.state.activity,
           ],
         });
+        await this.rememberConfirmedWrite(
+          current,
+          {
+            system: "salesforce",
+            objectType:
+              current.action === "create-review-task"
+                ? "Task"
+                : current.action === "attach-generated-image"
+                  ? "ContentDocument"
+                  : "Campaign",
+            recordId: sourceRecordId,
+            title:
+              typeof taskDetails.subject === "string"
+                ? taskDetails.subject
+                : typeof imageDetails.title === "string"
+                  ? imageDetails.title
+                  : ACTIVITY_LABELS[current.action],
+          },
+          {
+            outcome: `${ACTIVITY_LABELS[current.action]} (${sourceRecordId}), confirmed and read back from Salesforce.`,
+            note:
+              typeof taskDetails.dueDate === "string"
+                ? `Due ${taskDetails.dueDate}.`
+                : current.summary,
+            campaignId: typeof campaignId === "string" ? campaignId : undefined,
+          },
+        );
         return json({
           confirmation: executed,
           result: {
@@ -2131,6 +2397,28 @@ export class MarketingOrchestrator extends AIChatAgent<
           ...this.state.activity,
         ],
       });
+      await this.rememberConfirmedWrite(
+        current,
+        {
+          system: "salesforce",
+          objectType:
+            current.action === "create-review-task"
+              ? "Task"
+              : current.action === "attach-generated-image"
+                ? "ContentDocument"
+                : "Campaign",
+          recordId: fixtureRecordId,
+          title:
+            current.action === "create-review-task"
+              ? "Review campaign readiness: VERO Phase 1 Launch"
+              : (fixtureImage?.title ?? ACTIVITY_LABELS[current.action]),
+        },
+        {
+          outcome: `${ACTIVITY_LABELS[current.action]} (${fixtureRecordId}), confirmed and read back from the local fixture.`,
+          note: current.summary,
+          campaignId: current.recordId,
+        },
+      );
       return json({
         confirmation: executed,
         result: {
@@ -2175,6 +2463,25 @@ export class MarketingOrchestrator extends AIChatAgent<
     const abortSignal = options?.abortSignal;
     // Writes and forbidden actions never reach the model, so it cannot claim they happened.
     const utterance = latestUserText(evidenceTurnMessages(this.messages));
+    // "Remember this draft" stores the focus in long-term memory; the server writes it, not the model.
+    if (isRememberRequest(utterance)) {
+      const result = await this.rememberFocus().catch((error: unknown) => ({
+        ok: false as const,
+        status: 502,
+        code: "UPSTREAM_UNAVAILABLE",
+        message: `Memory is unavailable (${error instanceof Error ? error.message : "unknown error"}).`,
+      }));
+      const text = result.ok
+        ? `${result.created ? "Remembered" : "Already remembered"} **${result.title}** (version ${result.version}) for this workspace for ${MEMORY_RETENTION_DAYS} days. Ask about it in a new chat, or forget it from History → Memory. Nothing was saved to Salesforce.`
+        : `${result.message} Nothing was saved to Salesforce.`;
+      return scriptedResponse([text], {
+        model: POLICY_ROUTER,
+        route: "memory",
+        abortSignal,
+        onComplete: (turn) =>
+          this.recordTurn(utterance, { model: POLICY_ROUTER, route: "memory" }, turn),
+      });
+    }
     const policyIntent = classifyPolicyIntent(utterance);
     // A request to save or create the draft prepares that write for confirmation, with the
     // Salesforce permission check, instead of only pointing at a button.
@@ -2227,6 +2534,21 @@ export class MarketingOrchestrator extends AIChatAgent<
     if (!this.messages.some((message) => message.role === "assistant")) this.resetWorkingSet();
     if ((this.env.ENVIRONMENT as string) !== "local")
       return this.productionChatResponse(this.messages, abortSignal);
+    // Local development has no model: a recall question reads memory through the same tool.
+    const localMemory = this.memoryBackend();
+    if (localMemory && isRecallRequest(utterance)) {
+      const text = await localRecallAnswer(localMemory, utterance, {
+        workspaceId: this.state.workspaceId,
+        now: () => new Date(),
+      });
+      return scriptedResponse([text], {
+        model: "local-fixture",
+        reasoning: "Local development has no model: answer from the workspace's long-term memory.",
+        abortSignal,
+        onComplete: (result) =>
+          this.recordTurn(utterance, { model: "local-fixture", route: "local-fixture" }, result),
+      });
+    }
     // Local development has no Salesforce: fixture results go through the same ingestion path
     // as real tool results, so the workspace behaves the same way.
     for (const [toolName, result] of LOCAL_FIXTURE_RESULTS)

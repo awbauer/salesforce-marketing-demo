@@ -468,7 +468,7 @@ test("records each turn with its interpretation, reasoning, and outcome in histo
 
 test("reflects operator kill switches and offers the audit export", async ({ page }, testInfo) => {
   await page.route("**/agent/operations", (route) =>
-    route.fulfill({ json: { writesEnabled: false, disabledTools: [] } }),
+    route.fulfill({ json: { writesEnabled: false, memoryEnabled: true, disabledTools: [] } }),
   );
   await page.goto("/");
   await expect(page.getByText(/Salesforce writes are paused by an operator/)).toBeVisible();
@@ -559,6 +559,22 @@ test("explains context, GraphRAG, and every demo concept on the Learn page", asy
   await expect(glossary.getByText("Tool plan", { exact: true })).toBeVisible();
   await glossary.getByLabel("Filter the glossary").fill("cypher");
   await expect(glossary.getByText("Tool plan", { exact: true })).toBeHidden();
+  // The reference lists every concept in the code and links it to the lesson that teaches it.
+  await toc.getByRole("button", { name: "Reference", exact: true }).click();
+  const reference = page.locator("#learn-reference");
+  await expect(reference.getByText("recall_decisions", { exact: true })).toBeVisible();
+  await reference.getByRole("button", { name: /^Graph relationships/ }).click();
+  await expect(reference.getByText("DECIDED_ON", { exact: true })).toBeVisible();
+  await page.waitForTimeout(400);
+  await reference.getByText("DECIDED_ON", { exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: `artifacts/evidence/WU-039/learn-reference-${testInfo.project.name}.png`,
+  });
+  await reference.getByLabel("Search the reference").fill("MEMORY_ENABLED");
+  await reference
+    .getByRole("button", { name: /Long-term memory: remembering across chats/ })
+    .click();
+  await expect(page.locator("#learn-long-term-memory")).toBeInViewport();
   // Jumping scrolls the Learn view, never the page, so the top bar stays visible.
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
   await expect(page.getByRole("heading", { name: "Marketing workbench" })).toBeInViewport();
@@ -725,4 +741,56 @@ test("builds a versioned focus draft that follow-ups and confirmed saves act on"
   await page.getByRole("complementary", { name: "Workspace" }).screenshot({
     path: `artifacts/evidence/WU-037/saved-${testInfo.project.name}.png`,
   });
+});
+
+test("remembers a draft, recalls it in a new chat, and forgets it", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "New chat" }).click();
+  const composer = page.getByLabel("Message the orchestrator");
+  const send = page.getByRole("button", { name: "Send message" });
+  await composer.fill("Draft a push notification for Coastline Kitchen's lunch crowd");
+  await send.click();
+  await expect(page.getByTestId("workspace-focus")).toContainText(
+    "Rainy-day comfort: Spicy Tortilla Soup",
+  );
+
+  // The server remembers the draft; the model never writes memory.
+  await composer.fill("Remember this draft");
+  await send.click();
+  await expect(page.locator(".message.assistant").last()).toContainText(
+    /remembered \*?\*?Rainy-day comfort: Spicy Tortilla Soup/i,
+  );
+
+  // A new chat starts empty, but the workspace still remembers.
+  await page.getByRole("button", { name: "New chat" }).click();
+  await expect(page.getByText("Nothing in this chat yet")).toBeVisible();
+  await composer.fill("What did we decide about the rainy-day comfort push?");
+  await send.click();
+  const answer = page.locator(".message.assistant").last();
+  await expect(answer).toContainText("Rainy-day comfort: Spicy Tortilla Soup");
+  await expect(answer).toContainText("Remembered from the chat");
+  await expect(answer).toContainText(/re-check Salesforce/);
+  await page.screenshot({
+    path: `artifacts/evidence/WU-039/recall-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+
+  // History → Memory lists it with its provenance, and Forget removes it.
+  await page.getByRole("button", { name: "History" }).first().click();
+  await page.getByRole("button", { name: "Memory", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Memory" })).toBeVisible();
+  const item = page
+    .locator(".memory-item", { hasText: "Rainy-day comfort: Spicy Tortilla Soup" })
+    .first();
+  await expect(item).toContainText("Remembered from the chat");
+  await expect(item).toContainText(/expires in 1[34] days/);
+  await expect(item.getByText("About", { exact: true }).first()).toBeVisible();
+  await page.screenshot({
+    path: `artifacts/evidence/WU-039/memory-tab-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+  const before = await page.locator(".memory-item").count();
+  await item.getByRole("button", { name: /^Forget / }).click();
+  await expect(page.getByRole("status").filter({ hasText: /^Forgot/ })).toBeVisible();
+  await expect(page.locator(".memory-item")).toHaveCount(before - 1);
 });

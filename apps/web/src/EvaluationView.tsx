@@ -235,7 +235,13 @@ function ReportView({
                   <tr key={model.id}>
                     <th scope="row">{model.label}</th>
                     {EVAL_CHECKS.map((check) => (
-                      <td key={check}>{cell ? <RateBar value={cell.checkRates[check]} /> : "—"}</td>
+                      <td key={check}>
+                        {cell && cell.checkRates[check] !== undefined ? (
+                          <RateBar value={cell.checkRates[check]} />
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                     ))}
                   </tr>
                 );

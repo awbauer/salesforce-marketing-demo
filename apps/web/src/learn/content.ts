@@ -249,17 +249,17 @@ export const LEARN_PARTS: LearnPart[] = [
 |---|---|---|---|
 | **Working memory** | The current conversation, plus the workspace: the focus draft, open records, and context cards | Each user's agent Durable Object | Until **New chat** |
 | **Audit trail** | What each turn did: route, tools, inputs and outputs, outcome | Agent SQLite (turn history) | 24 hours |
-| **Long-term memory** | Decisions and drafts that matter across chats | Knowledge graph, linked to the entities involved | Across chats (planned, issue #41) |
+| **Long-term memory** | Drafts you asked to remember and confirmed Salesforce writes | Knowledge graph, linked to the campaigns and brands involved | 14 days, across chats |
 
 **Working memory** is sent to the model as a bounded window: the last 8 messages. Earlier assistant replies are reduced to their text, so old tool results and reasoning never re-enter the prompt. The workspace is working memory too. The draft being built, the records the chat opened, and the context its tools gathered are summarized in every prompt, so the model works from structured state instead of re-reading old replies. See *The workspace* under the demo concepts.
 
 **The audit trail** is never sent to the model. It exists for people: the History view and the audit export.
 
-**Long-term memory** belongs in the graph because it's retrieved *by relationship* ("what did we decide about the fall campaign?"), not by recency, and it needs provenance.`,
+**Long-term memory** belongs in the graph because it's retrieved *by relationship* ("what did we decide about the Coastline push?"), not by recency, and it needs provenance. It's never sent automatically: the model reads it through recall tools, only when a question asks about earlier work. See *Long-term memory* under the demo concepts.`,
         inDemo: [
-          "History view (turn history and audit export)",
+          "History view: Turns (the audit trail) and Memory (long-term memory)",
           "apps/edge/src/orchestrator.ts (conversationWindow)",
-          "Issue #41: long-term graph memory",
+          "packages/knowledge-graph/src/memory.ts",
         ],
         resources: [R.contextEngineering, R.durableObjects, R.cfChatAgents],
       },
@@ -336,9 +336,10 @@ GraphRAG's advantages are **multi-hop reasoning** and **explainability**. Every 
         title: "How this demo does GraphRAG",
         summary: "Six read-only, curated graph tools over Neo4j, each returning evidence paths.",
         body: `- **The graph:** a deterministic, fictional dataset of about 1,650 nodes and 14,200 relationships. **Northstar** is the parent brand, with B2B accounts, buying-role personas, campaigns, segments, content, brand rules, and consent scopes. **Coastline Kitchen** is a restaurant brand under Northstar: its locations, menu, and dayparts come from the restaurant system with the same ids. Its campaigns run on the **mobile app** channel, and each of its 1,500 past push sends links to its campaign, push content, app segment, push consent, location, daypart, weather, and featured menu item.
-- **The store:** Neo4j AuraDB, reached over the HTTPS **Query API**, because Workers can't open Bolt connections. Every query runs in **read access mode**, so the database itself rejects writes.
+- **The store:** Neo4j AuraDB, reached over the HTTPS **Query API**, because Workers can't open Bolt connections. Every tool query runs in **read access mode**, so the database itself rejects writes. The only writes are the server's fixed long-term memory statements, which keep to their own dataset.
 - **The tools:** \`explain_buyer_group\`, \`find_audience_overlap\`, \`check_consent_coverage\`, \`find_similar_past_pushes\`, \`trace_content_lineage\`, and \`get_graph_overview\`. Each returns an answer plus up to 25 **evidence paths**.
-- **Parity:** every tool also has an in-memory implementation over the same dataset. \`pnpm kg:parity\` proves both return identical results, so local development and evals match production.
+- **Parity:** every tool also has an in-memory implementation over the same dataset. \`pnpm kg:parity\` proves both return identical results, so local development and evals match production. It also reports tool latency; the median stays under 500 ms.
+- **Grounding:** evaluations check that a graph answer names only accounts, people, campaigns, and menu items that appear in what the tools returned.
 - **In a flow:** the restaurant push campaign calls \`find_similar_past_pushes\` to learn what worked before in the same weather and daypart, then passes that to the Salesforce content tool.`,
         inDemo: [
           "Quickstart: “Who should be in the buyer group for Acme Outfitters, and why?”",
@@ -362,7 +363,9 @@ GraphRAG's advantages are **multi-hop reasoning** and **explainability**. Every 
 - Each user gets their own instance, keyed by a hash of their Access identity and the workspace, so conversations and history are isolated by construction.
 - Each turn streams to the browser over a WebSocket, and the stream is **resumable** if the tab reconnects.
 
-A turn runs a **tool loop** of up to 6 steps. On each step the model either calls a tool or writes the answer. The orchestrator decides which tools are available on each step (see *Routing*) and records a **turn trace** of every event.`,
+A turn runs a **tool loop** of up to 6 steps. On each step the model either calls a tool or writes the answer. The orchestrator decides which tools are available on each step (see *Routing*) and records a **turn trace** of every event.
+
+Around the loop, the orchestrator also handles the events the model must not: it prepares and runs confirmed writes, and it writes **long-term memory** when a write is read back or you ask it to remember a draft. The Worker's hourly job prunes the 24-hour audit and deletes memory past its 14 days.`,
         inDemo: [
           "apps/edge/src/orchestrator.ts",
           "“Behind the scenes · technical trace” under each answer",
@@ -377,7 +380,7 @@ A turn runs a **tool loop** of up to 6 steps. On each step the model either call
         body: `Each chat has a **working set**, shown in the Workspace panel and summarized in every prompt. It starts empty with **New chat** and has three parts:
 
 - **Focus:** the draft being built (a campaign, brief, or message) as structured data: a title, labeled fields, a change note, and the context it was built from. When a turn drafts or revises something, the orchestrator saves the finished draft from the model's answer, reading its labeled lines (Headline, Body, Send time, and so on) into fields. Each revision becomes a new version, and earlier versions stay viewable. Saving this way never depends on a small model producing a large structured tool call.
-- **Context:** cards for what tools returned, such as weather, the restaurant profile, graph evidence, and Salesforce summaries, each with its source and fetch time.
+- **Context:** cards for what tools returned, such as weather, the restaurant profile, graph evidence, remembered work recalled from memory, and Salesforce summaries, each with its source and fetch time.
 - **Records:** records the chat opened, created, or updated, in any connected system. Salesforce is one system and restaurant data is another; any system can join through the same reference: system, object type, and id.
 
 Four properties make it trustworthy:
@@ -421,7 +424,7 @@ The demo uses three MCP servers:
 |---|---|---|
 | **Salesforce Hosted MCP** | 14 governed tools backed by Agentforce agents and Apex actions | Remote, with per-user OAuth |
 | **Campaign context** | Restaurant profile (mocked) and live weather (Open-Meteo) | In-process; also at \`/mcp/campaign-context\` |
-| **Knowledge graph** | Six curated Neo4j queries | In-process; also at \`/mcp/knowledge-graph\` |
+| **Knowledge graph** | Six curated Neo4j queries, plus three memory recall tools in chat | In-process; also at \`/mcp/knowledge-graph\` |
 
 The two local servers are called **in-process** through an in-memory MCP transport. The orchestrator uses the real protocol without a network hop, and external MCP clients can still reach the same servers over HTTP, behind Cloudflare Access.`,
         inDemo: [
@@ -460,10 +463,11 @@ Metadata (Apex, fields, the permission set, and the MCP definition) deploys thro
         summary: "Deterministic decisions before and around the model.",
         body: `Not every decision should be left to the model. Each turn passes through two deterministic routers:
 
-1. **Policy router.** A save or create request with a draft in the workspace prepares that write: the server plans it from the draft, Salesforce checks your permissions, and a confirmation card appears. Other save, create, or change requests get a fixed reply pointing to the confirmation flow. Publish, send, delete, and similar requests are refused. None of these calls the model, so it can never claim a write happened.
+1. **Policy router.** "Remember this draft" is handled by the server, which stores the focus in long-term memory. A save or create request with a draft in the workspace prepares that write: the server plans it from the draft, Salesforce checks your permissions, and a confirmation card appears. Other save, create, or change requests get a fixed reply pointing to the confirmation flow. Publish, send, delete, and similar requests are refused. None of these calls the model, so it can never claim a write happened.
 2. **Intent router.** Clear intents force a **tool plan**: an ordered list of tools, one forced per step.
    - "Check readiness" → \`check_campaign_readiness\`
    - "Why is X in the buyer group?" → \`explain_buyer_group\`
+   - "What did we decide about…?" or "last time…" → \`recall_decisions\`; "what have we worked on recently?" → \`recall_recent_work\`
    - A Coastline Kitchen email or push campaign → profile → weather → past pushes → content draft; the finished draft is saved to the focus
    - A revision of the focus ("make it warmer") → no tools; the model rewrites the draft, which is saved as the next version
    - "…as a new campaign in Salesforce" → the model drafts the campaign; once it's saved to the focus, the Salesforce save is prepared for confirmation
@@ -517,7 +521,7 @@ At the turn level:
 | **You** | Reviewing exact values and confirming | — |
 | **Salesforce** | Authorization (profile, permission sets, field-level security, sharing), signature checks, the write, and read-back | — |
 
-**Kill switches** (\`WRITES_ENABLED\`, \`DISABLED_TOOLS\`) are Worker secrets that operators can flip without a deploy. The knowledge graph is read-only at the database level. No customer PII enters prompts, logs, or the graph.`,
+**Kill switches** (\`WRITES_ENABLED\`, \`DISABLED_TOOLS\`, \`MEMORY_ENABLED\`) are Worker secrets that operators can flip without a deploy. Graph tools read in read-only mode; only the server's fixed memory statements write, and only to the memory dataset. No customer PII enters prompts, logs, or the graph.`,
         inDemo: [
           "Draft something → the Save to Salesforce action card in the chat → confirmation card with the permission check",
           "Check readiness → the Request a review action card → confirmation card",
@@ -549,11 +553,13 @@ At the turn level:
   - reasoning start and end, with the model's reasoning, redacted
   - text start and end
   - tool input and output, errors, recovery messages, and the outcome
-- **Turn history** (History view): each utterance with the orchestrator's interpretation, the tool calls with inputs and results, and the outcome. Filterable, and kept 24 hours per user.
-- **Audit export:** a JSON download of the user's confirmed writes and turn summaries.`,
+- **Turn history** (History → Turns): each utterance with the orchestrator's interpretation, the tool calls with inputs and results, and the outcome. Filterable, and kept 24 hours per user.
+- **Memory** (History → Memory): what the workspace remembers across chats, with provenance and a Forget button. See *Long-term memory*.
+- **Audit export:** a JSON download of the user's confirmed writes, memory remembers and forgets, and turn summaries.`,
         inDemo: [
           "Any answer → “Behind the scenes · technical trace”",
           "History view → Export audit (JSON)",
+          "History view → Memory",
         ],
         resources: [R.aiGateway, R.contextEngineering],
       },
@@ -564,12 +570,19 @@ At the turn level:
         body: `\`pnpm eval:live\` runs the **production pipeline**: policy router, intent router, prompt, guards, and step settings, against live Workers AI models. Three suites:
 
 - **Demo scenarios:** the Quickstart prompts, through the full pipeline.
-- **Routing through the pipeline:** 20 prompts, as evaluators experience them.
+- **Routing through the pipeline:** 22 prompts, including memory recall, as evaluators experience them.
 - **Routing by the model alone:** the same prompts with no routers, isolating model quality.
 
-Each turn is scored on **right tool** (or the right plan in order), **answered**, **no tool errors**, and **no false write claims**, plus latency and tokens.
+Each turn is scored on:
+- **right tool** (or the right plan in order)
+- **answered**
+- **no tool errors**
+- **no false write claims**
+- **graph-grounded:** a graph or memory answer names only accounts, people, campaigns, and menu items that its tools returned
 
-Salesforce tools are fixtures, so the scores measure orchestration, not Salesforce agent quality. A held-out set of paraphrases guards the router against overfitting. The first published run found a real routing bug: any prompt mentioning "campaign" forced the summary tool.`,
+Latency and tokens are recorded too. Runs recorded before the grounding check show no rate for it.
+
+\`pnpm eval\` runs the routing set through the production policy and intent routers without a model, on every verify. Salesforce tools are fixtures in the live run, so the scores measure orchestration, not Salesforce agent quality. A held-out set of paraphrases guards the router against overfitting. The first published run found a real routing bug: any prompt mentioning "campaign" forced the summary tool.`,
         inDemo: ["Evaluations view", "scripts/run-live-evals.mjs, packages/evals"],
         resources: [R.evals, R.buildingAgents],
       },
@@ -599,6 +612,40 @@ The Coastline campaign plan (email or push) chains these with the knowledge grap
           "Sources: Restaurant data, Weather · Open-Meteo",
         ],
         resources: [R.openMeteo, R.mcpIntro],
+      },
+      {
+        id: "long-term-memory",
+        title: "Long-term memory: remembering across chats",
+        summary:
+          "Drafts and decisions stored in the graph by the server, recalled by tools, and forgotten on request.",
+        body: `A new chat starts with an empty workspace, but some work should outlive it: the draft you settled on, the campaign you saved, the review you asked for. **Long-term memory** keeps these in the knowledge graph for 14 days, shared by the workspace.
+
+**What gets remembered, and by whom.** The model never writes memory. The server does, only on events it has verified:
+- a Salesforce save, review task, or image attachment that you confirmed and Salesforce read back
+- a request to remember the draft in focus: say "remember this draft", or use **History → Memory**
+
+**How it's stored.** Each memory is a small subgraph in its own dataset, next to the demo graph:
+- a \`Draft\` node per version, linked to the version it replaced (\`SUPERSEDES\`)
+- a \`Decision\` node, linked to the draft it saved (\`DECIDED_ON\`) and the Salesforce record it created (\`RECORDED_IN\`)
+- \`ABOUT\` links to the \`Campaign\` and \`Brand\` nodes involved, so "what did we decide about Coastline?" is a graph question
+
+Every node carries its workspace and an expiry. The person who acted is stored only as a hash.
+
+**How it's recalled.** When you ask about earlier work ("what did we decide…", "last time…", "what have we worked on recently?"), the intent router forces a recall tool:
+- \`recall_decisions\`
+- \`recall_recent_work\`
+- \`explain_memory\`
+
+The server gives these tools the workspace, so the model can't read another workspace's memory. Each item comes back **dated and sourced**, with provenance paths, and the model is told to treat it as past work and re-check Salesforce before reusing it.
+
+**How it's forgotten.** **Forget** in the Memory tab deletes an item at once, and the audit export records it. An hourly job deletes anything past 14 days. \`MEMORY_ENABLED=false\` turns memory off entirely.`,
+        inDemo: [
+          "Chat: “Remember this draft”, then New chat and “What did we decide about …?”",
+          "History → Memory (Forget, Remember current draft)",
+          "packages/knowledge-graph/src/memory.ts, apps/edge/src/memory.ts",
+          "docs/decisions/ADR-007-long-term-graph-memory.md",
+        ],
+        resources: [R.contextEngineering, R.graphDb, R.cypher],
       },
     ],
   },
@@ -655,6 +702,11 @@ export const GLOSSARY: Array<{ term: string; definition: string }> = [
   {
     term: "Knowledge graph",
     definition: "A database of entities (nodes) and typed relationships between them.",
+  },
+  {
+    term: "Long-term memory",
+    definition:
+      "Drafts and decisions the server stores in the graph for 14 days, recalled by tools across chats, never written by the model.",
   },
   {
     term: "MCP",

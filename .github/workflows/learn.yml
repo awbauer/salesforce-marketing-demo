@@ -1,0 +1,42 @@
+name: Learn
+
+# Keeps the Learn page in step with the code: every concept has a reference entry, every code
+# file is mapped to the section that teaches it, and a change to explained code updates that
+# section (or carries a Learn-Reviewed trailer). See scripts/check-learn.mjs.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  learn:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The drift check diffs against the merge base and reads commit trailers.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check Learn coverage and drift
+        env:
+          # On a push to main, compare with the previous main commit.
+          LEARN_BASE_REF: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: |
+          if [ -z "$LEARN_BASE_REF" ]; then unset LEARN_BASE_REF; fi
+          pnpm learn:check

@@ -4,9 +4,13 @@ import { jsonSchema, type ToolSet, tool } from "ai";
 import type { z } from "zod";
 import {
   buildDataset,
+  createMemoryStore,
   type Dataset,
   type GraphBackend,
   KNOWLEDGE_GRAPH_TOOL_SPECS,
+  MEMORY_TOOL_SPECS,
+  type MemoryStore,
+  type MemoryToolContext,
   queryApiBackend,
 } from "../../../../packages/knowledge-graph/src/index.ts";
 
@@ -16,7 +20,11 @@ type AnyGraphToolSpec = {
   title: string;
   description: string;
   input: z.ZodObject;
-  run: (backend: GraphBackend, input: never) => Promise<Record<string, unknown>>;
+  run: (
+    backend: GraphBackend,
+    input: never,
+    context: MemoryToolContext,
+  ) => Promise<Record<string, unknown>>;
 };
 
 export const KNOWLEDGE_GRAPH_MCP_NAME = "northstar-knowledge-graph";
@@ -25,6 +33,8 @@ export const KNOWLEDGE_GRAPH_TOOL_PREFIX = "graph_";
 type GraphEnv = { NEO4J_QUERY_URL?: string; NEO4J_USERNAME?: string; NEO4J_PASSWORD?: string };
 
 let fixtureDataset: Dataset | undefined;
+// Local long-term memory lives as long as the isolate, like the rest of the local copy.
+let fixtureMemory: MemoryStore | undefined;
 
 /**
  * Neo4j Aura when its Worker secrets are set; otherwise the identical fictional dataset in memory,
@@ -46,13 +56,20 @@ export function knowledgeGraphBackend(
       fetchImpl,
     );
   fixtureDataset ??= buildDataset();
-  return { kind: "fixture", dataset: fixtureDataset };
+  fixtureMemory ??= createMemoryStore();
+  return { kind: "fixture", dataset: fixtureDataset, memory: fixtureMemory };
 }
 
-/** Read-only MCP server over the curated, parameterized graph tools; no free-form Cypher. */
-export function createKnowledgeGraphMcpServer(backend: GraphBackend) {
+/**
+ * Read-only MCP server over the curated, parameterized graph tools; no free-form Cypher. The
+ * memory recall tools are registered only with a server-provided workspace, which the model
+ * can't choose or see.
+ */
+export function createKnowledgeGraphMcpServer(backend: GraphBackend, memory?: MemoryToolContext) {
   const server = new McpServer({ name: KNOWLEDGE_GRAPH_MCP_NAME, version: "1.0.0" });
-  for (const spec of KNOWLEDGE_GRAPH_TOOL_SPECS as readonly AnyGraphToolSpec[]) {
+  const specs = [...KNOWLEDGE_GRAPH_TOOL_SPECS, ...(memory ? MEMORY_TOOL_SPECS : [])];
+  const context = memory ?? { workspaceId: "", now: () => new Date() };
+  for (const spec of specs as readonly AnyGraphToolSpec[]) {
     server.registerTool(
       spec.name,
       {
@@ -63,7 +80,10 @@ export function createKnowledgeGraphMcpServer(backend: GraphBackend) {
       },
       async (input: unknown) => {
         try {
-          const result = { ...(await spec.run(backend, input as never)), source: backend.kind };
+          const result = {
+            ...(await spec.run(backend, input as never, context)),
+            source: backend.kind,
+          };
           return {
             content: [{ type: "text" as const, text: JSON.stringify(result) }],
             structuredContent: result,
@@ -86,8 +106,11 @@ export function createKnowledgeGraphMcpServer(backend: GraphBackend) {
 }
 
 /** In-process MCP client for the orchestrator, mirroring the campaign-context connector. */
-export async function connectKnowledgeGraphTools(backend: GraphBackend) {
-  const server = createKnowledgeGraphMcpServer(backend);
+export async function connectKnowledgeGraphTools(
+  backend: GraphBackend,
+  memory?: MemoryToolContext,
+) {
+  const server = createKnowledgeGraphMcpServer(backend, memory);
   const client = new Client({ name: "northstar-orchestrator", version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);

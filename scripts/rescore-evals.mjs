@@ -14,9 +14,14 @@ const trials = Object.fromEntries(
 const CHECK_NAMES = new Set(EVAL_CHECKS);
 
 const results = previous.results.map((result) => {
-  const checks = Object.fromEntries(EVAL_CHECKS.map((check) => [check, result.checks[check]]));
+  const checks = Object.fromEntries(
+    EVAL_CHECKS.filter((check) => result.checks[check] !== undefined).map((check) => [
+      check,
+      result.checks[check],
+    ]),
+  );
   const passed = Object.values(checks).every(Boolean);
-  const failedChecks = EVAL_CHECKS.filter((check) => !checks[check]).join(", ");
+  const failedChecks = EVAL_CHECKS.filter((check) => checks[check] === false).join(", ");
   // Keep provider errors; replace failure text that only listed check names.
   const listedChecksOnly = (result.failure ?? "")
     .split(", ")

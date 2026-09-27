@@ -1,0 +1,101 @@
+{
+  "generatedAt": "2026-09-27T01:14:39.656Z",
+  "status": "failed",
+  "baseRef": "origin/main",
+  "mergeBase": "b1d2667a9f38151833f7f59b8a2dab52b47521a6",
+  "inventory": {
+    "Tool": 29,
+    "Write action": 6,
+    "Graph node": 21,
+    "Graph relationship": 33,
+    "Operator control": 3,
+    "Salesforce component": 15
+  },
+  "drift": [
+    {
+      "section": "orchestrator",
+      "status": "stale",
+      "paths": [
+        "apps/edge/src/index.ts",
+        "apps/edge/src/orchestrator.ts"
+      ]
+    },
+    {
+      "section": "graphrag-here",
+      "status": "updated",
+      "paths": [
+        "apps/edge/src/knowledge-graph/server.ts",
+        "packages/knowledge-graph/src/explorer.ts",
+        "packages/knowledge-graph/src/index.ts",
+        "packages/knowledge-graph/src/query-api.ts",
+        "packages/knowledge-graph/src/tools.ts",
+        "scripts/check-knowledge-graph.mjs",
+        "scripts/seed-knowledge-graph.mjs"
+      ]
+    },
+    {
+      "section": "long-term-memory",
+      "status": "updated",
+      "paths": [
+        "apps/edge/src/memory.ts",
+        "apps/web/src/MemoryPanel.tsx",
+        "packages/knowledge-graph/src/memory.ts"
+      ]
+    },
+    {
+      "section": "routing",
+      "status": "stale",
+      "paths": [
+        "apps/edge/src/turn-policy.ts"
+      ]
+    },
+    {
+      "section": "workspace",
+      "status": "stale",
+      "paths": [
+        "apps/edge/src/working-set.ts"
+      ]
+    },
+    {
+      "section": "ui",
+      "status": "stale",
+      "paths": [
+        "apps/web/src/App.tsx"
+      ]
+    },
+    {
+      "section": "evaluations",
+      "status": "stale",
+      "paths": [
+        "apps/web/src/EvaluationView.tsx",
+        "packages/evals/src/cases.ts",
+        "packages/evals/src/report.ts",
+        "packages/evals/src/scoring.ts",
+        "scripts/lib/eval-methodology.mjs",
+        "scripts/lib/eval-summary.mjs",
+        "scripts/rescore-evals.mjs",
+        "scripts/run-evals.mjs",
+        "scripts/run-live-evals.mjs"
+      ]
+    },
+    {
+      "section": "observability",
+      "status": "stale",
+      "paths": [
+        "apps/web/src/HistoryView.tsx",
+        "apps/web/src/turn-trace.ts"
+      ]
+    },
+    {
+      "section": "governance",
+      "status": "updated",
+      "paths": [
+        "packages/contracts/src/index.ts"
+      ]
+    }
+  ],
+  "notices": [],
+  "failures": [
+    "Learn drift: this branch changes code that these Learn sections explain, but the sections didn't change:\n  • orchestrator (“The orchestrator agent”) ← apps/edge/src/index.ts, apps/edge/src/orchestrator.ts\n  • routing (“Routing: policy router, intent router, and tool plans”) ← apps/edge/src/turn-policy.ts\n  • workspace (“The workspace: focus, context, and records”) ← apps/edge/src/working-set.ts\n  • ui (“Structured UI: Markdown, HXL cards, and native fallbacks”) ← apps/web/src/App.tsx\n  • evaluations (“Evaluations”) ← apps/web/src/EvaluationView.tsx, packages/evals/src/cases.ts, packages/evals/src/report.ts, packages/evals/src/scoring.ts, scripts/lib/eval-methodology.mjs, scripts/lib/eval-summary.mjs, scripts/rescore-evals.mjs, scripts/run-evals.mjs, scripts/run-live-evals.mjs\n  • observability (“Observability: technical trace, turn history, and audit export”) ← apps/web/src/HistoryView.tsx, apps/web/src/turn-trace.ts\nUpdate each section in apps/web/src/learn/content.ts (or its lesson or reference entries) so it teaches the change.\nIf nothing a reader learns has changed, say so in a commit trailer:\n  Learn-Reviewed: orchestrator, routing, workspace, ui, evaluations, observability (why no Learn update is needed)"
+  ]
+}

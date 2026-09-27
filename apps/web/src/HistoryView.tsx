@@ -1,5 +1,6 @@
 import { type TurnRecord, TurnRecordSchema } from "@northstar/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { MemoryPanel } from "./MemoryPanel";
 import { readableToolName } from "./turn-trace";
 
 type LoadState =
@@ -14,6 +15,7 @@ const ROUTE_LABELS: Record<TurnRecord["route"], string> = {
   "confirmation-required": "Needs confirmation",
   unsupported: "Blocked action",
   "catalog-unavailable": "Catalog unavailable",
+  memory: "Memory",
   "local-fixture": "Local fixture",
 };
 
@@ -36,7 +38,16 @@ function hasIssue(turn: TurnRecord) {
   );
 }
 
-export function HistoryView({ refreshKey, onClose }: { refreshKey: number; onClose: () => void }) {
+export function HistoryView({
+  refreshKey,
+  onClose,
+  focusTitle,
+}: {
+  refreshKey: number;
+  onClose: () => void;
+  focusTitle?: string;
+}) {
+  const [tab, setTab] = useState<"turns" | "memory">("turns");
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [filter, setFilter] = useState<Filter>("all");
 
@@ -82,8 +93,17 @@ export function HistoryView({ refreshKey, onClose }: { refreshKey: number; onClo
       <div className="section-header">
         <div>
           <p className="kicker">Audit</p>
-          <h2 id="history-title">Turn history</h2>
+          <h2 id="history-title">{tab === "turns" ? "Turn history" : "Memory"}</h2>
         </div>
+        <fieldset className="evaluation-tabs history-tabs">
+          <legend className="sr-only">History section</legend>
+          <button type="button" aria-pressed={tab === "turns"} onClick={() => setTab("turns")}>
+            Turns
+          </button>
+          <button type="button" aria-pressed={tab === "memory"} onClick={() => setTab("memory")}>
+            Memory
+          </button>
+        </fieldset>
         <a className="text-button evaluations-back" href="/agent/audit/export" download>
           Export audit (JSON)
         </a>
@@ -92,8 +112,11 @@ export function HistoryView({ refreshKey, onClose }: { refreshKey: number; onClo
         </button>
       </div>
       <div className="evaluations-body">
-        {state.status === "loading" && <p role="status">Loading turn history…</p>}
-        {state.status === "error" && (
+        {tab === "memory" && <MemoryPanel refreshKey={refreshKey} focusTitle={focusTitle} />}
+        {tab === "turns" && state.status === "loading" && (
+          <p role="status">Loading turn history…</p>
+        )}
+        {tab === "turns" && state.status === "error" && (
           <div className="error-banner" role="alert">
             {state.message}{" "}
             <button type="button" className="text-button" onClick={load}>
@@ -101,7 +124,7 @@ export function HistoryView({ refreshKey, onClose }: { refreshKey: number; onClo
             </button>
           </div>
         )}
-        {state.status === "ready" && (
+        {tab === "turns" && state.status === "ready" && (
           <>
             <div className="evaluation-card-heading">
               <p className="evaluation-meta">

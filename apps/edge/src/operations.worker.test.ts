@@ -6,7 +6,12 @@ import { openCatalogCampaign } from "./worker.test-helpers";
 
 describe("operator controls", () => {
   it("defaults to writes enabled and ignores unknown tool names", () => {
-    expect(parseOperationControls({})).toEqual({ writesEnabled: true, disabledTools: [] });
+    expect(parseOperationControls({})).toEqual({
+      writesEnabled: true,
+      memoryEnabled: true,
+      disabledTools: [],
+    });
+    expect(parseOperationControls({ MEMORY_ENABLED: "False" }).memoryEnabled).toBe(false);
     expect(
       parseOperationControls({
         WRITES_ENABLED: " FALSE ",
@@ -14,6 +19,7 @@ describe("operator controls", () => {
       }),
     ).toEqual({
       writesEnabled: false,
+      memoryEnabled: true,
       disabledTools: ["summarize_campaign", "attach_campaign_image"],
     });
   });
@@ -30,6 +36,7 @@ describe("operator controls", () => {
     const response = await SELF.fetch("https://example.test/agent/operations");
     await expect(response.json()).resolves.toEqual({
       writesEnabled: true,
+      memoryEnabled: true,
       disabledTools: [],
       knowledgeGraph: "fixture",
     });

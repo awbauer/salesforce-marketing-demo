@@ -53,22 +53,24 @@ Two optional runtime switches pause risky behavior without a code change. They a
 
 - `WRITES_ENABLED`: set it to `false` to pause every confirmed Salesforce write (save brief, review task, image attach). Preflight and execute return `503 WRITES_DISABLED`, and the UI shows a paused notice and disables the write buttons.
 - `DISABLED_TOOLS`: a comma-separated list of curated tool names, for example `attach_campaign_image,summarize_campaign`. Disabled read tools are removed from the model's tool set, and a routed request explains that an operator turned the tool off. Disabled write tools are blocked like paused writes. Unknown names are ignored.
+- `MEMORY_ENABLED`: set it to `false` to stop long-term memory (ADR-007). Nothing new is remembered, the recall tools are withheld (a recall question says an operator turned them off), and the Memory tab says memory is off. Stored memory stays until it expires or is forgotten.
 
 ```bash
 printf 'false' | pnpm exec wrangler secret put WRITES_ENABLED --config wrangler.jsonc
 pnpm exec wrangler secret delete WRITES_ENABLED --config wrangler.jsonc
 ```
 
-`GET /agent/operations` reports the active controls. `GET /agent/audit/export` downloads the caller's confirmed-write audit rows and turn summaries from the 24-hour retention window. Older turns and audit rows are pruned on every write and hourly by the cron.
+`GET /agent/operations` reports the active controls. `GET /agent/audit/export` downloads the caller's confirmed-write audit rows, memory remembers and forgets, and turn summaries from the 24-hour retention window. Older turns and audit rows are pruned on every write and hourly by the cron.
 
 ## Neo4j knowledge graph
 
 The knowledge graph (ADR-006) reads from Neo4j AuraDB through the Query API.
 
 - **Secrets:** set `NEO4J_QUERY_URL` (`https://<instance>.databases.neo4j.io/db/<database>/query/v2`), `NEO4J_USERNAME`, and `NEO4J_PASSWORD` as Worker secrets with `wrangler secret put`. Without them, the tools use the in-memory demo copy and the rail says so.
-- **Seed or rebuild:** export the same three variables locally, then run `pnpm kg:seed --confirm --reset`. `--reset` removes every earlier demo dataset version first, so a model change (new labels or ids) leaves nothing stale. It is idempotent and ends with a count read-back. Run `pnpm kg:parity` afterwards to confirm every graph tool matches the fixture.
-- **Check parity:** `pnpm kg:parity` confirms Neo4j matches the in-memory copy for every tool.
-- **Keep-alive:** the Worker's daily cron (`17 9 * * *` UTC) runs one read query so Aura Free doesn't pause. A paused instance returns a "may be paused" tool error; resume it in the Aura console.
+- **Seed or rebuild:** export the same three variables locally, then run `pnpm kg:seed --confirm --reset`. `--reset` removes every earlier demo dataset version (`northstar-kg*`) first, so a model change (new labels or ids) leaves nothing stale. Long-term memory (`northstar-memory-v1`) is kept. It is idempotent and ends with a count read-back. Run `pnpm kg:parity` afterwards to confirm every graph tool matches the fixture.
+- **Check parity:** `pnpm kg:parity` confirms Neo4j matches the in-memory copy for every tool and for long-term memory. For memory it writes to a throwaway `parity-*` workspace and forgets it afterwards. It reports tool latency (p50/p95) and fails if the median reaches 500 ms.
+- **Long-term memory (ADR-007):** the Worker writes memory nodes only through fixed statements in `packages/knowledge-graph/src/memory.ts`. To remove all memory, run `MATCH (n {dataset: 'northstar-memory-v1'}) DETACH DELETE n` in the Aura console.
+- **Keep-alive and sweep:** the Worker's hourly cron (`17 * * * *` UTC) runs one read query so Aura Free doesn't pause, and deletes memory past its 14-day expiry. A paused instance returns a "may be paused" tool error; resume it in the Aura console.
 - **Teardown:** delete the Aura instance in the console, and remove the three secrets with `wrangler secret delete`.
 
 ## Rollback and teardown

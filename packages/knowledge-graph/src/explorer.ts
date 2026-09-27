@@ -1,3 +1,4 @@
+import { DATASET_VERSION } from "./dataset.ts";
 import type { GraphBackend, Row } from "./tools.ts";
 
 /**
@@ -107,21 +108,28 @@ export async function graphOverview(backend: GraphBackend): Promise<GraphOvervie
   const hiddenLabels = [...hidden];
   const [nodeRows, relationshipRows, labelRows, typeRows] = await Promise.all([
     backend.query(
-      `MATCH (n) WHERE NONE(label IN labels(n) WHERE label IN $hidden)
+      `MATCH (n) WHERE n.dataset = $dataset AND NONE(label IN labels(n) WHERE label IN $hidden)
        RETURN n.id AS id, labels(n)[0] AS label, n.name AS name, properties(n) AS properties
        ORDER BY label, name LIMIT 2000`,
-      { hidden: hiddenLabels },
+      { hidden: hiddenLabels, dataset: DATASET_VERSION },
     ),
     backend.query(
       `MATCH (a)-[r]->(b)
-       WHERE NONE(label IN labels(a) WHERE label IN $hidden)
+       WHERE a.dataset = $dataset AND b.dataset = $dataset
+         AND NONE(label IN labels(a) WHERE label IN $hidden)
          AND NONE(label IN labels(b) WHERE label IN $hidden)
        RETURN a.id AS from, type(r) AS type, b.id AS to, properties(r) AS properties
        LIMIT 5000`,
-      { hidden: hiddenLabels },
+      { hidden: hiddenLabels, dataset: DATASET_VERSION },
     ),
-    backend.query("MATCH (n) RETURN labels(n)[0] AS label, count(*) AS count", {}),
-    backend.query("MATCH ()-[r]->() RETURN type(r) AS type, count(*) AS count", {}),
+    backend.query(
+      "MATCH (n) WHERE n.dataset = $dataset RETURN labels(n)[0] AS label, count(*) AS count",
+      { dataset: DATASET_VERSION },
+    ),
+    backend.query(
+      "MATCH (a)-[r]->(b) WHERE a.dataset = $dataset AND b.dataset = $dataset RETURN type(r) AS type, count(*) AS count",
+      { dataset: DATASET_VERSION },
+    ),
   ]);
   return {
     source: "neo4j",
@@ -188,18 +196,21 @@ export async function graphNeighbors(
   const hiddenLabels = [...EXPLORER_HIDDEN_LABELS];
   const [selfRows, neighborRows, totalRows] = await Promise.all([
     backend.query(
-      "MATCH (n {id: $id}) RETURN n.id AS id, labels(n)[0] AS label, n.name AS name, properties(n) AS properties LIMIT 1",
-      { id },
+      "MATCH (n {id: $id, dataset: $dataset}) RETURN n.id AS id, labels(n)[0] AS label, n.name AS name, properties(n) AS properties LIMIT 1",
+      { id, dataset: DATASET_VERSION },
     ),
     backend.query(
-      `MATCH (n {id: $id})-[r]-(m)
+      `MATCH (n {id: $id, dataset: $dataset})-[r]-(m {dataset: $dataset})
        RETURN startNode(r).id AS from, type(r) AS type, endNode(r).id AS to,
               properties(r) AS relationshipProperties,
               m.id AS id, labels(m)[0] AS label, m.name AS name, properties(m) AS properties
        ORDER BY coalesce(m.orderRate, -1) DESC, label, name, id LIMIT $limit`,
-      { id, limit },
+      { id, limit, dataset: DATASET_VERSION },
     ),
-    backend.query("MATCH (n {id: $id})-[r]-() RETURN count(r) AS total", { id }),
+    backend.query(
+      "MATCH (n {id: $id, dataset: $dataset})-[r]-(m {dataset: $dataset}) RETURN count(r) AS total",
+      { id, dataset: DATASET_VERSION },
+    ),
   ]);
   const self = selfRows[0];
   if (!self) throw new GraphNodeNotFoundError("Unknown graph node.");
@@ -208,10 +219,11 @@ export async function graphNeighbors(
   const contextRows = neighborIds.length
     ? await backend.query(
         `MATCH (m)-[r]-(o)
-         WHERE m.id IN $ids AND NONE(label IN labels(o) WHERE label IN $hidden)
+         WHERE m.dataset = $dataset AND o.dataset = $dataset AND m.id IN $ids
+           AND NONE(label IN labels(o) WHERE label IN $hidden)
          RETURN DISTINCT startNode(r).id AS from, type(r) AS type, endNode(r).id AS to,
                 properties(r) AS properties`,
-        { ids: neighborIds, hidden: hiddenLabels },
+        { ids: neighborIds, hidden: hiddenLabels, dataset: DATASET_VERSION },
       )
     : [];
   return {
