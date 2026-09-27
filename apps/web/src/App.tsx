@@ -33,6 +33,7 @@ import { SalesforceAgentsPanel } from "./SalesforceAgents";
 import { executionTrace } from "./turn-trace";
 import { UseCasesView } from "./usecases/UseCasesView";
 import { WorkspacePanel } from "./WorkspacePanel";
+import { WriteProgress } from "./WriteProgress";
 
 function rawMessageText(message: UIMessage) {
   return message.parts
@@ -160,6 +161,8 @@ export function App() {
   const [connectorBusy, setConnectorBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [pendingConfirmation, setPendingConfirmation] = useState<Confirmation | null>(null);
+  /** True from the moment Confirm is clicked until the write finishes. */
+  const [executing, setExecuting] = useState(false);
   const [createdRecord, setCreatedRecord] = useState<{
     objectApiName: "Task";
     recordId: string;
@@ -290,9 +293,12 @@ export function App() {
     return () => window.clearInterval(timer);
   }, [state.connector.state]);
 
+  // Scroll to a confirmation once, when it appears. State broadcasts (such as a write's progress)
+  // re-deliver the same confirmation, which must not pull the view back to the card's top.
+  const pendingConfirmationId = pendingConfirmation?.id;
   useEffect(() => {
-    if (pendingConfirmation) confirmationRef.current?.scrollIntoView({ block: "nearest" });
-  }, [pendingConfirmation]);
+    if (pendingConfirmationId) confirmationRef.current?.scrollIntoView({ block: "nearest" });
+  }, [pendingConfirmationId]);
 
   function writeBlock(action: keyof typeof WRITE_TOOL_BY_ACTION) {
     if (!operations.writesEnabled) return "Writes paused by an operator";
@@ -469,6 +475,11 @@ export function App() {
 
   async function resolveConfirmation(decision: "execute" | "deny") {
     const action = pendingConfirmation?.action;
+    if (decision === "execute") {
+      if (executing) return;
+      setExecuting(true);
+      setActionError("");
+    }
     try {
       const result = await agentAction<{
         result?: {
@@ -569,6 +580,8 @@ export function App() {
       }
     } catch (actionError) {
       setActionError(actionError instanceof Error ? actionError.message : "Confirmation failed.");
+    } finally {
+      if (decision === "execute") setExecuting(false);
     }
   }
 
@@ -946,6 +959,9 @@ export function App() {
                 </details>
               </section>
             )}
+            {!pendingConfirmation && (
+              <WriteProgress progress={state.writeProgress} running={false} />
+            )}
             {openedCase && (
               <section className="success-banner" role="status">
                 <div>
@@ -1104,10 +1120,21 @@ export function App() {
                   </div>
                 </dl>
                 <PermissionDetails confirmation={pendingConfirmation} />
+                {executing && (
+                  <WriteProgress
+                    running
+                    progress={
+                      state.writeProgress?.confirmationId === pendingConfirmation.id
+                        ? state.writeProgress
+                        : null
+                    }
+                  />
+                )}
                 <div className="confirmation-actions">
                   <button
                     type="button"
                     className="text-button"
+                    disabled={executing}
                     onClick={() => void resolveConfirmation("deny")}
                   >
                     Cancel
@@ -1115,9 +1142,11 @@ export function App() {
                   <button
                     type="button"
                     className="confirm-button"
+                    disabled={executing}
+                    aria-busy={executing}
                     onClick={() => void resolveConfirmation("execute")}
                   >
-                    {CONFIRMATION_COPY[pendingConfirmation.action].confirm}
+                    {executing ? "Working…" : CONFIRMATION_COPY[pendingConfirmation.action].confirm}
                   </button>
                 </div>
               </section>

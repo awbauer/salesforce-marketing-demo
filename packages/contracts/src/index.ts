@@ -701,7 +701,32 @@ export const InventoryRiskSchema = z.object({
 });
 export type InventoryRisk = z.infer<typeof InventoryRiskSchema>;
 
+/**
+ * A confirmed write's steps as it runs: what the workbench and Salesforce are doing, published
+ * live so the person who confirmed it can follow along, then kept as a record of how it went.
+ */
+export const WriteProgressStepSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  status: z.enum(["pending", "active", "done", "skipped", "failed"]),
+  detail: z.string().optional(),
+  startedAt: z.string().optional(),
+  endedAt: z.string().optional(),
+});
+export const WriteProgressSchema = z.object({
+  confirmationId: z.string(),
+  action: z.enum(PROOF_DEFAULTS.allowedWrites),
+  title: z.string(),
+  startedAt: z.string(),
+  finishedAt: z.string().optional(),
+  outcome: z.enum(["succeeded", "failed"]).optional(),
+  steps: z.array(WriteProgressStepSchema),
+});
+export type WriteProgress = z.infer<typeof WriteProgressSchema>;
+
 export const OrchestratorStateSchema = z.object({
+  /** The confirmed write running now, or the last one, step by step. */
+  writeProgress: WriteProgressSchema.nullable().default(null),
   suggestions: z.array(SuggestedActionSchema).default([]),
   /** The latest weather-driven inventory check in this chat, which a case can be opened from. */
   inventoryRisk: InventoryRiskSchema.nullable().default(null),
@@ -980,6 +1005,7 @@ export const ErrorEnvelopeSchema = z.object({
 
 export const initialOrchestratorState: OrchestratorState = {
   workspaceId: "northstar-demo",
+  writeProgress: null,
   inventoryRisk: null,
   sourcesConnected: 3,
   connector: {
