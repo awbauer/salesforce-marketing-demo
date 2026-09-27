@@ -158,7 +158,7 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
   "graphrag-here": {
     diagram: "graph-tools",
     keyIdea:
-      "Eight curated, read-only queries, each returning evidence paths, with a local copy that must match Neo4j exactly.",
+      "Nine curated, read-only queries, each returning evidence paths, with a local copy that must match Neo4j exactly.",
     tryIt: [
       { kind: "prompt", label: "Ask a graph question", prompt: BUYER_GROUP_PROMPT },
       { kind: "view", label: "Open the graph explorer", view: "graph" },
@@ -257,7 +257,7 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
   "use-cases": {
     diagram: "use-cases",
     keyIdea:
-      "Each use case pairs a live outside service with the graph: the service says what's happening, and the graph says who it affects and how they can be reached.",
+      "Each use case pairs a live outside service with the graph: the service says what's happening, and the graph says who or what it affects: people and how to reach them, or dishes and the stock they draw on.",
     tryIt: [
       {
         kind: "prompt",
@@ -269,6 +269,11 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
         label: "Assess a weather disruption",
         prompt:
           "There are weather alerts near our San Diego location. Which customers are affected and what should we tell them?",
+      },
+      {
+        kind: "prompt",
+        label: "Check inventory against the forecast",
+        prompt: "Check inventory for our Sacramento store against the forecast",
       },
     ],
   },

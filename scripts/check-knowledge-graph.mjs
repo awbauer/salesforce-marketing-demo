@@ -51,6 +51,11 @@ const cases = {
     limit: 5,
   })),
   assess_location_impact: ["los-angeles", "san-diego", "fresno"].map((location) => ({ location })),
+  map_weather_demand: [
+    { location: "sacramento", conditions: ["heat"] },
+    { location: "san-francisco", conditions: ["fog", "rain"] },
+    { location: "fresno", conditions: ["clear", "heat"] },
+  ],
 };
 
 // Averages can differ in the last floating-point digits by summation order.

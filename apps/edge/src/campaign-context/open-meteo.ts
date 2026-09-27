@@ -107,3 +107,97 @@ export async function fetchCurrentWeather(
     };
   }
 }
+
+/** The knowledge graph's weather buckets, which its demand links are keyed by. */
+export type GraphCondition = "clear" | "cloudy" | "fog" | "rain" | "heat";
+
+/** Forecast highs at or above this count as heat for demand planning. */
+export const HEAT_THRESHOLD_F = 88;
+
+export type ForecastDay = {
+  date: string;
+  condition: Condition;
+  /** The graph's bucket for the day: heat by temperature, rain for any wet or stormy day. */
+  demandCondition: GraphCondition;
+  highF: number;
+  lowF: number;
+  precipitationChance: number;
+};
+
+const OpenMeteoDailySchema = z.object({
+  daily: z.object({
+    time: z.array(z.string()),
+    weather_code: z.array(z.number().int()),
+    temperature_2m_max: z.array(z.number()),
+    temperature_2m_min: z.array(z.number()),
+    precipitation_probability_max: z.array(z.number().nullable()),
+  }),
+});
+
+export function demandCondition(condition: Condition, highF: number, precipitationChance: number) {
+  if (highF >= HEAT_THRESHOLD_F) return "heat" as const;
+  if (
+    condition === "rain" ||
+    condition === "drizzle" ||
+    condition === "storm" ||
+    precipitationChance >= 60
+  )
+    return "rain" as const;
+  if (condition === "fog") return "fog" as const;
+  if (condition === "clear") return "clear" as const;
+  return "cloudy" as const;
+}
+
+export function openMeteoForecastUrl(location: LocationId, days: number) {
+  const { latitude, longitude } = LOCATIONS[location];
+  const params = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+    forecast_days: String(days),
+    temperature_unit: "fahrenheit",
+    timezone: CALIFORNIA_TIME_ZONE,
+  });
+  return `https://api.open-meteo.com/v1/forecast?${params}`;
+}
+
+/** The daily forecast from Open-Meteo, with each day's demand-planning weather bucket. */
+export async function fetchForecast(
+  location: LocationId,
+  days: number,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ city: string; days: ForecastDay[] } | { error: string }> {
+  try {
+    const response = await fetchImpl(openMeteoForecastUrl(location, days), {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!response.ok) return { error: `Open-Meteo returned HTTP ${response.status}` };
+    const parsed = OpenMeteoDailySchema.safeParse(await response.json());
+    if (!parsed.success) return { error: "Open-Meteo returned an unexpected response" };
+    const daily = parsed.data.daily;
+    return {
+      city: LOCATIONS[location].city,
+      days: daily.time.map((date, index) => {
+        const condition = conditionFromWmo(daily.weather_code[index] ?? 0);
+        const highF = Math.round(daily.temperature_2m_max[index] ?? 0);
+        const precipitationChance = daily.precipitation_probability_max[index] ?? 0;
+        return {
+          date,
+          condition,
+          demandCondition: demandCondition(condition, highF, precipitationChance),
+          highF,
+          lowF: Math.round(daily.temperature_2m_min[index] ?? 0),
+          precipitationChance,
+        };
+      }),
+    };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error && error.name === "TimeoutError"
+          ? "Open-Meteo timed out"
+          : "Open-Meteo could not be reached",
+    };
+  }
+}

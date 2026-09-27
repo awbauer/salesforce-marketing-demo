@@ -19,6 +19,8 @@ const requiredFiles = [
   "aiAuthoringBundles/Northstar_Campaign_Creation/Northstar_Campaign_Creation.agent",
   "objects/Activity/fields/Northstar_Idempotency_Key__c.field-meta.xml",
   "objects/ContentVersion/fields/Northstar_Idempotency_Key__c.field-meta.xml",
+  "objects/Case/fields/Northstar_Idempotency_Key__c.field-meta.xml",
+  "classes/NorthstarCreateInventoryCase.cls",
   "objects/Northstar_Confirmation_Config__c/Northstar_Confirmation_Config__c.object-meta.xml",
   "objects/Northstar_Confirmation_Config__c/fields/Signing_Key__c.field-meta.xml",
   "mcpServerDefinitions/NorthstarMarketingWorkbench.mcpServerDefinition-meta.xml",

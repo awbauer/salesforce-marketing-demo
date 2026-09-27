@@ -244,4 +244,26 @@ describe("use-case graph tools", () => {
       expect.arrayContaining(["NEAR", "HAS_CONSENT", "TARGETS"]),
     );
   });
+
+  it("maps forecast weather to lifted dishes, their inventory, and the store manager", async () => {
+    const result = (await tool("map_weather_demand")({
+      location: "sacramento",
+      conditions: ["heat"],
+    })) as {
+      manager: { name: string } | null;
+      menuItems: Array<{ name: string; lift: number }>;
+      inventoryItems: Array<{ id: string; usedBy: Array<{ menuItem: string }> }>;
+      paths: Array<{ relationships: Array<{ type: string }> }>;
+    };
+    // Heat lifts the cold dishes, learned from past push results.
+    expect(result.menuItems.map((item) => item.name)).toContain("Açaí Sunrise Bowl");
+    expect(result.menuItems.every((item) => item.lift >= 1.15)).toBe(true);
+    expect(result.inventoryItems.map((item) => item.id)).toContain("acai");
+    expect(result.manager).toEqual({ name: "Tom Okafor" });
+    expect(result.paths.map((path) => path.relationships.map((rel) => rel.type).join(">"))).toEqual(
+      expect.arrayContaining(["MANAGED_BY", "LIFTS_DEMAND>MADE_WITH"]),
+    );
+    // The graph holds no contact data about the manager.
+    expect(JSON.stringify(result)).not.toMatch(/@/);
+  });
 });

@@ -21,7 +21,7 @@ test("builds the workspace from the chat and completes a durable turn", async ({
   await expect(page.getByRole("heading", { name: "Campaign intelligence" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Workspace" })).toBeVisible();
   await expect(page.locator(".image-workflow-summary")).toBeVisible();
-  await expect(page.getByText("17 configured tools")).toBeVisible();
+  await expect(page.getByText("18 configured tools")).toBeVisible();
   // A new chat starts with an empty workspace and nothing to write to.
   await page.getByRole("button", { name: "New chat" }).click();
   await expect(page.locator(".messages .message.user")).toHaveCount(0);
@@ -197,6 +197,43 @@ test("offers a use-case library with data flows and coming-soon scenarios", asyn
     "There are weather alerts near our San Diego location. Which customers are affected and what should we tell them?";
   await detail.getByRole("button", { name: new RegExp(prompt.slice(0, 40)) }).click();
   await expect(page.getByLabel("Message the orchestrator")).toHaveValue(prompt);
+});
+
+test("checks inventory against the forecast and opens a store-manager case only after confirmation", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "New chat" }).click();
+  await page
+    .getByLabel("Message the orchestrator")
+    .fill("Check inventory for our Sacramento store against the forecast");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.locator(".message.assistant").last()).toContainText(
+    "Inventory check for Coastline Kitchen Sacramento",
+  );
+  const workspace = page.getByRole("complementary", { name: "Workspace" });
+  await expect(workspace.getByText("Store inventory · randomized mock")).toBeVisible();
+  await expect(workspace.getByText("Inventory risk")).toBeVisible();
+  const card = page.getByTestId("action-card").filter({ hasText: "Tom Okafor" });
+  await expect(card).toBeVisible();
+  await card.getByRole("button", { name: "Review case" }).click();
+  const confirmation = page.locator(".confirmation-card");
+  await expect(
+    confirmation.getByRole("heading", { name: "Open a Salesforce case for the store manager?" }),
+  ).toBeVisible();
+  await expect(confirmation.getByRole("table")).toContainText("Needed");
+  await expect(confirmation).toContainText("Create Case");
+  await page.screenshot({
+    path: `artifacts/evidence/WU-047/inventory-case-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+  await confirmation.getByRole("button", { name: "Confirm case" }).click();
+  await expect(page.getByText("Case 00001001 opened for Tom Okafor")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Open case in Salesforce/ })).toHaveAttribute(
+    "href",
+    /\/lightning\/r\/Case\/500000000000001\/view$/,
+  );
+  await expect(workspace.getByTestId("workspace-record").first()).toContainText("Created");
 });
 
 test("routes chat write requests to the confirmation flow without claiming a write", async ({
@@ -641,9 +678,9 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
     .first()
     .click();
   await expect(page.getByRole("heading", { name: "Graph explorer" })).toBeVisible();
-  await expect(page.getByText("157", { exact: true })).toBeVisible();
+  await expect(page.getByText("177", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("img", { name: /Knowledge graph drawing with 157 nodes/ }),
+    page.getByRole("img", { name: /Knowledge graph drawing with 177 nodes/ }),
   ).toBeVisible();
 
   // The rain tour expands the weather node and summarizes what worked.
@@ -652,7 +689,7 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
   await expect(details.getByRole("heading", { name: "rain", exact: true })).toBeVisible();
   await expect(details.getByText(/Loaded 60 of \d+ connections/)).toBeVisible();
   await expect(details.getByText("What the graph says")).toBeVisible();
-  await expect(page.getByText("217", { exact: true })).toBeVisible();
+  await expect(page.getByText("237", { exact: true })).toBeVisible();
 
   // Search reaches every loaded node without the canvas.
   await page.getByLabel("Find a node").fill("fall loyalty");
@@ -670,7 +707,7 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
   const personas = page.getByRole("button", { name: /^Persona/ });
   await personas.click();
   await expect(personas).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByRole("img", { name: /with 165 nodes/ })).toBeVisible();
+  await expect(page.getByRole("img", { name: /with 185 nodes/ })).toBeVisible();
   await personas.click();
 
   await page.getByRole("button", { name: /A failed brand check/ }).click();

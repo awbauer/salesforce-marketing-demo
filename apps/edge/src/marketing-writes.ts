@@ -306,12 +306,17 @@ export function fixturePermissionReport(
             { label: "Create Campaign", detail: "Allowed by your profile and permission sets." },
             { label: "Edit this brief", detail: "Sharing gives you edit access to the record." },
           ]
-        : [
-            {
-              label: `Create ${action === "create-review-task" ? "Task" : "Content Version"}`,
-              detail: "Allowed by your profile and permission sets.",
-            },
-          ]),
+        : action === "create-inventory-case"
+          ? [
+              { label: "Create Case", detail: "Allowed by your profile and permission sets." },
+              { label: "Read Contact", detail: "You can see the store manager's contact." },
+            ]
+          : [
+              {
+                label: `Create ${action === "create-review-task" ? "Task" : "Content Version"}`,
+                detail: "Allowed by your profile and permission sets.",
+              },
+            ]),
   ].map((check) => ({ ...check, passed: true }));
   return {
     source: "local-fixture",

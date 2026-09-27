@@ -58,8 +58,18 @@ export const DOMAINS: Domain[] = [
   {
     id: "restaurant",
     title: "Coastline Kitchen restaurants",
-    blurb: "Locations, the menu, and past mobile app pushes with their context.",
-    labels: ["Location", "Menu", "MenuItem", "Daypart", "WeatherCondition", "PushSend"],
+    blurb:
+      "Locations and their managers, the menu and what it's made with, and past mobile app pushes with their context.",
+    labels: [
+      "Location",
+      "StoreManager",
+      "Menu",
+      "MenuItem",
+      "InventoryItem",
+      "Daypart",
+      "WeatherCondition",
+      "PushSend",
+    ],
   },
 ];
 
@@ -80,6 +90,8 @@ export const LABEL_COLORS: Record<string, string> = {
   Daypart: "#5b6fb3",
   WeatherCondition: "#3fa3a0",
   PushSend: "#9fb0bd",
+  InventoryItem: "#b0763f",
+  StoreManager: "#4f6f8f",
 };
 
 export const LABEL_NAMES: Record<string, string> = {
@@ -89,6 +101,8 @@ export const LABEL_NAMES: Record<string, string> = {
   MenuItem: "Menu item",
   WeatherCondition: "Weather",
   PushSend: "Push send",
+  InventoryItem: "Inventory item",
+  StoreManager: "Store manager",
 };
 
 export const labelName = (label: string) => LABEL_NAMES[label] ?? label;
@@ -123,6 +137,9 @@ export const RELATIONSHIP_PHRASES: Record<string, string> = {
   FEATURED: "featured",
   SENT_DURING: "was sent during",
   UNDER: "was sent under",
+  MADE_WITH: "is made with",
+  LIFTS_DEMAND: "lifts demand for",
+  MANAGED_BY: "is managed by",
 };
 
 export const relationshipPhrase = (type: string) =>

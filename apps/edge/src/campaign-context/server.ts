@@ -2,18 +2,20 @@ import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
 import { jsonSchema, type ToolSet, tool } from "ai";
 import { z } from "zod";
-import { fetchCurrentWeather, LOCATION_IDS, LOCATIONS } from "./open-meteo.ts";
+import { fetchCurrentWeather, fetchForecast, LOCATION_IDS, LOCATIONS } from "./open-meteo.ts";
 import { RESTAURANT_IDS, RESTAURANT_PROFILES } from "./restaurant-profile.ts";
+import { locationInventory } from "./store-inventory.ts";
 
 export const CAMPAIGN_CONTEXT_MCP_NAME = "northstar-campaign-context";
 /** Tool keys in the orchestrator carry this prefix, mirroring the Salesforce MCP naming. */
 export const CAMPAIGN_CONTEXT_TOOL_PREFIX = "context_";
 
-export type CampaignContextDependencies = { fetch?: typeof fetch };
+export type CampaignContextDependencies = { fetch?: typeof fetch; now?: () => Date };
 
 /**
- * Builds the campaign-context MCP server: a mocked restaurant profile and live weather. Both tools
- * are read-only; campaign drafting stays with the governed Salesforce content tool.
+ * Builds the campaign-context MCP server: a mocked restaurant profile and store inventory, and live
+ * weather and forecasts. Every tool is read-only; campaign drafting stays with the governed
+ * Salesforce content tool.
  */
 export function createCampaignContextMcpServer(dependencies: CampaignContextDependencies = {}) {
   const server = new McpServer({ name: CAMPAIGN_CONTEXT_MCP_NAME, version: "1.0.0" });
@@ -65,6 +67,68 @@ export function createCampaignContextMcpServer(dependencies: CampaignContextDepe
       return {
         content: [{ type: "text", text: JSON.stringify(output) }],
         structuredContent: output,
+      };
+    },
+  );
+  server.registerTool(
+    "get_weather_forecast",
+    {
+      title: "Get weather forecast",
+      description: `The daily forecast for a California city from Open-Meteo: each day's condition, high and low in °F, chance of precipitation, and its demand-planning weather (clear, cloudy, fog, rain, or heat), plus the distinct demand-planning conditions to pass to map_weather_demand. Cities: ${LOCATION_IDS.map((id) => `${id} (${LOCATIONS[id].city})`).join(", ")}.`,
+      inputSchema: z.object({
+        location: z.enum(LOCATION_IDS).describe("California city to check"),
+        days: z.number().int().min(1).max(7).default(3).describe("Days ahead, 1 to 7"),
+      }),
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ location, days }) => {
+      const result = await fetchForecast(location, days ?? 3, dependencies.fetch);
+      if ("error" in result)
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: `The forecast for ${LOCATIONS[location].city} could not be retrieved: ${result.error}.`,
+            },
+          ],
+        };
+      const output = {
+        source: "Open-Meteo",
+        location,
+        city: result.city,
+        days: result.days,
+        demandConditions: [...new Set(result.days.map((day) => day.demandCondition))],
+        attribution: "Weather data by Open-Meteo.com (CC BY 4.0)",
+      };
+      return {
+        content: [{ type: "text", text: JSON.stringify(output) }],
+        structuredContent: output,
+      };
+    },
+  );
+  server.registerTool(
+    "get_location_inventory",
+    {
+      title: "Get location inventory",
+      description:
+        "Stock counts for a Coastline Kitchen restaurant from its store inventory system (a randomized mock): each inventory item's on-hand amount, deliveries on order for the next three days, par level, typical daily use, and days of cover. Read-only.",
+      inputSchema: z.object({
+        location: z.enum(LOCATION_IDS).describe("Coastline Kitchen location (city id)"),
+      }),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async ({ location }) => {
+      const today = (dependencies.now?.() ?? new Date()).toISOString().slice(0, 10);
+      const output = locationInventory(location, today);
+      if (!output)
+        return {
+          isError: true,
+          content: [{ type: "text", text: `No inventory system for ${location}.` }],
+        };
+      return {
+        content: [{ type: "text", text: JSON.stringify(output) }],
+        structuredContent: output as unknown as Record<string, unknown>,
       };
     },
   );

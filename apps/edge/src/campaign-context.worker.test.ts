@@ -58,7 +58,9 @@ describe("campaign-context MCP", () => {
     try {
       expect(Object.keys(tools).sort()).toEqual([
         "context_get_current_weather",
+        "context_get_location_inventory",
         "context_get_restaurant_profile",
+        "context_get_weather_forecast",
       ]);
       const profile = (await tools.context_get_restaurant_profile?.execute?.(
         { restaurant: "coastline-kitchen" },

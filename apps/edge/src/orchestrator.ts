@@ -12,6 +12,7 @@ import {
   type FocusItem,
   GeneratedCampaignImageSchema,
   initialOrchestratorState,
+  type MarketingWrite,
   MEMORY_RETENTION_DAYS,
   MEMORY_TOOLS,
   type OrchestratorState,
@@ -20,11 +21,10 @@ import {
   PHASE_2_CURATED_TOOLS,
   PROOF_DEFAULTS,
   parseOperationControls,
+  policyResponse,
+  referentFromReply,
   SALESFORCE_AGENTS,
   SALESFORCE_TOOL_DETAILS,
-  policyResponse,
-  type MarketingWrite,
-  referentFromReply,
   type SuggestedAction,
   type TurnRecord,
   TurnRecordSchema,
@@ -44,9 +44,20 @@ import {
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import {
+  forgetMemory,
+  type GraphBackend,
+  KNOWLEDGE_GRAPH_TOOL_SPECS,
+  listMemory,
+  type MemoryRecordRef,
+  recordDecision,
+  rememberDraft,
+} from "../../../packages/knowledge-graph/src/index.ts";
+import { LOCATIONS } from "./campaign-context/open-meteo";
+import {
   CAMPAIGN_CONTEXT_TOOL_PREFIX,
   connectCampaignContextTools,
 } from "./campaign-context/server";
+import { locationInventory } from "./campaign-context/store-inventory";
 import {
   connectExternalServiceTools,
   EXTERNAL_SERVICES_TOOL_PREFIX,
@@ -54,25 +65,18 @@ import {
 import { applyFocusUpdate, type FocusInput, focusFromAnswer } from "./focus";
 import { forcedToolCallMiddleware } from "./forced-tool-middleware";
 import {
-  forgetMemory,
-  type GraphBackend,
-  listMemory,
-  type MemoryRecordRef,
-  recordDecision,
-  rememberDraft,
-} from "../../../packages/knowledge-graph/src/index.ts";
+  assessInventoryRisk,
+  type DemandResult,
+  type ForecastResult,
+  type InventoryResult,
+  inventoryCaseDetails,
+  inventoryRiskPrompt,
+} from "./inventory-risk";
 import {
   connectKnowledgeGraphTools,
   KNOWLEDGE_GRAPH_TOOL_PREFIX,
   knowledgeGraphBackend,
 } from "./knowledge-graph/server";
-import {
-  focusMemoryDraft,
-  localRecallAnswer,
-  memoryActorHash,
-  memoryStamp,
-  memorySubjects,
-} from "./memory";
 import {
   agentRequest,
   agentToolInput,
@@ -84,16 +88,24 @@ import {
   type MarketingReadBack,
   parseMarketingReadBack,
   parsePermissionReport,
-  sameBrief,
   pinBriefToRefinement,
   planMarketingWrite,
+  sameBrief,
   toolText,
   withRefreshedPreview,
 } from "./marketing-writes";
+import {
+  focusMemoryDraft,
+  localRecallAnswer,
+  memoryActorHash,
+  memoryStamp,
+  memorySubjects,
+} from "./memory";
 import { buildTurnRecord } from "./turn-history";
 import {
   type DraftIntent,
   draftIntent,
+  isInventoryCheck,
   isRecallRequest,
   isRememberRequest,
   isRevisionRequest,
@@ -111,8 +123,12 @@ import {
   addCreatedRecord,
   baseToolName,
   ingestToolResult,
+  inventoryRiskCard,
+  isFailure as isToolFailure,
+  mergeIntoWorkingSet,
   openCampaign,
   reopenFromMemory,
+  toolPayload,
   workingSetPrompt,
 } from "./working-set";
 
@@ -137,6 +153,8 @@ type OrchestratorBindings = CloudflareBindings & {
   NEO4J_PASSWORD?: string;
 };
 
+/** The store inventory mock's count date in local development. */
+const LOCAL_FIXTURE_COUNT_DATE = "2026-09-27";
 const IMAGE_PROMPT_VERSION = "campaign-image-v1";
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 // Matches the Apex attachment limit, which keeps the decoded image inside the synchronous heap.
@@ -146,6 +164,7 @@ const ACTIVITY_LABELS = {
   "create-marketing-campaign": "Campaign and flow created in Marketing Cloud",
   "create-review-task": "Review request created",
   "attach-generated-image": "Campaign image attached",
+  "create-inventory-case": "Inventory case opened for the store manager",
 } as const;
 /** Why a write was linked to records Marketing Cloud already had, instead of saved again. */
 const FOUND_NOTES = {
@@ -511,6 +530,34 @@ export function classifyMcpFailure(
   };
 }
 
+/**
+ * The signed confirmation token Apex verifies: the action, the record or subject it's bound to,
+ * the request hash, the idempotency key, the expiry, and the user, under the shared HMAC key.
+ */
+async function signConfirmation(current: Confirmation, signingKey: string) {
+  const confirmationExpiresAt = Math.floor(Date.parse(current.expiresAt) / 1000);
+  const canonicalConfirmation = [
+    current.action,
+    current.recordId,
+    current.id,
+    current.requestHash,
+    current.idempotencyKey,
+    String(confirmationExpiresAt),
+    current.principalSubject,
+  ].join("\n");
+  const confirmationSignature = await hmacSha256Hex(signingKey, canonicalConfirmation);
+  const principalHex = [...new TextEncoder().encode(current.principalSubject)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  return [
+    "v1",
+    current.id,
+    String(confirmationExpiresAt),
+    principalHex,
+    confirmationSignature,
+  ].join(".");
+}
+
 async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -644,6 +691,12 @@ export class MarketingOrchestrator extends AIChatAgent<
   private imageGenerationInFlight = false;
   /** Set when the Campaign Creation agent drafted the brief in focus during this turn. */
   private agentBriefThisTurn = false;
+  /** This chat's latest forecast, weather-demand map, and stock counts, for the inventory check. */
+  private inventoryInputs: {
+    forecast?: ForecastResult;
+    demand?: DemandResult;
+    inventory?: InventoryResult;
+  } = {};
   /** Local development's Marketing Cloud records, created by the local agent stand-in. */
   private localMarketing = new Map<string, MarketingReadBack>();
 
@@ -722,6 +775,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     const workspace = workingSetPrompt(this.state.workingSet);
     const prompt = latestUserText(turnMessages);
     const toolPlan = selectToolPlan(prompt, Object.keys(tools), planContext);
+    const inventoryPlan = toolPlan?.some((name) => name.endsWith("map_weather_demand"));
     // A drafting or revision turn's answer is saved as the workspace focus when it completes.
     const drafting = draftIntent(prompt, planContext);
     // Readable plan for the trace and history, such as "a → b → c".
@@ -767,10 +821,25 @@ export class MarketingOrchestrator extends AIChatAgent<
             tools: pinnedTools,
             // A revision with no agent to ask rewrites the draft in focus without tools; a brief's
             // revision goes back to the Marketing Cloud agent through its plan.
-            prepareStep: ({ stepNumber }: { stepNumber: number }) =>
-              drafting?.mode === "revise" && !toolPlan
-                ? { toolChoice: "none" as const, activeTools: [] as string[] }
-                : stepToolChoice(toolPlan, stepNumber),
+            prepareStep: ({ stepNumber }: { stepNumber: number }) => {
+              if (drafting?.mode === "revise" && !toolPlan)
+                return { toolChoice: "none" as const, activeTools: [] as string[] };
+              const choice = stepToolChoice(toolPlan, stepNumber);
+              // The inventory check is computed by code after the plan's tools run, so the answer
+              // step sees the workspace as it is now, including exactly which items are low.
+              return inventoryPlan && stepNumber >= (toolPlan?.length ?? 0)
+                ? {
+                    ...choice,
+                    system: orchestratorSystemPrompt(
+                      [
+                        workingSetPrompt(this.state.workingSet),
+                        inventoryRiskPrompt(this.state.inventoryRisk),
+                      ].join(" "),
+                      toolPlan,
+                    ),
+                  }
+                : choice;
+            },
             stopWhen: stepCountIs(MAX_TURN_STEPS),
             maxOutputTokens: MAX_OUTPUT_TOKENS,
             timeout: TURN_TIMEOUT,
@@ -1276,6 +1345,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     imageId?: unknown;
   }): Promise<Response> {
     const action = body.action;
+    if (action === "create-inventory-case") return this.prepareInventoryCase();
     const marketingAction =
       action === "save-marketing-brief" || action === "create-marketing-campaign";
     if (
@@ -1432,6 +1502,258 @@ export class MarketingOrchestrator extends AIChatAgent<
       ),
     });
     return json(confirmation, { status: 201 });
+  }
+
+  /**
+   * Prepares a case for the store manager from this chat's inventory check. The server writes
+   * the case contents from the computed low-stock list, and the request hash is the SHA-256 of
+   * exactly those contents, so Salesforce can verify it received what the user confirmed.
+   */
+  private async prepareInventoryCase(): Promise<Response> {
+    const blocked = this.writeBlocked("create-inventory-case");
+    if (blocked) return blocked;
+    const risk = this.state.inventoryRisk;
+    if (!risk?.lowItems.length)
+      return json(
+        {
+          error: {
+            code: "VALIDATION_FAILED",
+            message:
+              "Run an inventory check in the chat first; a case is opened only for items the check found low.",
+          },
+        },
+        { status: 400 },
+      );
+    const permissionCheck = await this.checkWriteAccess("create-inventory-case", "new");
+    if (!permissionCheck.permissions)
+      return json(
+        {
+          error: {
+            code: "UPSTREAM_UNAVAILABLE",
+            message:
+              permissionCheck.failure === "catalog-incomplete"
+                ? "Salesforce is connected, but its governed tool catalog is incomplete: the permission check is not available. Nothing was prepared."
+                : "Salesforce could not complete the permission check, so nothing was prepared. Reconnect Salesforce and retry.",
+          },
+        },
+        { status: 503 },
+      );
+    const permissions = permissionCheck.permissions;
+    if (!permissions.allowed)
+      return json(
+        {
+          error: {
+            code: "PERMISSION_DENIED",
+            message: `Your Salesforce permissions don't allow this: ${permissions.checks
+              .filter((check) => !check.passed)
+              .map((check) => `${check.label} (${check.detail})`)
+              .join("; ")}`,
+          },
+          permissions,
+        },
+        { status: 403 },
+      );
+    const detailsJson = inventoryCaseDetails(risk);
+    const count = risk.lowItems.length;
+    const confirmation = ConfirmationSchema.parse({
+      id: crypto.randomUUID(),
+      action: "create-inventory-case",
+      recordId: `location:${risk.locationId}`,
+      principalSubject: this.principalSubject,
+      requestHash: await sha256(detailsJson),
+      idempotencyKey: crypto.randomUUID(),
+      summary:
+        `Open a Salesforce case for ${risk.manager.name}, the ${risk.city} store manager: ${count} item${count === 1 ? "" : "s"} won't cover the ${risk.window.days}-day forecast (${risk.conditions.join(", ")}). Nothing is ordered.`.slice(
+          0,
+          500,
+        ),
+      expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+      status: "pending",
+      permissions,
+      inventoryCase: {
+        locationId: risk.locationId,
+        city: risk.city,
+        manager: risk.manager,
+        conditions: risk.conditions,
+        items: risk.lowItems,
+        detailsJson,
+      },
+    });
+    await this.recordConfirmationAudit(confirmation, "pending");
+    this.setState({
+      ...this.state,
+      pendingConfirmation: confirmation,
+      suggestions: (this.state.suggestions ?? []).filter(
+        (item) => item.action !== "create-inventory-case",
+      ),
+    });
+    return json(confirmation, { status: 201 });
+  }
+
+  /**
+   * Opens the confirmed case: Apex verifies the signed confirmation and that the contents hash to
+   * the confirmed request hash, finds the store manager's contact, creates the Case as the user,
+   * and reads it back. Local development uses a fixture read-back.
+   */
+  private async executeInventoryCase(current: Confirmation): Promise<Response> {
+    const details = current.inventoryCase;
+    if (!details)
+      return json(
+        { error: { code: "CONFLICT", message: "The confirmation has no case contents." } },
+        { status: 409 },
+      );
+    const subject = `Low stock before forecast weather: Coastline Kitchen ${details.city}`;
+    let result: {
+      source: "salesforce" | "local-fixture";
+      caseId: string;
+      caseNumber: string;
+      subject: string;
+      priority: string;
+      status: string;
+      contactName: string;
+    };
+    if ((this.env.ENVIRONMENT as string) === "local") {
+      result = {
+        source: "local-fixture",
+        caseId: "500000000000001",
+        caseNumber: "00001001",
+        subject,
+        priority: "High",
+        status: "New",
+        contactName: details.manager.name,
+      };
+    } else {
+      const signingKey = this.env.CONFIRMATION_SIGNING_KEY;
+      if (!signingKey)
+        return json(
+          {
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message: "Signed confirmation execution is not configured.",
+            },
+          },
+          { status: 503 },
+        );
+      await this.mcp.waitForConnections({ timeout: 5_000 });
+      const tool = this.salesforceTool(WRITE_TOOL_BY_ACTION[current.action]);
+      if (!tool)
+        return json(
+          {
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message:
+                "The Salesforce case tool isn't in the catalog. An administrator must enable create_inventory_case on the portal's Salesforce server. Nothing was created.",
+            },
+          },
+          { status: 503 },
+        );
+      let upstream: unknown;
+      try {
+        upstream = await resolveToolResult(
+          tool.execute(
+            {
+              inputs: [
+                {
+                  locationKey: current.recordId,
+                  caseDetailsJson: details.detailsJson,
+                  confirmationId: await signConfirmation(current, signingKey),
+                  requestHash: current.requestHash,
+                  idempotencyKey: current.idempotencyKey,
+                },
+              ],
+            },
+            { toolCallId: current.id, messages: [], context: undefined },
+          ),
+        );
+      } catch {
+        return json(
+          {
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message:
+                "Salesforce rejected the confirmed case. It was not recorded as created; reconnect and retry.",
+            },
+          },
+          { status: 502 },
+        );
+      }
+      const field = (name: string) => findToolField(upstream, name);
+      if (
+        field("readBack") !== true ||
+        typeof field("caseId") !== "string" ||
+        typeof field("caseNumber") !== "string" ||
+        field("locationKey") !== current.recordId
+      )
+        return json(
+          {
+            error: {
+              code: "CONFLICT",
+              message: "Salesforce did not return the required authoritative read-back.",
+            },
+          },
+          { status: 409 },
+        );
+      result = {
+        source: "salesforce",
+        caseId: field("caseId") as string,
+        caseNumber: field("caseNumber") as string,
+        subject: String(field("subject") ?? subject),
+        priority: String(field("priority") ?? ""),
+        status: String(field("status") ?? ""),
+        contactName: String(field("contactName") ?? details.manager.name),
+      };
+    }
+    const executed = { ...current, status: "executed" as const };
+    await this.recordConfirmationAudit(current, "executed", result.caseId);
+    const title = `Case ${result.caseNumber}: ${result.subject}`;
+    this.setState({
+      ...this.state,
+      pendingConfirmation: null,
+      workingSet: addCreatedRecord(
+        this.state.workingSet,
+        { system: "salesforce", objectType: "Case", recordId: result.caseId, title },
+        "create_inventory_case",
+        new Date(),
+      ),
+      activity: [
+        {
+          id: `create-inventory-case-${result.caseId}`,
+          label: ACTIVITY_LABELS["create-inventory-case"],
+          detail: `${result.source === "salesforce" ? "Salesforce" : "Local fixture"} read-back · Case ${result.caseNumber} for ${result.contactName}`,
+          occurredAt: "Now",
+          status: "complete",
+        },
+        ...this.state.activity,
+      ],
+    });
+    await this.rememberConfirmedWrite(
+      current,
+      { system: "salesforce", objectType: "Case", recordId: result.caseId, title },
+      {
+        outcome: `Case ${result.caseNumber} opened for ${result.contactName} (${details.city}), confirmed and read back.`,
+        note: details.items
+          .map(
+            (item) =>
+              `${item.name}: ${item.onHand} + ${item.onOrder} on order of ${item.projectedNeed} ${item.unit}`,
+          )
+          .join("; ")
+          .slice(0, 400),
+      },
+    );
+    return json({
+      confirmation: executed,
+      result: {
+        source: result.source,
+        recordId: result.caseId,
+        caseNumber: result.caseNumber,
+        subject: result.subject,
+        priority: result.priority,
+        status: result.status,
+        contactName: result.contactName,
+        idempotencyKey: current.idempotencyKey,
+        readBack: true,
+      },
+    });
   }
 
   /**
@@ -1839,6 +2161,125 @@ export class MarketingOrchestrator extends AIChatAgent<
     });
   }
 
+  /**
+   * Keeps the inventory check's three inputs and, once all three are in for the same location,
+   * computes which weather-driven items won't cover the forecast. The result becomes a context
+   * card and, when anything is low, an action card to open a case for the store manager. Code
+   * decides what's low; the model only explains it.
+   */
+  private checkInventory(tool: string | null, output: unknown) {
+    const data = toolPayload(output).data;
+    if (!data || isToolFailure(output)) return;
+    if (tool === "get_weather_forecast")
+      this.inventoryInputs.forecast = data as unknown as ForecastResult;
+    else if (tool === "map_weather_demand")
+      this.inventoryInputs.demand = data as unknown as DemandResult;
+    else if (tool === "get_location_inventory")
+      this.inventoryInputs.inventory = data as unknown as InventoryResult;
+    else return;
+    const { forecast, demand, inventory } = this.inventoryInputs;
+    const risk = assessInventoryRisk(forecast, demand, inventory);
+    if (!risk) return;
+    const at = new Date();
+    this.setState({
+      ...this.state,
+      inventoryRisk: risk,
+      workingSet: mergeIntoWorkingSet(
+        this.state.workingSet,
+        { cards: [inventoryRiskCard(risk, at)], records: [] },
+        at,
+      ),
+      suggestions: (this.state.suggestions ?? []).filter(
+        (existing) => existing.action !== "create-inventory-case",
+      ),
+    });
+    if (risk.lowItems.length)
+      this.suggest({
+        action: "create-inventory-case",
+        title: `Open a Salesforce case for ${risk.manager.name}, the ${risk.city} store manager?`,
+        detail: `${risk.lowItems.length} item${risk.lowItems.length === 1 ? "" : "s"} won't cover the ${risk.window.days}-day forecast (${risk.conditions.join(", ")}): ${risk.lowItems
+          .slice(0, 4)
+          .map(
+            (item) =>
+              `${item.name} (${item.onHand + item.onOrder} of ${item.projectedNeed} ${item.unit})`,
+          )
+          .join("; ")}${risk.lowItems.length > 4 ? "; …" : ""}.`,
+        cta: "Review case",
+      });
+  }
+
+  /** The local inventory check: the plan's three tools with a fixed forecast, then the risk. */
+  private async localInventoryCheck(prompt: string) {
+    const location =
+      (Object.keys(LOCATIONS) as Array<keyof typeof LOCATIONS>).find((id) =>
+        prompt.toLowerCase().includes(LOCATIONS[id].city.toLowerCase()),
+      ) ?? "sacramento";
+    const start = new Date();
+    const date = (offset: number) =>
+      new Date(start.getTime() + offset * 86_400_000).toISOString().slice(0, 10);
+    const forecast = {
+      source: "Open-Meteo (local fixture)",
+      location,
+      city: LOCATIONS[location].city,
+      days: [
+        {
+          date: date(0),
+          condition: "clear",
+          demandCondition: "clear",
+          highF: 84,
+          lowF: 58,
+          precipitationChance: 0,
+        },
+        {
+          date: date(1),
+          condition: "clear",
+          demandCondition: "heat",
+          highF: 95,
+          lowF: 64,
+          precipitationChance: 0,
+        },
+        {
+          date: date(2),
+          condition: "clear",
+          demandCondition: "clear",
+          highF: 86,
+          lowF: 60,
+          precipitationChance: 0,
+        },
+      ],
+      demandConditions: ["clear", "heat"],
+    };
+    const mcp = (data: unknown) => ({
+      structuredContent: data,
+      content: [{ type: "text", text: JSON.stringify(data) }],
+    });
+    this.ingestToolResult("context_get_weather_forecast", { location, days: 3 }, mcp(forecast));
+    const spec = KNOWLEDGE_GRAPH_TOOL_SPECS.find((entry) => entry.name === "map_weather_demand");
+    const demandInput = { location, conditions: forecast.demandConditions };
+    const demand = await spec?.run(knowledgeGraphBackend(this.env), demandInput as never);
+    this.ingestToolResult("graph_map_weather_demand", demandInput, mcp(demand));
+    this.ingestToolResult(
+      "context_get_location_inventory",
+      { location },
+      // A fixed count date keeps the local check (and its tests) the same every day.
+      mcp(locationInventory(location, LOCAL_FIXTURE_COUNT_DATE)),
+    );
+    const risk = this.state.inventoryRisk;
+    if (!risk) return "The inventory check could not complete locally.";
+    return [
+      `**Inventory check for Coastline Kitchen ${risk.city}** (local fixture forecast: ${risk.conditions.join(", ")}).\n\n`,
+      risk.lowItems.length
+        ? `${risk.lowItems.length} item${risk.lowItems.length === 1 ? "" : "s"} won't cover the forecast:\n\n${risk.lowItems
+            .map(
+              (item) =>
+                `- **${item.name}:** ${item.onHand} ${item.unit} on hand + ${item.onOrder} on order, ${item.projectedNeed} needed (${item.menuItems.join(", ")})`,
+            )
+            .join("\n")}\n\n`
+        : "Every weather-driven item covers the forecast.\n\n",
+      `Store manager: ${risk.manager.name}. ${risk.lowItems.length ? "Use the action card to open a Salesforce case for them; nothing is created until you confirm." : ""} Stock counts come from a randomized mock of the store inventory system.`,
+    ].join("");
+  }
+
   /** Accepting an action card prepares its confirmation, with the Salesforce permission check. */
   private async acceptSuggestion(id: string): Promise<Response> {
     const suggestion = (this.state.suggestions ?? []).find((item) => item.id === id);
@@ -1847,6 +2288,8 @@ export class MarketingOrchestrator extends AIChatAgent<
         { error: { code: "NOT_FOUND", message: "That suggestion is no longer available." } },
         { status: 404 },
       );
+    if (suggestion.action === "create-inventory-case")
+      return this.prepareConfirmation({ action: "create-inventory-case" });
     if (suggestion.action === "save-focus") {
       const focus = this.state.workingSet.focus;
       if (!focus)
@@ -1897,6 +2340,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       at: new Date(),
     });
     if (next !== this.state.workingSet) this.setState({ ...this.state, workingSet: next });
+    this.checkInventory(baseToolName(toolName), output);
     // The brief the Marketing Cloud agent drafted becomes the focus, field for field.
     if (baseToolName(toolName) === "draft_campaign_brief") {
       const focus = this.state.workingSet.focus;
@@ -1953,7 +2397,9 @@ export class MarketingOrchestrator extends AIChatAgent<
       pendingConfirmation: null,
       suggestions: [],
       activity: [],
+      inventoryRisk: null,
     });
+    this.inventoryInputs = {};
   }
 
   /**
@@ -2379,6 +2825,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       }
       // Briefs and campaigns are created by the Marketing Cloud Campaign Creation agent.
       if (current.write) return this.executeMarketingWrite(current);
+      if (current.action === "create-inventory-case") return this.executeInventoryCase(current);
       if ((this.env.ENVIRONMENT as string) !== "local") {
         const signingKey = this.env.CONFIRMATION_SIGNING_KEY;
         if (!signingKey)
@@ -2406,27 +2853,7 @@ export class MarketingOrchestrator extends AIChatAgent<
             },
             { status: 503 },
           );
-        const confirmationExpiresAt = Math.floor(Date.parse(current.expiresAt) / 1000);
-        const canonicalConfirmation = [
-          current.action,
-          current.recordId,
-          current.id,
-          current.requestHash,
-          current.idempotencyKey,
-          String(confirmationExpiresAt),
-          current.principalSubject,
-        ].join("\n");
-        const confirmationSignature = await hmacSha256Hex(signingKey, canonicalConfirmation);
-        const principalHex = [...new TextEncoder().encode(current.principalSubject)]
-          .map((byte) => byte.toString(16).padStart(2, "0"))
-          .join("");
-        const signedConfirmation = [
-          "v1",
-          current.id,
-          String(confirmationExpiresAt),
-          principalHex,
-          confirmationSignature,
-        ].join(".");
+        const signedConfirmation = await signConfirmation(current, signingKey);
         const imagePayload =
           current.action === "attach-generated-image"
             ? await this.loadConfirmedImage(current)
@@ -2767,6 +3194,19 @@ export class MarketingOrchestrator extends AIChatAgent<
       return scriptedResponse([text], {
         model: "local-fixture",
         reasoning: "Local development has no model: answer from the workspace's long-term memory.",
+        abortSignal,
+        onComplete: (result) =>
+          this.recordTurn(utterance, { model: "local-fixture", route: "local-fixture" }, result),
+      });
+    }
+    // Local development has no model: an inventory check runs the same three tools in process,
+    // with a fixed forecast, and the workbench computes the same inventory risk.
+    if (isInventoryCheck(utterance)) {
+      const text = await this.localInventoryCheck(utterance);
+      return scriptedResponse([text], {
+        model: "local-fixture",
+        reasoning:
+          "Local development has no model or network: a fixed forecast, the graph's demand map, and the store inventory mock go through the same ingestion and risk check.",
         abortSignal,
         onComplete: (result) =>
           this.recordTurn(utterance, { model: "local-fixture", route: "local-fixture" }, result),

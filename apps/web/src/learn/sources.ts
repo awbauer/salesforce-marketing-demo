@@ -90,7 +90,13 @@ export const SECTION_SOURCES: Record<string, readonly string[]> = {
     "salesforce/force-app/main/default/aiAuthoringBundles/Northstar_Campaign_Creation/",
     "salesforce/force-app/main/default/classes/NorthstarGetMarketingRecords.cls",
   ],
-  "use-cases": ["apps/edge/src/external-services/", "apps/web/src/usecases/"],
+  "use-cases": [
+    "apps/edge/src/external-services/",
+    "apps/web/src/usecases/",
+    "apps/edge/src/campaign-context/store-inventory.ts",
+    "apps/edge/src/inventory-risk.ts",
+    "salesforce/force-app/main/default/classes/NorthstarCreateInventoryCase.cls",
+  ],
   "long-term-memory": [
     "packages/knowledge-graph/src/memory.ts",
     "apps/edge/src/memory.ts",
@@ -119,6 +125,10 @@ export const UNTAUGHT_SOURCES: ReadonlyArray<{ path: string; reason: string }> =
   },
   {
     path: "salesforce/force-app/main/default/classes/NorthstarMarketingAgentTest.cls",
+    reason: "Apex tests",
+  },
+  {
+    path: "salesforce/force-app/main/default/classes/NorthstarInventoryCaseTest.cls",
     reason: "Apex tests",
   },
   { path: "scripts/check-blocked-words.mjs", reason: "Delivery gate" },

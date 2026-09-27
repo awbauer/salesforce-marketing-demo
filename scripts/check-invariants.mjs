@@ -22,10 +22,8 @@ const forbidden = [
   "arbitrary-crud",
 ];
 const orchestratorSource = await readFile("apps/edge/src/orchestrator.ts", "utf8");
-const confirmationMigration = await readFile(
-  "migrations/0004_marketing_cloud_agent_actions.sql",
-  "utf8",
-);
+// The latest migration that rebuilds the confirmation audit defines its allowed actions.
+const confirmationMigration = await readFile("migrations/0005_inventory_case_action.sql", "utf8");
 const failures = required
   .filter((value) => !wrangler.includes(value))
   .map((value) => `Missing config invariant: ${value}`);

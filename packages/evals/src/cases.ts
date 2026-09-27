@@ -103,6 +103,11 @@ export const routingCases = [
     prompt: "Is there severe weather near our Sacramento location that affects customers?",
     expected: "get_weather_alerts",
   },
+  {
+    id: "routing-25",
+    prompt: "Are any ingredients running low at our Fresno location for this week's weather?",
+    expected: "get_weather_forecast",
+  },
 ] as const;
 
 /** The guided demo scenarios, taken from the use-case library prompts plus the two policy cases. */
@@ -175,6 +180,11 @@ export const demoScenarios = [
     prompt:
       "There are weather alerts near our San Diego location. Which customers are affected and what should we tell them?",
     expected: "get_weather_alerts → assess_location_impact",
+  },
+  {
+    id: "demo-service-inventory",
+    prompt: "Check inventory for our Sacramento store against the forecast",
+    expected: "get_weather_forecast → map_weather_demand → get_location_inventory",
   },
   {
     id: "demo-memory-recall",

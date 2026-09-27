@@ -306,10 +306,11 @@ function GraphTools() {
     ["get_graph_overview", "What is in the graph?"],
     ["plan_account_outreach", "Who to contact, on which consented channel?"],
     ["assess_location_impact", "Who is affected near this location?"],
+    ["map_weather_demand", "Which dishes and stock will the weather draw on?"],
   ] as const;
   return (
     <Figure
-      label="The eight curated graph tools"
+      label="The nine curated graph tools"
       caption="Each tool is a fixed, parameterized Cypher query in read mode that returns an answer plus evidence paths."
     >
       <div className="graph-tools">
@@ -564,7 +565,7 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
   "use-cases": () => (
     <Figure
       label="Sales and service use cases"
-      caption="A live public API says what's happening; the knowledge graph says who it affects and how they can be reached."
+      caption="A live outside service says what's happening; the knowledge graph says who or what it affects, and a confirmed write goes to Salesforce only when you approve it."
     >
       <Lanes
         lanes={[
@@ -606,6 +607,25 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
               {
                 title: "Impact + drafted notice",
                 caption: "aggregate only",
+                tone: "output",
+                glyph: "✎",
+              },
+            ],
+          },
+          {
+            label: "Inventory",
+            steps: [
+              { title: "Open-Meteo forecast", caption: "heat, rain, …", tone: "tool", glyph: "↗" },
+              {
+                title: "map_weather_demand",
+                caption: "dishes · stock · manager",
+                tone: "store",
+                glyph: "⋈",
+              },
+              { title: "Store inventory", caption: "randomized mock", tone: "tool", glyph: "▤" },
+              {
+                title: "Case for the manager",
+                caption: "after you confirm",
                 tone: "output",
                 glyph: "✎",
               },
@@ -791,7 +811,7 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
           },
           {
             title: "Knowledge graph",
-            caption: "eight curated queries · in-process and HTTP",
+            caption: "nine curated queries · in-process and HTTP",
             tone: "tool",
             glyph: "⋈",
           },

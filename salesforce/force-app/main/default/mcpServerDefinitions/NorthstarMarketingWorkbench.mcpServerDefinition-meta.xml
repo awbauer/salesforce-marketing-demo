@@ -184,6 +184,21 @@
     </tools>
     <tools>
         <apiDefinition>
+            <apiIdentifier>aa:apex-NorthstarCreateInventoryCase</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>NorthstarCreateInventoryCase</operation>
+        </apiDefinition>
+        <descriptionOverride>Open one confirmed Salesforce Case for a Coastline Kitchen store manager listing inventory items that won't cover the weather forecast; verifies the signed confirmation and the contents' hash, and returns authoritative read-back.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>true</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>false</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>create_inventory_case</toolName>
+        <toolTitle>Create Confirmed Inventory Case</toolTitle>
+    </tools>
+    <tools>
+        <apiDefinition>
             <apiIdentifier>aa:apex-NorthstarAttachCampaignImage</apiIdentifier>
             <apiSource>API_CATALOG</apiSource>
             <operation>NorthstarAttachCampaignImage</operation>
