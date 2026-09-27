@@ -497,3 +497,45 @@ export function localAgentWrite(
   });
   return `Your campaign has been created and saved (local fixture).\n\nCampaign ID: ${campaignId}`;
 }
+
+type ExecutableTool = { execute?: (input: never, options: never) => unknown };
+
+/**
+ * Makes every Refine Campaign Preview request name the saved brief. The model often leaves the
+ * Brief ID out, and the Campaign Creation agent then has to guess which brief to change; the
+ * server knows it, so it adds it when the request doesn't already contain it.
+ */
+export function pinBriefToRefinement<T extends Record<string, unknown>>(
+  tools: T,
+  briefId: string | undefined,
+): T {
+  if (!briefId) return tools;
+  return Object.fromEntries(
+    Object.entries(tools).map(([name, definition]) => {
+      const execute = (definition as ExecutableTool).execute;
+      if (!/(?:^|_)refine_campaign_preview$/.test(name) || typeof execute !== "function")
+        return [name, definition];
+      return [
+        name,
+        {
+          ...(definition as object),
+          execute: (input: Record<string, unknown>, options: unknown) => {
+            const text = JSON.stringify(input ?? {});
+            if (text.includes(briefId)) return execute(input as never, options as never);
+            const key =
+              Object.keys(input ?? {}).find((field) => typeof input[field] === "string") ??
+              "message";
+            return execute(
+              {
+                ...input,
+                [key]:
+                  `Refine the campaign preview on brief ${briefId}: ${String(input?.[key] ?? "")}`.trim(),
+              } as never,
+              options as never,
+            );
+          },
+        },
+      ];
+    }),
+  ) as T;
+}
