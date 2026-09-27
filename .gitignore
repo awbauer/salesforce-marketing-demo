@@ -7,3 +7,6 @@ dist/
 .salesforce-readback/
 /playwright-report/
 /test-results/
+
+# Local Agentforce preview sessions (transcripts and traces)
+.sfdx/
