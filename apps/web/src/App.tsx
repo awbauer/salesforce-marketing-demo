@@ -478,7 +478,7 @@ export function App() {
         const campaign = result.result.campaign;
         const brief = result.result.brief;
         setSavedRecord(
-          campaign
+          campaign && pendingConfirmation.write.kind === "campaign"
             ? {
                 label: "Campaign and flow created in Marketing Cloud",
                 title: `${campaign.name}${campaign.flow ? ` · ${campaign.flow.label}` : ""}`,

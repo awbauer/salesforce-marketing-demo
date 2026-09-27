@@ -299,6 +299,8 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
       updateFocus: (input: FocusInput) => unknown;
       localMarketing: Map<string, MarketingReadBack>;
       callMarketingAgent: (...args: unknown[]) => Promise<unknown>;
+      marketingAttemptKey: (write: unknown) => Promise<string>;
+      rememberAttempt: (key: string) => void;
     };
     const brief = briefFocusFromAgent(AGENT_BRIEF, "Drafted") as FocusInput;
     const plannedBrief = planMarketingWrite(focusFrom(brief));
@@ -312,13 +314,6 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
     expect(
       sameBrief(plannedBrief.write.brief, { ...plannedBrief.write.brief, keyMessage: "Other" }),
     ).toBe(false);
-    // An earlier attempt timed out after the agent saved the brief.
-    await runInDurableObject(stub, (instance) => {
-      const agent = instance as unknown as Agent;
-      agent.localMarketing.clear();
-      localAgentWrite(plannedBrief.write, agent.localMarketing);
-      agent.updateFocus(brief);
-    });
     const prepare = (action: string) =>
       SELF.fetch("https://example.test/agent/confirmations", {
         method: "POST",
@@ -326,15 +321,36 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
         body: JSON.stringify({ action }),
       });
     const execute = async () =>
-      (
+      (await (
         await SELF.fetch("https://example.test/agent/confirmations/execute", { method: "POST" })
-      ).json() as Promise<{
+      ).json()) as {
         result?: { found?: string; brief?: { id: string }; campaign?: { id: string } };
         error?: { message: string };
-      }>;
+      };
     const count = () =>
       runInDurableObject(stub, (instance) => (instance as unknown as Agent).localMarketing.size);
 
+    // Another chat saved a brief with the same name and key message: it is not linked.
+    await runInDurableObject(stub, (instance) => {
+      const agent = instance as unknown as Agent;
+      agent.localMarketing.clear();
+      localAgentWrite(plannedBrief.write, agent.localMarketing);
+      agent.updateFocus(brief);
+    });
+    expect((await prepare("save-marketing-brief")).status).toBe(201);
+    const fresh = await execute();
+    expect(fresh.result?.found).toBeUndefined();
+    expect(fresh.result?.brief?.id).toBe("21y000000000002");
+    expect(await count()).toBe(2);
+
+    // This chat's own earlier attempt timed out after the agent saved: it is linked.
+    await runInDurableObject(stub, async (instance) => {
+      const agent = instance as unknown as Agent;
+      agent.localMarketing.clear();
+      localAgentWrite(plannedBrief.write, agent.localMarketing);
+      agent.rememberAttempt(await agent.marketingAttemptKey(plannedBrief.write));
+      agent.updateFocus(brief);
+    });
     expect((await prepare("save-marketing-brief")).status).toBe(201);
     const reused = await execute();
     expect(reused.result).toMatchObject({ found: "reused", brief: { id: "21y000000000001" } });
