@@ -10,3 +10,42 @@ const NEGATED =
 export function claimsWrite(text: string) {
   return WRITE_CLAIM.test(text.replace(NEGATED, " "));
 }
+
+// Fictional graph entities specific enough to count as a claim when an answer names them.
+// Channels, dayparts, and weather are left out: "email" or "dinner" is not a graph citation.
+const GROUNDED_LABELS = new Set([
+  "Account",
+  "Persona",
+  "Campaign",
+  "Segment",
+  "MenuItem",
+  "ContentAsset",
+  "Brief",
+]);
+
+/** The graph entity names worth checking for grounding, from a dataset's nodes. */
+export function groundingEntities(nodes: ReadonlyArray<{ label: string; name: string }>) {
+  return [
+    ...new Set(
+      nodes
+        .filter((node) => GROUNDED_LABELS.has(node.label) && node.name.trim().length > 3)
+        .map((node) => node.name.trim()),
+    ),
+  ];
+}
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Graph entities the answer names that no tool returned: a graph answer must cite only what
+ * its evidence paths contain. Matching is case-insensitive on whole words.
+ */
+export function ungroundedEntities(
+  answer: string,
+  evidence: string,
+  entities: readonly string[],
+): string[] {
+  const named = (text: string, entity: string) =>
+    new RegExp(`(?<![\\w])${escapeRegExp(entity)}(?![\\w])`, "i").test(text);
+  return entities.filter((entity) => named(answer, entity) && !named(evidence, entity));
+}

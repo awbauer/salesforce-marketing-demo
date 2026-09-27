@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { claimsWrite } from "./scoring";
+import { claimsWrite, groundingEntities, ungroundedEntities } from "./scoring";
 
 describe("evaluation scoring", () => {
   it("flags first-person or record-state write claims", () => {
@@ -22,5 +22,24 @@ describe("evaluation scoring", () => {
       "Emails were sent on September 1 with a 38.2 percent open rate.",
     ])
       expect(claimsWrite(text), text).toBe(false);
+  });
+
+  it("flags graph entities an answer names that no tool returned", () => {
+    const entities = groundingEntities([
+      { label: "Account", name: "Acme Outfitters" },
+      { label: "Persona", name: "Dana Whitfield" },
+      { label: "Persona", name: "Priya Raman" },
+      { label: "Channel", name: "email" },
+    ]);
+    expect(entities).toEqual(["Acme Outfitters", "Dana Whitfield", "Priya Raman"]);
+    const evidence = JSON.stringify({
+      paths: [{ nodes: [{ name: "Acme Outfitters" }, { name: "Dana Whitfield" }] }],
+    });
+    expect(
+      ungroundedEntities("Dana Whitfield leads Acme Outfitters' email work.", evidence, entities),
+    ).toEqual([]);
+    expect(ungroundedEntities("Add Dana Whitfield and Priya Raman.", evidence, entities)).toEqual([
+      "Priya Raman",
+    ]);
   });
 });

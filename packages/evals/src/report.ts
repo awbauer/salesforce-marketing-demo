@@ -7,13 +7,19 @@ export const EVAL_CHECKS = [
   "textProduced",
   "noToolErrors",
   "noFalseWriteClaim",
+  "graphGrounded",
 ] as const;
+export type EvalCheck = (typeof EVAL_CHECKS)[number];
+// Checks added after the first published run; results recorded before them leave them out.
+export const LATER_CHECKS: readonly EvalCheck[] = ["graphGrounded"];
 
 const ChecksSchema = z.object(
-  Object.fromEntries(EVAL_CHECKS.map((check) => [check, z.boolean()])) as Record<
-    (typeof EVAL_CHECKS)[number],
-    z.ZodBoolean
-  >,
+  Object.fromEntries(
+    EVAL_CHECKS.map((check) => [
+      check,
+      LATER_CHECKS.includes(check) ? z.boolean().optional() : z.boolean(),
+    ]),
+  ) as Record<EvalCheck, z.ZodBoolean | z.ZodOptional<z.ZodBoolean>>,
 );
 
 export const EvalCaseResultSchema = z.object({
@@ -41,11 +47,14 @@ export const EvalSummarySchema = z.object({
   suite: z.enum(EVAL_SUITES),
   passed: z.number().int().nonnegative(),
   total: z.number().int().positive(),
+  /** Share of turns passing each check; a later check is absent when no turn measured it. */
   checkRates: z.object(
-    Object.fromEntries(EVAL_CHECKS.map((check) => [check, z.number().min(0).max(1)])) as Record<
-      (typeof EVAL_CHECKS)[number],
-      z.ZodNumber
-    >,
+    Object.fromEntries(
+      EVAL_CHECKS.map((check) => {
+        const rate = z.number().min(0).max(1);
+        return [check, LATER_CHECKS.includes(check) ? rate.optional() : rate];
+      }),
+    ) as Record<EvalCheck, z.ZodNumber | z.ZodOptional<z.ZodNumber>>,
   ),
   latencyP50Ms: z.number().nonnegative(),
   latencyP90Ms: z.number().nonnegative(),

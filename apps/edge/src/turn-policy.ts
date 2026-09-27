@@ -20,6 +20,9 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
   // Scenario guidance is added only when its plan is active, so it cannot steer other requests.
   const restaurantPlan = toolPlan?.some((name) => name.endsWith("get_restaurant_profile"));
   const graphPlan = toolPlan?.some((name) => name.startsWith("graph_"));
+  const memoryPlan = toolPlan?.some((name) =>
+    /_(?:recall_decisions|recall_recent_work)$/.test(name),
+  );
   return [
     "You are the Northstar marketing proof orchestrator.",
     "Salesforce tool results are the only authority for Salesforce facts. Protocol success does not mean that a business result exists.",
@@ -40,6 +43,11 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
           "Knowledge-graph results are fictional demo data with evidence paths. Explain the answer from those paths, name only entities that appear in the results, and never suggest that the graph or Salesforce was changed.",
         ]
       : []),
+    ...(memoryPlan
+      ? [
+          "Memory results are dated records of past work in this workspace, not current Salesforce state. For each item, give its date and source; say it was remembered, not that it is true now; and offer to re-check Salesforce before reusing it. If nothing was found, say so plainly and do not guess.",
+        ]
+      : []),
     `Workspace (built from tool results in this chat): ${workspace}`,
   ].join(" ");
 }
@@ -48,6 +56,9 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
 // a tool; when no rule matches, the model chooses. Precision matters more than coverage here,
 // because a forced wrong tool cannot be recovered within the turn.
 const INTENT_RULES: ReadonlyArray<readonly [string, (prompt: string) => boolean]> = [
+  // Memory recall asks about earlier work; it never matches a request to draft something new.
+  ["recall_recent_work", (p) => isRecallRequest(p) && RECENT_WORK.test(p)],
+  ["recall_decisions", (p) => isRecallRequest(p)],
   // Knowledge-graph intents come first; each needs a signal the Salesforce tools cannot answer.
   [
     "check_consent_coverage",
@@ -155,6 +166,23 @@ export function isRevisionRequest(prompt: string) {
     !/\b(?:summarize|summary|readiness|overview|buyer group|consent|overlap|lineage)\b/i.test(
       prompt,
     )
+  );
+}
+
+const RECALL =
+  /\b(?:what (?:did|have) we (?:decide|decided|save|saved|draft|drafted|do|done|agree|agreed|work(?:ed)? on)|what do you (?:remember|recall)|do you (?:remember|recall)|last time|previously|earlier (?:session|chat|conversation)|recall|reuse (?:what|the) we|did we (?:save|decide|draft|approve|request))\b/i;
+const RECENT_WORK =
+  /\b(?:recent(?:ly)?|lately|so far|latest)\b[^.?!]*\b(?:work|worked|drafts?|decisions?|done)\b|\bwhat have we (?:done|worked on)\b/i;
+
+/** A question about work remembered from earlier chats in this workspace. */
+export function isRecallRequest(prompt: string) {
+  return RECALL.test(prompt) && !isRememberRequest(prompt);
+}
+
+/** "Remember this draft": store the draft in focus in long-term memory. */
+export function isRememberRequest(prompt: string) {
+  return /^\s*(?:please\s+)?(?:remember|memorize)\s+(?:this|that|it|the (?:current |latest )?(?:draft|campaign|brief|email|message|push(?: message)?))\b[^?]*$|\b(?:save|add|keep|store) (?:this|that|it|the draft) (?:to|in) (?:long[- ]term )?memory\b/i.test(
+    prompt,
   );
 }
 

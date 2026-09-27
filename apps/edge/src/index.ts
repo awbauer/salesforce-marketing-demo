@@ -6,6 +6,7 @@ import {
   GraphNodeNotFoundError,
   graphNeighbors,
   graphOverview,
+  sweepMemory,
 } from "../../../packages/knowledge-graph/src/index.ts";
 import { type AuthBindings, AuthError, deriveAgentKey, resolvePrincipal } from "./auth";
 import { createCampaignContextMcpServer } from "./campaign-context/server";
@@ -155,16 +156,19 @@ export default {
       return errorResponse(error, id);
     }
   },
-  // Daily read keeps an Aura Free instance from pausing after three idle days.
+  // Hourly: prune the 24-hour audit, sweep expired long-term memory, and keep Aura Free awake
+  // (it pauses after three idle days).
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
     await pruneConfirmationAudit(env.APP_DB);
     const backend = knowledgeGraphBackend(env as Parameters<typeof knowledgeGraphBackend>[0]);
     if (backend.kind !== "neo4j") return;
     try {
       await backend.query("RETURN 1 AS ok", {});
+      const swept = await sweepMemory(backend, new Date());
+      if (swept > 0) console.info(`[memory] swept ${swept} expired memory nodes`);
     } catch (error) {
       console.warn(
-        "[knowledge-graph] keep-alive query failed",
+        "[knowledge-graph] scheduled maintenance failed",
         error instanceof Error ? error.message : error,
       );
     }

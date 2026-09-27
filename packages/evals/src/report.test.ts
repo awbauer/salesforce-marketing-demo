@@ -12,7 +12,7 @@ describe("evaluation report contract", () => {
     const knownCases = new Set<string>([...demoScenarios, ...routingCases].map((test) => test.id));
     for (const result of report.results) {
       expect(knownCases.has(result.caseId), result.caseId).toBe(true);
-      expect(result.passed).toBe(Object.values(result.checks).every(Boolean));
+      expect(result.passed).toBe(Object.values(result.checks).every((value) => value !== false));
     }
     for (const summary of report.summaries) {
       const group = report.results.filter(

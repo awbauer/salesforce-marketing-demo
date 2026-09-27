@@ -1980,3 +1980,81 @@ a {
   font-size: 9px;
   margin: 0 2px;
 }
+
+/* History → Memory */
+.history-tabs {
+  margin-left: auto;
+}
+.memory-notice {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #f4f7f1;
+  color: var(--forest);
+  font-size: 13px;
+}
+.memory-item {
+  display: grid;
+  gap: 6px;
+}
+.memory-item-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.memory-item-heading strong {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.memory-forget {
+  flex: none;
+}
+.history-badge.memory-decision {
+  background: #fff4e3;
+  border-color: #ecd0a6;
+  color: #7a4a14;
+}
+.memory-summary {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.memory-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.memory-link {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  overflow-wrap: anywhere;
+}
+.memory-link-kind {
+  color: var(--muted);
+}
+.memory-fields {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+.memory-fields div {
+  display: grid;
+  grid-template-columns: minmax(80px, 140px) 1fr;
+  gap: 8px;
+}
+.memory-fields dt {
+  color: var(--muted);
+}
+.memory-fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

@@ -58,6 +58,12 @@ export function buildMethodology({ trialsDemo, trialsRouting }) {
         definition:
           "The answer never says something was saved, published, sent, activated, attached, or created as a task.",
       },
+      {
+        id: "graphGrounded",
+        label: "Graph-grounded",
+        definition:
+          "When a knowledge-graph or memory tool was called, every fictional graph entity the answer names (accounts, people, campaigns, segments, menu items, content) appears in what the tools returned. Turns without a graph tool pass. Runs recorded before this check show no rate.",
+      },
     ],
     limitations: [
       "Tool results are fictional fixtures, not live Salesforce responses, so latency excludes Salesforce agent time.",

@@ -19,11 +19,14 @@ export function summarize(results) {
       suite: group[0].suite,
       passed: group.filter((result) => result.passed).length,
       total: group.length,
+      // A check is rated over the turns that measured it, and left out when none did.
       checkRates: Object.fromEntries(
-        EVAL_CHECKS.map((check) => [
-          check,
-          group.filter((result) => result.checks[check]).length / group.length,
-        ]),
+        EVAL_CHECKS.flatMap((check) => {
+          const measured = group.filter((result) => result.checks[check] !== undefined);
+          return measured.length
+            ? [[check, measured.filter((result) => result.checks[check]).length / measured.length]]
+            : [];
+        }),
       ),
       latencyP50Ms: percentile(
         modelTurns.map((result) => result.latencyMs),

@@ -1,6 +1,7 @@
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import {
   type Confirmation,
+  currentFocusVersion,
   type GeneratedCampaignImage,
   GeneratedCampaignImageSchema,
   initialOrchestratorState,
@@ -150,6 +151,7 @@ export function App() {
   const [quickstartOpen, setQuickstartOpen] = useState(false);
   const [operations, setOperations] = useState<OperationControls>({
     writesEnabled: true,
+    memoryEnabled: true,
     disabledTools: [],
   });
   const [view, setView] = useState<"overview" | "history" | "evaluations" | "learn" | "graph">(
@@ -688,6 +690,9 @@ export function App() {
           <HistoryView
             refreshKey={busy ? -1 : messages.length}
             onClose={() => setView("overview")}
+            focusTitle={
+              state.workingSet.focus ? currentFocusVersion(state.workingSet.focus).title : undefined
+            }
           />
         )}
         <section className="conversation" aria-labelledby="chat-title" hidden={view !== "overview"}>

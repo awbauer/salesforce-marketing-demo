@@ -53,8 +53,9 @@ for (const label of labels)
     `CREATE CONSTRAINT kg_${safe(label).toLowerCase()}_id IF NOT EXISTS FOR (n:${safe(label)}) REQUIRE n.id IS UNIQUE`,
   );
 // --reset removes every version of the demo dataset, so renamed labels and ids leave nothing behind.
+// Long-term memory (dataset northstar-memory-*) is workspace data and survives a reseed.
 if (args.has("--reset")) {
-  await write("MATCH (n) WHERE n.dataset IS NOT NULL DETACH DELETE n");
+  await write("MATCH (n) WHERE n.dataset STARTS WITH 'northstar-kg' DETACH DELETE n");
   console.log("Removed previous demo dataset versions.");
 }
 

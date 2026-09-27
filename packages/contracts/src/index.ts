@@ -194,11 +194,19 @@ export const KNOWLEDGE_GRAPH_TOOLS = Object.freeze([
   "trace_content_lineage",
 ] as const);
 
+/** Read-only recall tools over the workspace's long-term memory in the graph. See ADR-007. */
+export const MEMORY_TOOLS = Object.freeze([
+  "recall_decisions",
+  "recall_recent_work",
+  "explain_memory",
+] as const);
+
 /** Every tool the orchestrator may call, for display names and operator kill switches. */
 export const ORCHESTRATOR_TOOLS = Object.freeze([
   ...PHASE_2_CURATED_TOOLS,
   ...CAMPAIGN_CONTEXT_TOOLS,
   ...KNOWLEDGE_GRAPH_TOOLS,
+  ...MEMORY_TOOLS,
 ] as const);
 
 /** A record in any connected system, identified by system, object type, and id. */
@@ -489,7 +497,7 @@ export const TurnTraceEventSchema = z.discriminatedUnion("kind", [
     toolCount: z.number().int().nonnegative(),
     requiredTool: z.string().optional(),
     route: z
-      .enum(["model", "confirmation-required", "unsupported", "catalog-unavailable"])
+      .enum(["model", "confirmation-required", "unsupported", "catalog-unavailable", "memory"])
       .optional(),
   }),
   z.object({ kind: z.literal("step-start"), at: z.number(), step: z.number().int() }),
@@ -570,6 +578,8 @@ export const WRITE_TOOL_BY_ACTION = Object.freeze({
 
 export const OperationControlsSchema = z.object({
   writesEnabled: z.boolean(),
+  /** Long-term memory: remembering and recall. Off when MEMORY_ENABLED is "false". */
+  memoryEnabled: z.boolean(),
   disabledTools: z.array(z.enum(ORCHESTRATOR_TOOLS as unknown as [string, ...string[]])),
   /** Where knowledge-graph answers come from: live Neo4j or the fictional local copy. */
   knowledgeGraph: z.enum(["neo4j", "fixture"]).optional(),
@@ -578,10 +588,12 @@ export type OperationControls = z.infer<typeof OperationControlsSchema>;
 
 /**
  * Operator kill switches from Worker variables. Writes stay enabled unless WRITES_ENABLED is
- * exactly "false"; DISABLED_TOOLS is a comma-separated list, and unknown names are ignored.
+ * exactly "false", and memory likewise with MEMORY_ENABLED; DISABLED_TOOLS is a comma-separated
+ * list, and unknown names are ignored.
  */
 export function parseOperationControls(env: {
   WRITES_ENABLED?: string;
+  MEMORY_ENABLED?: string;
   DISABLED_TOOLS?: string;
 }): OperationControls {
   const requested = (env.DISABLED_TOOLS ?? "")
@@ -590,6 +602,7 @@ export function parseOperationControls(env: {
     .filter(Boolean);
   return {
     writesEnabled: env.WRITES_ENABLED?.trim().toLowerCase() !== "false",
+    memoryEnabled: env.MEMORY_ENABLED?.trim().toLowerCase() !== "false",
     disabledTools: ORCHESTRATOR_TOOLS.filter((tool) => requested.includes(tool)),
   };
 }
@@ -597,6 +610,10 @@ export function parseOperationControls(env: {
 /** Turn history and the confirmation audit are kept for 24 hours. */
 export const AUDIT_RETENTION_HOURS = PROOF_DEFAULTS.transcriptRetentionHours;
 export const AUDIT_RETENTION_MS = AUDIT_RETENTION_HOURS * 3_600_000;
+
+/** Long-term memory (drafts and decisions in the graph) is kept for 14 days. See ADR-007. */
+export const MEMORY_RETENTION_DAYS = 14;
+export const MEMORY_RETENTION_MS = MEMORY_RETENTION_DAYS * 86_400_000;
 
 export const TurnRecordSchema = z.object({
   id: z.string(),
@@ -609,6 +626,7 @@ export const TurnRecordSchema = z.object({
     "confirmation-required",
     "unsupported",
     "catalog-unavailable",
+    "memory",
     "local-fixture",
   ]),
   requiredTool: z.string().optional(),

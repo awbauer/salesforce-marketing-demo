@@ -124,6 +124,7 @@ const ROUTE_DETAIL = {
   unsupported: "Handled by the policy router without a model call: this action is blocked",
   "catalog-unavailable":
     "Handled without a model call: the governed Salesforce tool catalog is not ready",
+  memory: "Handled by the server without a model call: the draft was stored in long-term memory",
 } as const;
 
 const json = (value: unknown) => JSON.stringify(sanitizedPayload(value), null, 2);
