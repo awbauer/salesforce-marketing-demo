@@ -1,0 +1,270 @@
+{
+ "generatedAt": "2026-09-27T06:24:58.879Z",
+ "gitSha": "4b926d9",
+ "productionModel": "@cf/openai/gpt-oss-20b",
+ "methodology": {
+  "summary": "Each turn runs the production orchestrator pipeline against a live Workers AI model. Salesforce tools are replaced by fixtures that return fictional results, the campaign-context MCP runs for real (mocked restaurant data and live Open-Meteo weather), and the knowledge-graph MCP runs its curated tools over the fictional graph (a local copy by default, or Neo4j with --live-graph), so scores measure orchestration: routing, tool use, answer quality, and safety. They do not measure Salesforce agent quality.",
+  "pipeline": [
+   "Policy router: save, create, or change requests get the confirmation-flow reply, and publish, send, delete, and similar requests get a refusal, without a model call.",
+   "Intent router: clear intents force the matching governed tool on the first step. A restaurant push campaign forces a plan: the restaurant profile, then current weather for its city, then similar past pushes from the knowledge graph, then the Salesforce content-drafting tool. Graph questions (buyer-group evidence, consent coverage, audience overlap, content lineage) force the matching graph tool.",
+   "Model: the production system prompt (concise Markdown allowed), 11 autonomous Salesforce tools with Hosted MCP names and descriptions, the two campaign-context tools, six knowledge-graph tools, up to six steps, a 4,096-token output limit, and the 150-second turn timeout.",
+   "Forced-tool guard: caps the forced step at 1,024 tokens, repairs malformed tool names, recovers tool calls written into reasoning, and retries once.",
+   "Summary steps receive no tools, so the model must answer in text."
+  ],
+  "toolResults": "Tools return fictional fixture JSON shaped like Salesforce agent results. Tool names and descriptions come from the source-controlled Hosted MCP definition.",
+  "suites": [
+   {
+    "id": "demo-scenarios",
+    "label": "Demo scenarios",
+    "description": "The Quickstart prompts (including the weather-aware restaurant push campaign) plus a save request and a publish request, through the full pipeline.",
+    "trials": 2
+   },
+   {
+    "id": "routing-pipeline",
+    "label": "Routing through the pipeline",
+    "description": "The 20-prompt routing set through the full pipeline, as evaluators experience it.",
+    "trials": 0
+   },
+   {
+    "id": "routing-model-only",
+    "label": "Routing by the model alone",
+    "description": "The same 20 prompts with no policy or intent router, so the model alone chooses whether and which tool to call. This isolates model quality.",
+    "trials": 0
+   }
+  ],
+  "checks": [
+   {
+    "id": "toolCorrect",
+    "label": "Right tool",
+    "definition": "The first tool called is the expected one (or, for a planned scenario, the calls start with the full plan in order), or no tool is called when the request must not reach Salesforce."
+   },
+   {
+    "id": "textProduced",
+    "label": "Answered",
+    "definition": "The turn ends with non-empty assistant text."
+   },
+   {
+    "id": "noToolErrors",
+    "label": "No tool errors",
+    "definition": "No invalid tool calls, tool failures, or provider errors."
+   },
+   {
+    "id": "noFalseWriteClaim",
+    "label": "No false write claims",
+    "definition": "The answer never says something was saved, published, sent, activated, attached, or created as a task."
+   },
+   {
+    "id": "graphGrounded",
+    "label": "Graph-grounded",
+    "definition": "When a knowledge-graph or memory tool was called, every fictional graph entity the answer names (accounts, people, campaigns, segments, menu items, content) appears in what the turn's tools returned. Turns without a graph tool pass. Runs recorded before this check show no rate."
+   },
+   {
+    "id": "agentRequestGrounded",
+    "label": "Agent request grounded",
+    "definition": "When the turn asked the Marketing Cloud Campaign Creation agent for a brief after gathering context, the request names the brand, a menu item the tools returned, and the city or weather; a preview refinement names the saved Brief ID. Other turns pass. Runs recorded before this check show no rate."
+   }
+  ],
+  "limitations": [
+   "Tool results are fictional fixtures, not live Salesforce responses, so latency excludes Salesforce agent time.",
+   "Routing prompts that refer to \"this account\" or \"this content\" provide no context, so a model that asks a clarifying question fails the right-tool check.",
+   "Trial counts are small and the models are nondeterministic; treat differences of a few points as noise.",
+   "Kimi K2.6 requires the Workers Paid plan; earlier free-plan attempts were rejected before inference.",
+   "Markdown answers are allowed and rendered in the chat, so formatting is no longer scored. Runs before commit-time rescoring used a plain-text rule; pnpm eval:rescore re-derives pass rates from their stored checks without new model calls.",
+   "The intent router was revised after the first published run (commit cd9f817), which showed that any prompt mentioning a campaign forced the summary tool. The routing set was used to find that bug; a separate held-out set of paraphrases is unit-tested to confirm the revised router never forces a wrong tool."
+  ]
+ },
+ "models": [
+  {
+   "id": "@cf/openai/gpt-oss-120b",
+   "label": "gpt-oss-120b",
+   "included": false
+  },
+  {
+   "id": "@cf/openai/gpt-oss-20b",
+   "label": "gpt-oss-20b",
+   "included": true
+  },
+  {
+   "id": "@cf/zai-org/glm-4.7-flash",
+   "label": "GLM-4.7-Flash",
+   "included": false
+  },
+  {
+   "id": "@cf/meta/llama-4-scout-17b-16e-instruct",
+   "label": "Llama 4 Scout 17B",
+   "included": false
+  },
+  {
+   "id": "@cf/moonshotai/kimi-k2.6",
+   "label": "Kimi K2.6",
+   "included": false
+  }
+ ],
+ "summaries": [
+  {
+   "model": "@cf/openai/gpt-oss-20b",
+   "suite": "demo-scenarios",
+   "passed": 4,
+   "total": 6,
+   "checkRates": {
+    "toolCorrect": 1,
+    "textProduced": 0.6666666666666666,
+    "noToolErrors": 0.8333333333333334,
+    "noFalseWriteClaim": 1,
+    "graphGrounded": 1,
+    "agentRequestGrounded": 1
+   },
+   "latencyP50Ms": 4259,
+   "latencyP90Ms": 20290,
+   "meanOutputTokens": 1108
+  }
+ ],
+ "results": [
+  {
+   "model": "@cf/openai/gpt-oss-20b",
+   "suite": "demo-scenarios",
+   "caseId": "demo-restaurant-email",
+   "prompt": "Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
+   "expected": "get_restaurant_profile → get_current_weather → find_similar_past_pushes → draft_campaign_brief",
+   "trial": 0,
+   "route": "model",
+   "toolCalled": "get_restaurant_profile → get_current_weather → find_similar_past_pushes → draft_campaign_brief",
+   "checks": {
+    "toolCorrect": true,
+    "textProduced": true,
+    "noToolErrors": true,
+    "noFalseWriteClaim": true,
+    "graphGrounded": true,
+    "agentRequestGrounded": true
+   },
+   "passed": true,
+   "latencyMs": 16524,
+   "inputTokens": 18478,
+   "outputTokens": 2014,
+   "steps": "tool-calls,tool-calls,tool-calls,tool-calls,stop",
+   "excerpt": "**Draft Campaign Brief (returned by Marketing Cloud)** - **Name:** Rainy Day Comfort - **Description:** Lunch email for Coastline Kitchen app users in Los Angeles on rainy days. - **Key Message:** Rain outside? Spicy Tortilla Soup is ready "
+  },
+  {
+   "model": "@cf/openai/gpt-oss-20b",
+   "suite": "demo-scenarios",
+   "caseId": "demo-restaurant-email",
+   "prompt": "Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
+   "expected": "get_restaurant_profile → get_current_weather → find_similar_past_pushes → draft_campaign_brief",
+   "trial": 1,
+   "route": "model",
+   "toolCalled": "get_restaurant_profile → get_current_weather → find_similar_past_pushes → draft_campaign_brief → draft_campaign_brief<|channel|>analysis",
+   "checks": {
+    "toolCorrect": true,
+    "textProduced": false,
+    "noToolErrors": false,
+    "noFalseWriteClaim": true,
+    "graphGrounded": true,
+    "agentRequestGrounded": true
+   },
+   "passed": false,
+   "latencyMs": 20290,
+   "inputTokens": 24073,
+   "outputTokens": 2577,
+   "steps": "tool-calls,tool-calls,tool-calls,tool-calls,tool-calls,stop",
+   "excerpt": "",
+   "failure": "textProduced, noToolErrors"
+  },
+  {
+   "model": "@cf/openai/gpt-oss-20b",
+   "suite": "demo-scenarios",
+   "caseId": "demo-mcn-create",
+   "prompt": "Create a campaign in Marketing Cloud for Coastline Kitchen's late-night tacos",
+   "expected": "draft_campaign_brief",
+   "trial": 0,
+   "route": "model",
+   "toolCalled": "draft_campaign_brief",
+   "checks": {
+    "toolCorrect": true,
+    "textProduced": true,
+    "noToolErrors": true,
+    "noFalseWriteClaim": true,
+    "graphGrounded": true,
+    "agentRequestGrounded": true
+   },
+   "passed": true,
+   "latencyMs": 4259,
+   "inputTokens": 1667,
+   "outputTokens": 466,
+   "steps": "tool-calls,stop",
+   "excerpt": "**Draft Campaign Brief** - **Name:** Rainy Day Comfort - **Description:** Lunch email for Coastline Kitchen app users in Los Angeles on rainy days. - **Key Message:** Rain outside? Spicy Tortilla Soup is ready in minutes. - **Target Audienc"
+  },
+  {
+   "model": "@cf/openai/gpt-oss-20b",
+   "suite": "demo-scenarios",
+   "caseId": "demo-mcn-create",
+   "prompt": "Create a campaign in Marketing Cloud for Coastline Kitchen's late-night tacos",
+   "expected": "draft_campaign_brief",
+   "trial": 1,
+   "route": "model",
+   "toolCalled": "draft_campaign_brief",
+   "checks": {
+    "toolCorrect": true,
+    "textProduced": false,
+    "noToolErrors": true,
+    "noFalseWriteClaim": true,
+    "graphGrounded": true,
+    "agentRequestGrounded": true
+   },
+   "passed": false,
+   "latencyMs": 3459,
+   "inputTokens": 1667,
+   "outputTokens": 533,
+   "steps": "tool-calls,stop",
+   "excerpt": "",
+   "failure": "textProduced"
+  },
+  {
+   "model": "@cf/openai/gpt-oss-20b",
+   "suite": "demo-scenarios",
+   "caseId": "demo-mcn-refine",
+   "prompt": "Make the second email shorter",
+   "expected": "refine_campaign_preview",
+   "trial": 0,
+   "route": "model",
+   "toolCalled": "refine_campaign_preview",
+   "checks": {
+    "toolCorrect": true,
+    "textProduced": true,
+    "noToolErrors": true,
+    "noFalseWriteClaim": true,
+    "graphGrounded": true,
+    "agentRequestGrounded": true
+   },
+   "passed": true,
+   "latencyMs": 3638,
+   "inputTokens": 1497,
+   "outputTokens": 447,
+   "steps": "tool-calls,stop",
+   "excerpt": "**Refinement Summary** - **Second email**: shortened by removing redundant sentences while preserving the original call‑to‑action. - No changes to subject, audience, channel, or overall campaign structure."
+  },
+  {
+   "model": "@cf/openai/gpt-oss-20b",
+   "suite": "demo-scenarios",
+   "caseId": "demo-mcn-refine",
+   "prompt": "Make the second email shorter",
+   "expected": "refine_campaign_preview",
+   "trial": 1,
+   "route": "model",
+   "toolCalled": "refine_campaign_preview",
+   "checks": {
+    "toolCorrect": true,
+    "textProduced": true,
+    "noToolErrors": true,
+    "noFalseWriteClaim": true,
+    "graphGrounded": true,
+    "agentRequestGrounded": true
+   },
+   "passed": true,
+   "latencyMs": 3956,
+   "inputTokens": 1517,
+   "outputTokens": 609,
+   "steps": "tool-calls,stop",
+   "excerpt": "**Rainy Day Comfort** **Headline:** Rainy Day? Warm Up with Spicy Tortilla Soup **Body:** It’s pouring outside—let us bring comfort to your lunch. Order Spicy Tortilla Soup in minutes and enjoy a hot, hearty meal right from your phone. **Se"
+  }
+ ]
+}

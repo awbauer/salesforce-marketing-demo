@@ -33,6 +33,8 @@ import {
   stepToolChoice,
   TURN_TIMEOUT,
 } from "../apps/edge/src/turn-policy.ts";
+import { applyFocusUpdate } from "../apps/edge/src/focus.ts";
+import { pinBriefToRefinement } from "../apps/edge/src/marketing-writes.ts";
 import { workingSetPrompt } from "../apps/edge/src/working-set.ts";
 import {
   classifyPolicyIntent,
@@ -135,10 +137,21 @@ const FIXTURES = {
     preheader: "Members-only gear picks for fall hikes",
     body: "A short fictional draft inviting dormant loyalty members back for fall hiking season.",
   },
+  // The Campaign Creation agent's Draft a Campaign Brief reply, in its real format.
   draft_campaign_brief: {
-    objective: "Reactivate dormant loyalty members",
-    channel: "email",
-    audience: "Dormant members",
+    message: [
+      "Here is a draft campaign brief:",
+      "Name: Rainy Day Comfort",
+      "Description: Lunch email for Coastline Kitchen app users in Los Angeles on rainy days.",
+      "Key Message: Rain outside? Spicy Tortilla Soup is ready in minutes.",
+      "Target Audience: Los Angeles app users who order at lunch.",
+      "Primary Goal: Drive lunch app orders on rainy days.",
+      "Primary CTAs: Order now",
+      "Primary KPI: Lunch orders from the campaign",
+      "Agent Guardrails: Coastline Kitchen brand voice.",
+      "Priority: High",
+      "Would you like to see a campaign preview based on this brief?",
+    ].join("\n"),
   },
   recommend_buyer_group_members: {
     candidates: [
@@ -157,7 +170,10 @@ const FIXTURES = {
   generate_campaign_insights: { insights: ["Mobile opens outperform desktop by 12 percent"] },
   validate_content_against_brand: { issues: ["Replace one exclamation mark to match brand tone"] },
   create_content_section: { section: "Hero: Find your next trail with members-only fall picks." },
-  refine_campaign_preview: { preview: "Refined fictional preview with a clearer call to action." },
+  refine_campaign_preview: {
+    message:
+      "I refined the campaign preview: the second email is now shorter, with the same call to action.",
+  },
 };
 
 function fixtureTools() {
@@ -191,6 +207,38 @@ function fixtureTools() {
 
 // Each evaluation turn is a fresh chat, so its working set is empty and only the catalog is listed.
 const WORKSPACE = workingSetPrompt(emptyWorkingSet());
+// A chat whose brief was saved in Marketing Cloud, for refinement scenarios.
+const SAVED_BRIEF_ID = "21yjV0000002NIHQA2";
+function savedBriefWorkspace() {
+  const set = applyFocusUpdate(
+    emptyWorkingSet(),
+    {
+      kind: "brief",
+      title: "Rainy Day Comfort",
+      summary: "Lunch email for Coastline Kitchen app users in Los Angeles on rainy days.",
+      fields: [
+        { label: "Key Message", value: "Rain outside? Spicy Tortilla Soup is ready in minutes." },
+        { label: "Target Audience", value: "Los Angeles app users who order at lunch." },
+      ],
+      changeNote: "Drafted by the Campaign Creation agent",
+    },
+    new Date(),
+  );
+  const focus = set.focus;
+  return {
+    ...set,
+    focus: focus && {
+      ...focus,
+      saved: { objectType: "Brief", recordId: SAVED_BRIEF_ID, version: 1, preview: [] },
+    },
+  };
+}
+const WORKSPACES = {
+  "saved-brief": {
+    prompt: workingSetPrompt(savedBriefWorkspace()),
+    context: { hasFocus: true, focusKind: "brief", briefSaved: true },
+  },
+};
 function shortName(name) {
   if (!name) return null;
   if (name.startsWith(TOOL_PREFIX)) return name.slice(TOOL_PREFIX.length);
@@ -220,6 +268,8 @@ async function runCase(model, tools, suite, testCase, trial) {
   let toolCalled = null;
   let toolErrors = 0;
   let evidence = "";
+  let agentRequest;
+  const sent = [];
   let inputTokens = 0;
   let outputTokens = 0;
   let steps = "";
@@ -230,18 +280,24 @@ async function runCase(model, tools, suite, testCase, trial) {
     text = POLICY_RESPONSES[policyRouted];
   } else {
     try {
+      const workspace = testCase.workspace ? WORKSPACES[testCase.workspace] : undefined;
       const toolPlan =
         suite === "routing-model-only"
           ? undefined
-          : selectToolPlan(testCase.prompt, Object.keys(tools));
+          : selectToolPlan(testCase.prompt, Object.keys(tools), workspace?.context);
       const result = streamText({
         model: wrapLanguageModel({
           model: model.provider(model.id),
           middleware: forcedToolCallMiddleware,
         }),
-        system: orchestratorSystemPrompt(WORKSPACE, toolPlan),
+        system: orchestratorSystemPrompt(workspace?.prompt ?? WORKSPACE, toolPlan),
         prompt: testCase.prompt,
-        tools,
+        // The same server-side pinning production applies to refinements of a saved brief, with
+        // each request recorded as the agent receives it.
+        tools: pinBriefToRefinement(
+          recordAgentRequests(tools, sent),
+          workspace?.context.briefSaved ? SAVED_BRIEF_ID : undefined,
+        ),
         prepareStep: ({ stepNumber }) => stepToolChoice(toolPlan, stepNumber),
         stopWhen: stepCountIs(MAX_TURN_STEPS),
         maxOutputTokens: MAX_OUTPUT_TOKENS,
@@ -256,6 +312,7 @@ async function runCase(model, tools, suite, testCase, trial) {
         .flatMap((step) => step.toolCalls)
         .map((call) => shortName(call.toolName));
       toolCalled = called.length ? called.join(" → ") : null;
+      agentRequest = agentRequestCheck(resultSteps, sent);
       // Grounding applies when a graph or memory tool ran; any tool's result counts as evidence,
       // since a restaurant menu item can come from the restaurant profile, not the graph.
       const results = resultSteps.flatMap((step) => step.toolResults);
@@ -293,6 +350,8 @@ async function runCase(model, tools, suite, testCase, trial) {
     noFalseWriteClaim: !claimsWrite(text),
     // A graph or memory answer names only entities its tool results contain.
     graphGrounded: !evidence || ungroundedEntities(text, evidence, GRAPH_ENTITIES).length === 0,
+    // A request to the Marketing Cloud Campaign Creation agent carries what the turn gathered.
+    agentRequestGrounded: agentRequest ?? true,
   };
   const passed = Object.values(checks).every(Boolean);
   if (!passed && !failure)
@@ -316,6 +375,77 @@ async function runCase(model, tools, suite, testCase, trial) {
 }
 
 const GRAPH_ENTITIES = groundingEntities(buildDataset().nodes);
+const MENU_ITEMS = buildDataset()
+  .nodes.filter((node) => node.label === "MenuItem")
+  .map((node) => node.name);
+
+/** Records what the Campaign Creation agent's tools actually receive, after server changes. */
+function recordAgentRequests(tools, sent) {
+  return Object.fromEntries(
+    Object.entries(tools).map(([name, definition]) => {
+      const short = shortName(name);
+      if (
+        !["draft_campaign_brief", "refine_campaign_preview"].includes(short) ||
+        !definition.execute
+      )
+        return [name, definition];
+      const execute = definition.execute;
+      return [
+        name,
+        {
+          ...definition,
+          execute: (input, options) => {
+            sent.push({ toolName: name, input });
+            return execute(input, options);
+          },
+        },
+      ];
+    }),
+  );
+}
+
+/**
+ * Whether the turn's request to the Campaign Creation agent carries the context the turn
+ * gathered: a refinement names the saved Brief ID; a brief request after context tools names the
+ * brand, a menu item those tools returned, and the city or weather. Undefined when the turn
+ * didn't ask the agent.
+ */
+function agentRequestCheck(resultSteps, sent) {
+  const results = resultSteps.flatMap((step) => step.toolResults);
+  const request = (name) => {
+    const call = sent.find((item) => shortName(item.toolName) === name);
+    return call ? JSON.stringify(call.input ?? {}).toLowerCase() : null;
+  };
+  const refine = request("refine_campaign_preview");
+  if (refine !== null) return refine.includes(SAVED_BRIEF_ID.toLowerCase());
+  const brief = request("draft_campaign_brief");
+  if (brief === null) return undefined;
+  const context = results
+    .filter((result) => shortName(result.toolName) !== "draft_campaign_brief")
+    .map((result) => JSON.stringify(result.output ?? {}))
+    .join("\n")
+    .toLowerCase();
+  if (!context) return true;
+  const menu = MENU_ITEMS.filter((item) => context.includes(item.toLowerCase()));
+  const placeOrWeather = [
+    "los angeles",
+    "san francisco",
+    "san diego",
+    "fresno",
+    "sacramento",
+    "rain",
+    "clear",
+    "cloud",
+    "fog",
+    "heat",
+    "sunny",
+  ].filter((term) => context.includes(term));
+  return (
+    brief.includes("coastline") &&
+    menu.some((item) => brief.includes(item.toLowerCase())) &&
+    placeOrWeather.some((term) => brief.includes(term))
+  );
+}
 
 async function seedEvalMemory(backend, workspaceId) {
   const stamp = (daysAgo) => {

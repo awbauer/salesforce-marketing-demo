@@ -154,6 +154,18 @@ export const demoScenarios = [
     expected: "check_consent_coverage",
   },
   {
+    id: "demo-mcn-create",
+    prompt: "Create a campaign in Marketing Cloud for Coastline Kitchen's late-night tacos",
+    expected: "draft_campaign_brief",
+  },
+  {
+    id: "demo-mcn-refine",
+    prompt: "Make the second email shorter",
+    expected: "refine_campaign_preview",
+    // Evaluated in a chat whose brief was saved in Marketing Cloud.
+    workspace: "saved-brief",
+  },
+  {
     id: "demo-sales-outreach",
     prompt: "Plan outreach to Acme Outfitters' buyer group for the next month",
     expected: "plan_account_outreach → get_public_holidays",

@@ -85,6 +85,7 @@ import {
   parseMarketingReadBack,
   parsePermissionReport,
   sameBrief,
+  pinBriefToRefinement,
   planMarketingWrite,
   toolText,
   withRefreshedPreview,
@@ -701,6 +702,12 @@ export class MarketingOrchestrator extends AIChatAgent<
       },
       (name, input, output) => this.ingestToolResult(name, input, output),
     );
+    // Refinements of a saved brief always name it, whatever the model wrote.
+    const savedBrief = this.state.workingSet.focus?.saved;
+    const pinnedTools = pinBriefToRefinement(
+      tools,
+      savedBrief?.objectType === "Brief" ? savedBrief.recordId : undefined,
+    );
     const planContext = {
       hasFocus: Boolean(this.state.workingSet.focus),
       focusKind: this.state.workingSet.focus?.kind,
@@ -756,7 +763,7 @@ export class MarketingOrchestrator extends AIChatAgent<
             }),
             system: orchestratorSystemPrompt(workspace, toolPlan),
             messages: await convertToModelMessages(turnMessages),
-            tools,
+            tools: pinnedTools,
             // A revision with no agent to ask rewrites the draft in focus without tools; a brief's
             // revision goes back to the Marketing Cloud agent through its plan.
             prepareStep: ({ stepNumber }: { stepNumber: number }) =>
