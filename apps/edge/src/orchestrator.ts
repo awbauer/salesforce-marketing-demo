@@ -112,6 +112,7 @@ import {
   baseToolName,
   ingestToolResult,
   openCampaign,
+  reopenFromMemory,
   workingSetPrompt,
 } from "./working-set";
 
@@ -1975,9 +1976,9 @@ export class MarketingOrchestrator extends AIChatAgent<
     )`;
   }
 
-  /** Notes a remember or forget in this user's agent storage, kept as long as the audit. */
+  /** Notes a remember, reopen, or forget in this user's agent storage, kept as long as the audit. */
   private auditMemory(
-    action: "remember" | "decision" | "forget",
+    action: "remember" | "decision" | "forget" | "reopen",
     memoryId: string,
     detail: string,
   ) {
@@ -2129,6 +2130,8 @@ export class MarketingOrchestrator extends AIChatAgent<
             { status: result.status },
           );
     }
+    const reopen = url.pathname.match(/\/memory\/([a-f0-9-]{36})\/reopen$/);
+    if (reopen?.[1] && request.method === "POST") return this.reopenMemory(reopen[1]);
     const forget = url.pathname.match(/\/memory\/([a-f0-9-]{36})$/);
     if (forget?.[1] && request.method === "DELETE") {
       const backend = this.memoryBackend();
@@ -2147,6 +2150,39 @@ export class MarketingOrchestrator extends AIChatAgent<
       return json({ forgotten: forget[1] });
     }
     return null;
+  }
+
+  /**
+   * Reopens a remembered draft or decision in the current chat: the draft becomes the focus and
+   * its records join the working set as remembered. Only the user can do this, from the Memory tab.
+   */
+  private async reopenMemory(id: string): Promise<Response> {
+    const backend = this.memoryBackend();
+    if (!backend)
+      return json(
+        { error: { code: "MEMORY_DISABLED", message: "Long-term memory is turned off." } },
+        { status: 503 },
+      );
+    const now = new Date();
+    const items = await listMemory(backend, this.state.workspaceId, now);
+    const item = items.find((entry) => entry.id === id);
+    if (!item)
+      return json(
+        { error: { code: "NOT_FOUND", message: "That memory is not in this workspace." } },
+        { status: 404 },
+      );
+    const draft = item.type === "Draft" ? item : items.find((entry) => entry.id === item.draft?.id);
+    const workingSet = reopenFromMemory(this.state.workingSet, item, draft, now);
+    this.setState({ ...this.state, workingSet });
+    this.auditMemory("reopen", id, `Reopened “${item.title}” in the workspace`);
+    return json({
+      reopened: id,
+      title: item.title,
+      focus: Boolean(
+        workingSet.focus && draft && workingSet.focus.id === (draft.focusId ?? draft.id),
+      ),
+      records: item.records.length + (draft && draft !== item ? draft.records.length : 0),
+    });
   }
 
   private syncConnector() {

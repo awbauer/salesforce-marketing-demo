@@ -1,5 +1,8 @@
+import type { MemoryView } from "../../../packages/knowledge-graph/src/index.ts";
 import {
   CAMPAIGN_CONTEXT_TOOLS,
+  type FocusItem,
+  FocusKindSchema,
   EXTERNAL_SERVICE_TOOLS,
   type InsightTile,
   KNOWLEDGE_GRAPH_TOOLS,
@@ -579,8 +582,11 @@ export function mergeIntoWorkingSet(set: WorkingSet, added: Ingested, at: Date):
   for (const next of added.records) {
     const index = records.findIndex((existing) => existing.key === next.key);
     if (index === -1) records.unshift(next);
-    // A write this chat made (created or updated) outranks a later read of the same record.
-    else if (next.relation !== "read")
+    // A write this chat made (created or updated) outranks a later read of the same record, and
+    // anything this chat opened outranks a record reopened from memory.
+    else if (next.relation === "created" || next.relation === "updated")
+      records[index] = { ...next, addedAt: records[index]?.addedAt ?? next.addedAt };
+    else if (next.relation === "read" && records[index]?.relation === "remembered")
       records[index] = { ...next, addedAt: records[index]?.addedAt ?? next.addedAt };
   }
   return {
@@ -605,15 +611,74 @@ export function addCreatedRecord(
   return mergeIntoWorkingSet(set, { cards: [], records: [record(ref, via, at, relation)] }, at);
 }
 
-/** The Salesforce campaign the chat has open, most recent first: the target for writes. */
+/**
+ * The Salesforce campaign the chat has open, most recent first: the target for writes. A
+ * campaign reopened from memory isn't a target until the chat reads it again.
+ */
 export const openCampaign = (set: WorkingSet) =>
-  set.records.find((entry) => entry.system === "salesforce" && entry.objectType === "Campaign");
+  set.records.find(
+    (entry) =>
+      entry.system === "salesforce" &&
+      entry.objectType === "Campaign" &&
+      entry.relation !== "remembered",
+  );
+
+const RELATION_PROMPTS: Record<WorkingRecord["relation"], string> = {
+  read: "opened in this chat",
+  created: "created in this chat",
+  updated: "updated in this chat",
+  remembered: "reopened from memory, not re-read; read it again before acting on it",
+};
+
+/**
+ * Reopens remembered work in this chat: a remembered draft becomes the focus again, and the
+ * records a memory links to join the working set as remembered, not as read. Memory is dated
+ * and may be stale, so nothing is marked saved and no remembered campaign becomes a write target.
+ * `draft` is the remembered draft itself: the item, or for a decision, the draft it came from.
+ */
+export function reopenFromMemory(
+  set: WorkingSet,
+  item: MemoryView,
+  draft: MemoryView | undefined,
+  at: Date,
+): WorkingSet {
+  const records = [item, ...(draft && draft !== item ? [draft] : [])].flatMap((memory) =>
+    memory.records.map((ref) => record(ref, "memory", at, "remembered")),
+  );
+  let next = mergeIntoWorkingSet(set, { cards: [], records }, at);
+  const kind = FocusKindSchema.safeParse(draft?.kind);
+  const fields = (draft?.fields ?? []).filter((field) => field.label.trim() && field.value.trim());
+  if (draft && kind.success && fields.length) {
+    const focus: FocusItem = {
+      id: draft.focusId ?? draft.id,
+      kind: kind.data,
+      current: draft.version ?? 1,
+      versions: [
+        {
+          version: draft.version ?? 1,
+          title: draft.title.slice(0, 160),
+          summary: draft.summary.slice(0, 600),
+          fields: fields.slice(0, 16),
+          changeNote:
+            `Reopened from memory (${draft.source.toLowerCase()}, ${draft.at.slice(0, 10)})`.slice(
+              0,
+              240,
+            ),
+          basedOn: [],
+          createdAt: at.toISOString(),
+        },
+      ],
+    };
+    next = { ...next, startedAt: next.startedAt ?? at.toISOString(), focus };
+  }
+  return next;
+}
 
 /** Prompt lines describing what's open in this chat and, separately, the catalog. */
 export function workingSetPrompt(set: WorkingSet) {
   const open = set.records.map(
     (entry) =>
-      `${entry.title} (${entry.systemLabel} ${entry.objectType} ${entry.recordId}, ${entry.relation === "created" ? "created in this chat" : "opened in this chat"})`,
+      `${entry.title} (${entry.systemLabel} ${entry.objectType} ${entry.recordId}, ${RELATION_PROMPTS[entry.relation]})`,
   );
   const context = set.cards.map((card) => `${card.eyebrow}: ${card.title} [${card.source.label}]`);
   const openKeys = new Set(set.records.map((entry) => entry.key));

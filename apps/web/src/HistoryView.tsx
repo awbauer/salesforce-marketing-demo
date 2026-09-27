@@ -44,6 +44,7 @@ export function HistoryView({
   focusTitle,
 }: {
   refreshKey: number;
+  /** Returns to the workspace; after reopening a memory, the chat shows what was reopened. */
   onClose: () => void;
   focusTitle?: string;
 }) {
@@ -112,7 +113,9 @@ export function HistoryView({
         </button>
       </div>
       <div className="evaluations-body">
-        {tab === "memory" && <MemoryPanel refreshKey={refreshKey} focusTitle={focusTitle} />}
+        {tab === "memory" && (
+          <MemoryPanel refreshKey={refreshKey} focusTitle={focusTitle} onReopened={onClose} />
+        )}
         {tab === "turns" && state.status === "loading" && (
           <p role="status">Loading turn history…</p>
         )}

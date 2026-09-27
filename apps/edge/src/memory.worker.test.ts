@@ -1,5 +1,5 @@
 import { runInDurableObject, SELF } from "cloudflare:test";
-import { PROOF_DEFAULTS } from "@northstar/contracts";
+import { PROOF_DEFAULTS, type WorkingSet } from "@northstar/contracts";
 import { describe, expect, it } from "vitest";
 import { notMemoryCases, rememberCases } from "../../../packages/evals/src/cases";
 import type { FocusInput } from "./focus";
@@ -184,6 +184,31 @@ describe("long-term memory in the workspace", () => {
     };
     expect(audit.memory).toContainEqual(
       expect.objectContaining({ action: "forget", memoryId: remembered.id }),
+    );
+  });
+
+  it("reopens a remembered draft as the focus in a new chat, and audits it", async () => {
+    await focusOn("Reopen me push");
+    const remembered = (await (
+      await SELF.fetch("https://example.test/agent/memory/remember", { method: "POST" })
+    ).json()) as { id: string };
+    await SELF.fetch("https://example.test/agent/working-set/reset", { method: "POST" });
+    const response = await SELF.fetch(`https://example.test/agent/memory/${remembered.id}/reopen`, {
+      method: "POST",
+    });
+    expect(await response.json()).toMatchObject({ title: "Reopen me push", focus: true });
+    const focus = await runInDurableObject(
+      await agentStubFor(),
+      (instance) =>
+        (instance as unknown as { state: { workingSet: WorkingSet } }).state.workingSet.focus,
+    );
+    expect(focus?.versions[0]).toMatchObject({ title: "Reopen me push" });
+    expect(focus?.versions[0]?.changeNote).toMatch(/^Reopened from memory/);
+    const audit = (await (await SELF.fetch("https://example.test/agent/audit/export")).json()) as {
+      memory: Array<{ action: string; memoryId: string }>;
+    };
+    expect(audit.memory).toContainEqual(
+      expect.objectContaining({ action: "reopen", memoryId: remembered.id }),
     );
   });
 
