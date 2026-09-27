@@ -1527,6 +1527,8 @@ export class MarketingOrchestrator extends AIChatAgent<
       .json()
       .catch(() => null)) as { error?: { message?: string } } | null;
     this.finishProgress(response.ok, body?.error?.message);
+    // A failed Marketing Cloud write spent its confirmation, so offer the save again.
+    if (!response.ok && current.write) this.suggestFocusSave();
     return response;
   }
 
@@ -2374,7 +2376,7 @@ export class MarketingOrchestrator extends AIChatAgent<
   ): Promise<unknown> {
     if (!tool) return localAgentWrite(write, this.localMarketing);
     return resolveToolResult(
-      tool.execute(agentToolInput(tool, agentRequest(write)), {
+      tool.execute(await agentToolInput(tool, agentRequest(write)), {
         toolCallId: current.id,
         messages: [],
         context: undefined,

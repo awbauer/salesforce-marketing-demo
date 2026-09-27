@@ -222,6 +222,8 @@ export function App() {
   >("overview");
   const confirmationRef = useRef<HTMLElement>(null);
   const connectorStatusLoaded = useRef(false);
+  /** The confirmation the server holds, from its latest state: a failed write may have spent it. */
+  const serverConfirmationId = useRef<string | null>(null);
   const agent = useAgent<OrchestratorState>({
     agent: "MarketingOrchestrator",
     basePath: "agent",
@@ -232,6 +234,7 @@ export function App() {
           ...parsed.data,
           connector: connectorStatusLoaded.current ? current.connector : parsed.data.connector,
         }));
+        serverConfirmationId.current = parsed.data.pendingConfirmation?.id ?? null;
         if (parsed.data.pendingConfirmation) {
           setPendingConfirmation(parsed.data.pendingConfirmation);
         }
@@ -580,6 +583,9 @@ export function App() {
       }
     } catch (actionError) {
       setActionError(actionError instanceof Error ? actionError.message : "Confirmation failed.");
+      // A Marketing Cloud write spends its confirmation before calling the agent, so after a
+      // failure there may be nothing left to confirm: drop the card rather than offer a dead button.
+      if (serverConfirmationId.current !== pendingConfirmation?.id) setPendingConfirmation(null);
     } finally {
       if (decision === "execute") setExecuting(false);
     }

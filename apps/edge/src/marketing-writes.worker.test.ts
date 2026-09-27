@@ -115,7 +115,7 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
     });
   });
 
-  it("asks the agent in one self-contained request and finds the ids it replies with", () => {
+  it("asks the agent in one self-contained request and finds the ids it replies with", async () => {
     const save = agentRequest({
       kind: "brief",
       brief: {
@@ -143,12 +143,30 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
       "701jV00000C76xpQAB",
     );
     expect(
-      agentToolInput(
+      await agentToolInput(
         { inputSchema: { jsonSchema: { properties: { userMessage: { type: "string" } } } } },
         "hi",
       ),
     ).toEqual({ userMessage: "hi" });
-    expect(agentToolInput({}, "hi")).toEqual({ message: "hi" });
+    expect(await agentToolInput({}, "hi")).toEqual({ message: "hi" });
+    // The AI SDK can hold the schema as a promise, and "required" isn't always an array.
+    expect(
+      await agentToolInput(
+        {
+          inputSchema: {
+            jsonSchema: Promise.resolve({
+              type: "object",
+              properties: {
+                sessionId: { type: "string" },
+                inputText: { type: ["string", "null"] },
+              },
+              required: { inputText: true },
+            }),
+          },
+        },
+        "hi",
+      ),
+    ).toEqual({ inputText: "hi" });
   });
 
   it("parses the Salesforce read-back of the brief, preview steps, campaign, and flow", () => {
