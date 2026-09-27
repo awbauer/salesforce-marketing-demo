@@ -214,6 +214,7 @@ export function App() {
     });
   }, []);
   const busy = status === "submitted" || status === "streaming" || isRecovering;
+  const [resetting, setResetting] = useState(false);
   const salesforceReady = state.connector.state === "ready";
   const showChatError = shouldShowChatError(
     status === "error" && Boolean(error) && !isRecovering,
@@ -301,26 +302,24 @@ export function App() {
     }
   }
 
-  /** Clears the conversation and its working set together. */
+  /**
+   * Clears the conversation and its working set together. Sending waits until the server has
+   * reset, so a reset that lands late can't wipe what the new chat's first turn added. The
+   * cleared workspace arrives through the agent's state broadcast, which is always the newest.
+   */
   function startNewChat() {
     clearHistory();
     setSavedRecord(null);
     setImages([]);
     setSelectedImageId(null);
+    setResetting(true);
     agentAction<OrchestratorState["workingSet"]>("working-set/reset")
-      .then((workingSet) =>
-        setState((current) => ({
-          ...current,
-          workingSet,
-          activity: [],
-          pendingConfirmation: null,
-        })),
-      )
       .catch((resetError: unknown) =>
         setActionError(
           resetError instanceof Error ? resetError.message : "The workspace could not be cleared.",
         ),
-      );
+      )
+      .finally(() => setResetting(false));
   }
 
   /** Accepting an action card prepares its confirmation, with the Salesforce permission check. */
@@ -1037,7 +1036,7 @@ export function App() {
             onSubmit={(event) => {
               event.preventDefault();
               const text = input.trim();
-              if (!text || busy) return;
+              if (!text || busy || resetting) return;
               void sendMessage({ text });
               setInput("");
             }}
@@ -1061,7 +1060,7 @@ export function App() {
                 <button
                   type="submit"
                   className="send"
-                  disabled={!input.trim()}
+                  disabled={!input.trim() || resetting}
                   aria-label="Send message"
                 >
                   <span aria-hidden="true">↑</span>

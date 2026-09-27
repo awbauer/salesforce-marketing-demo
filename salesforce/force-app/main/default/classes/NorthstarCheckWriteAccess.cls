@@ -36,7 +36,8 @@ global with sharing class NorthstarCheckWriteAccess {
     };
     private static final Map<String, List<String>> FIELDS = new Map<String, List<String>>{
         'save-marketing-brief' => new List<String>{ 'Brief.KeyMessage', 'Brief.TargetAudience', 'BriefPlanStep.Content' },
-        'create-marketing-campaign' => new List<String>{ 'Campaign.BriefId', 'Campaign.Stage' },
+        // Campaign.Stage is set by Marketing Cloud's own flow; no user can write it through the API.
+        'create-marketing-campaign' => new List<String>{ 'Campaign.Name', 'Campaign.BriefId' },
         'create-review-task' => new List<String>{ 'Task.Description' },
         'attach-generated-image' => new List<String>{ 'ContentVersion.Title' }
     };
