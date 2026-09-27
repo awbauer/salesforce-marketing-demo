@@ -714,7 +714,9 @@ export const WriteProgressStepSchema = z.object({
   endedAt: z.string().optional(),
 });
 export const WriteProgressSchema = z.object({
-  confirmationId: z.string(),
+  /** Preparing a confirmation (plan, permission check), or running a confirmed write. */
+  phase: z.enum(["prepare", "execute"]).default("execute"),
+  confirmationId: z.string().optional(),
   action: z.enum(PROOF_DEFAULTS.allowedWrites),
   title: z.string(),
   startedAt: z.string(),
@@ -725,7 +727,7 @@ export const WriteProgressSchema = z.object({
 export type WriteProgress = z.infer<typeof WriteProgressSchema>;
 
 export const OrchestratorStateSchema = z.object({
-  /** The confirmed write running now, or the last one, step by step. */
+  /** The confirmation being prepared or the confirmed write running now (or the last), step by step. */
   writeProgress: WriteProgressSchema.nullable().default(null),
   suggestions: z.array(SuggestedActionSchema).default([]),
   /** The latest weather-driven inventory check in this chat, which a case can be opened from. */

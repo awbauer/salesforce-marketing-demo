@@ -163,6 +163,24 @@ describe("working set", () => {
       }),
     });
     expect(preflight.status).toBe(201);
+    // Preparing it was published step by step too: the plan, the permission check, the binding.
+    const prepared = await runInDurableObject(
+      await agentStubFor(),
+      (instance) =>
+        (instance as unknown as { state: { writeProgress: WriteProgress | null } }).state
+          .writeProgress,
+    );
+    expect(prepared).toMatchObject({
+      phase: "prepare",
+      action: "create-review-task",
+      outcome: "succeeded",
+    });
+    expect(prepared?.steps.map((step) => [step.id, step.status])).toEqual([
+      ["plan", "done"],
+      ["permissions", "done"],
+      ["confirm", "done"],
+    ]);
+    expect(prepared?.steps[1]?.detail).toMatch(/checks passed \(local fixture\)/);
     const execute = await SELF.fetch("https://example.test/agent/confirmations/execute", {
       method: "POST",
     });
@@ -182,7 +200,11 @@ describe("working set", () => {
         (instance as unknown as { state: { writeProgress: WriteProgress | null } }).state
           .writeProgress,
     );
-    expect(progress).toMatchObject({ action: "create-review-task", outcome: "succeeded" });
+    expect(progress).toMatchObject({
+      phase: "execute",
+      action: "create-review-task",
+      outcome: "succeeded",
+    });
     expect(progress?.steps.map((step) => [step.id, step.status])).toEqual([
       ["confirm", "done"],
       ["sign", "skipped"],

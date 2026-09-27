@@ -45,15 +45,17 @@ function Steps({ progress }: { progress: Progress }) {
 }
 
 /**
- * A confirmed write's steps. While it runs, the steps update live as the Worker publishes them;
+ * A confirmation's preparation, or a confirmed write's steps. While it runs, the steps update live as the Worker publishes them;
  * afterwards they stay as a collapsible record of what happened behind the scenes.
  */
 export function WriteProgress({
   progress,
   running,
+  phase = "execute",
 }: {
   progress: Progress | null;
   running: boolean;
+  phase?: Progress["phase"];
 }) {
   const panel = useRef<HTMLElement>(null);
   // The steps appear below the confirmation card and grow as the Worker reports each one, so
@@ -73,12 +75,18 @@ export function WriteProgress({
       <section
         ref={panel}
         className="write-progress is-running"
-        aria-label="Running the confirmed write"
+        aria-label={
+          phase === "prepare" ? "Preparing the confirmation" : "Running the confirmed write"
+        }
       >
         <p className="write-progress-heading" role="status" aria-live="polite">
           <span className="write-spinner" aria-hidden="true" />
           {progress?.steps.find((step) => step.status === "active")?.label ??
-            (progress?.finishedAt ? "Finishing up…" : "Sending your confirmation…")}
+            (progress?.finishedAt
+              ? "Finishing up…"
+              : phase === "prepare"
+                ? "Preparing the confirmation…"
+                : "Sending your confirmation…")}
         </p>
         {progress && <Steps progress={progress} />}
       </section>

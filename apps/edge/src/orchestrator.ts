@@ -166,6 +166,14 @@ const ACTIVITY_LABELS = {
   "attach-generated-image": "Campaign image attached",
   "create-inventory-case": "Inventory case opened for the store manager",
 } as const;
+/** What a confirmation being prepared is for. */
+const CONFIRMATION_TITLES = {
+  "save-marketing-brief": "save the brief in Marketing Cloud",
+  "create-marketing-campaign": "create the campaign in Marketing Cloud",
+  "create-review-task": "request a review",
+  "attach-generated-image": "attach the campaign image",
+  "create-inventory-case": "open an inventory case",
+} as const;
 /** Why a write was linked to records Marketing Cloud already had, instead of saved again. */
 const FOUND_NOTES = {
   reused: "already in Marketing Cloud from an earlier attempt; linked, not saved again",
@@ -1338,7 +1346,35 @@ export class MarketingOrchestrator extends AIChatAgent<
    * checks the user's Salesforce permissions, and binds everything into one pending confirmation.
    * The HTTP route, the chat's policy router, and the model's proposal tool all come through here.
    */
+  /**
+   * Prepares a confirmation and publishes its progress as it goes (the plan, Salesforce's
+   * permission check, the one-time confirmation), so the person sees the work while it runs.
+   */
   private async prepareConfirmation(body: {
+    action?: unknown;
+    recordId?: unknown;
+    summary?: unknown;
+    imageId?: unknown;
+  }): Promise<Response> {
+    const action = PROOF_DEFAULTS.allowedWrites.find((write) => write === body.action);
+    if (!action) return this.buildConfirmation(body);
+    this.beginPrepareProgress(action);
+    let response: Response;
+    try {
+      response = await this.buildConfirmation(body);
+    } catch (error) {
+      this.finishProgress(false, error instanceof Error ? error.message : "Preparing failed.");
+      throw error;
+    }
+    const result = (await response
+      .clone()
+      .json()
+      .catch(() => null)) as { error?: { message?: string } } | null;
+    this.finishProgress(response.ok, result?.error?.message);
+    return response;
+  }
+
+  private async buildConfirmation(body: {
     action?: unknown;
     recordId?: unknown;
     summary?: unknown;
@@ -1391,6 +1427,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         { status: 409 },
       );
     // Salesforce decides whether this user may write; the card shows each check it ran.
+    this.stepProgress("permissions");
     const permissionCheck = await this.checkWriteAccess(action as Confirmation["action"], recordId);
     if (!permissionCheck.permissions)
       return json(
@@ -1420,6 +1457,8 @@ export class MarketingOrchestrator extends AIChatAgent<
         },
         { status: 403 },
       );
+    this.notePermissions(permissions);
+    this.stepProgress("confirm");
     let summary = plan?.summary ?? (typeof body.summary === "string" ? body.summary.trim() : "");
     let image: { imageId: string; contentHash: string } | undefined;
     if (action === "attach-generated-image") {
@@ -1532,6 +1571,51 @@ export class MarketingOrchestrator extends AIChatAgent<
     return response;
   }
 
+  /** The steps preparing a confirmation goes through, in order, for its live progress. */
+  private preparePlan(action: Confirmation["action"]): Array<{ id: string; label: string }> {
+    const plan =
+      action === "save-marketing-brief" || action === "create-marketing-campaign"
+        ? "Planning the save from the workspace draft"
+        : action === "create-inventory-case"
+          ? "Writing the case from the inventory check"
+          : "Checking the campaign open in this chat";
+    return [
+      { id: "plan", label: plan },
+      {
+        id: "permissions",
+        label: "Salesforce checks your permissions as you (NorthstarCheckWriteAccess)",
+      },
+      { id: "confirm", label: "Binding exactly what will be written to a one-time confirmation" },
+    ];
+  }
+
+  /** Starts a confirmation's live progress; nothing is written while it's prepared. */
+  private beginPrepareProgress(action: Confirmation["action"]) {
+    const now = new Date().toISOString();
+    this.setState({
+      ...this.state,
+      writeProgress: {
+        phase: "prepare",
+        action,
+        title: `Preparing to ${CONFIRMATION_TITLES[action]}`,
+        startedAt: now,
+        steps: this.preparePlan(action).map((step, index) => ({
+          ...step,
+          status: index === 0 ? ("active" as const) : ("pending" as const),
+          ...(index === 0 ? { startedAt: now } : {}),
+        })),
+      },
+    });
+  }
+
+  /** Adds what Salesforce's permission check found to the prepare progress. */
+  private notePermissions(permissions: PermissionReport) {
+    this.noteProgress(
+      "permissions",
+      `${permissions.checks.filter((check) => check.passed).length} of ${permissions.checks.length} checks passed${permissions.source === "salesforce" ? ` as ${permissions.user}` : " (local fixture)"}.`,
+    );
+  }
+
   /** The steps a confirmed write goes through, in order, for its live progress. */
   private progressPlan(current: Confirmation): Array<{ id: string; label: string }> {
     const agent = SALESFORCE_AGENTS[CAMPAIGN_AGENT].label;
@@ -1586,6 +1670,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     this.setState({
       ...this.state,
       writeProgress: {
+        phase: "execute",
         confirmationId: current.id,
         action: current.action,
         title: ACTIVITY_LABELS[current.action],
@@ -1975,6 +2060,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         },
         { status: 400 },
       );
+    this.stepProgress("permissions");
     const permissionCheck = await this.checkWriteAccess("create-inventory-case", "new");
     if (!permissionCheck.permissions)
       return json(
@@ -2004,6 +2090,8 @@ export class MarketingOrchestrator extends AIChatAgent<
         },
         { status: 403 },
       );
+    this.notePermissions(permissions);
+    this.stepProgress("confirm");
     const detailsJson = inventoryCaseDetails(risk);
     const count = risk.lowItems.length;
     const confirmation = ConfirmationSchema.parse({
