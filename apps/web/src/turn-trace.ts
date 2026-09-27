@@ -377,7 +377,9 @@ function rowsFromTrace(message: UIMessage, trace: TurnTrace): TraceRow[] {
             detail:
               event.reason === "empty"
                 ? "The model wrote no text, so the orchestrator explained the result"
-                : `The orchestrator explained the ${event.reason} outcome`,
+                : event.reason === "composed"
+                  ? "The model wrote no text, so the orchestrator wrote the answer from the tool's result"
+                  : `The orchestrator explained the ${event.reason} outcome`,
             state: "complete",
             elapsed,
           },

@@ -565,7 +565,7 @@ After a plan finishes, the model gets **no tools** and must write the answer.`,
 
 At the turn level:
 - Structured timeouts cover the whole turn, gaps between chunks, and each tool call.
-- Errors and empty answers become an explanatory message instead of a silent failure.
+- Errors and empty answers become an explanatory message instead of a silent failure. When the Campaign Creation agent drafted a brief but the model wrote no reply, the answer is written from the brief's own fields.
 - Workers AI capacity errors are explained in plain language.`,
         inDemo: [
           "apps/edge/src/forced-tool-middleware.ts",
@@ -636,7 +636,8 @@ You watch both halves step by step. While a confirmation is prepared, the steps 
   - turn start, step start and finish (finish reason, token counts)
   - reasoning start and end, with the model's reasoning, redacted
   - text start and end
-  - tool input and output, with the Salesforce agent, subagent, and actions behind each Salesforce tool; errors; recovery messages; and the outcome
+  - tool input and output, with the Salesforce agent, subagent, and actions behind each Salesforce tool; errors; recovery messages; and the outcome, including when the answer was written from a tool's result because the model wrote none
+- **Workers Logs** for operators: a Salesforce or agent call that failed is logged with its error and stack, even when the user sees a friendly message. A write or confirmation that failed logs the step where it stopped. Request content is never logged.
 - **Turn history** (History → Turns): each utterance with the orchestrator's interpretation, the tool calls with inputs and results, and the outcome. Filterable, and kept 24 hours per user.
 - **Memory** (History → Memory): what the workspace remembers across chats, with provenance, and **Reopen** and **Forget** buttons. The audit export lists each reopen. See *Long-term memory*.
 - **Audit export:** a JSON download of the user's confirmed writes, memory remembers and forgets, and turn summaries.`,
