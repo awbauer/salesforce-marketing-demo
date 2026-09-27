@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   type Confirmation,
   currentFocusVersion,
@@ -425,14 +426,25 @@ export function briefFocusFromAgent(reply: string, changeNote: string): FocusInp
   };
 }
 
+/** A tool's input schema as JSON Schema: the Agents SDK holds a Zod schema, the AI SDK a wrapper. */
+async function inputJsonSchema(inputSchema: unknown): Promise<unknown> {
+  if (inputSchema instanceof z.ZodType) return z.toJSONSchema(inputSchema, { io: "input" });
+  if (inputSchema && typeof inputSchema === "object" && "jsonSchema" in inputSchema)
+    return await (inputSchema as { jsonSchema: unknown }).jsonSchema;
+  return inputSchema;
+}
+
 /**
  * The arguments for an agent-backed MCP tool: the request goes in the tool's text parameter,
- * whatever the Hosted MCP names it, read from the tool's own input schema. The AI SDK may hold
- * that schema as a promise, and nothing about its shape is assumed.
+ * whatever the Hosted MCP names it, read from the tool's own input schema.
  */
 export async function agentToolInput(tool: { inputSchema?: unknown }, message: string) {
-  const raw = tool.inputSchema as { jsonSchema?: unknown } | undefined;
-  const resolved: unknown = await (raw && "jsonSchema" in raw ? raw.jsonSchema : raw);
+  let resolved: unknown;
+  try {
+    resolved = await inputJsonSchema(tool.inputSchema);
+  } catch {
+    resolved = undefined;
+  }
   const schema = (resolved && typeof resolved === "object" ? resolved : {}) as {
     properties?: unknown;
     required?: unknown;
@@ -448,7 +460,7 @@ export async function agentToolInput(tool: { inputSchema?: unknown }, message: s
     : [];
   // Parameter names only, never values: the record of what the Hosted MCP tool expects.
   console.log(
-    `[marketing] agent tool input: properties=${Object.keys(properties).join(",") || "none"} required=${JSON.stringify(schema.required ?? null).slice(0, 120)}`,
+    `[marketing] agent tool input: properties=${Object.keys(properties).join(",") || "none"} required=${required.join(",") || "none"}`,
   );
   const key =
     required.find((name) => strings.includes(name)) ??

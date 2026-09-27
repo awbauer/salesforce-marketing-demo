@@ -1,6 +1,7 @@
 import { runInDurableObject, SELF } from "cloudflare:test";
 import { emptyWorkingSet, type FocusItem, type WorkingSet } from "@northstar/contracts";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { applyFocusUpdate, type FocusInput } from "./focus";
 import {
   agentRequest,
@@ -167,6 +168,19 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
         "hi",
       ),
     ).toEqual({ inputText: "hi" });
+    // The Agents SDK's getAITools() holds a Zod schema, whose .required is a method.
+    expect(
+      await agentToolInput(
+        {
+          inputSchema: z.fromJSONSchema({
+            type: "object",
+            properties: { sessionId: { type: "string" }, userInput: { type: "string" } },
+            required: ["userInput"],
+          }),
+        },
+        "hi",
+      ),
+    ).toEqual({ userInput: "hi" });
   });
 
   it("parses the Salesforce read-back of the brief, preview steps, campaign, and flow", () => {

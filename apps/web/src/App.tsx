@@ -163,6 +163,8 @@ export function App() {
   const [pendingConfirmation, setPendingConfirmation] = useState<Confirmation | null>(null);
   /** True from the moment Confirm is clicked until the write finishes. */
   const [executing, setExecuting] = useState(false);
+  // What's being prepared for confirmation: an action card's id, or "image" for an attachment.
+  const [preparing, setPreparing] = useState<string | null>(null);
   const [createdRecord, setCreatedRecord] = useState<{
     objectApiName: "Task";
     recordId: string;
@@ -389,13 +391,24 @@ export function App() {
 
   /** Accepting an action card prepares its confirmation, with the Salesforce permission check. */
   async function acceptSuggestion(id: string) {
+    if (preparing) return;
+    startPreparing(id);
     try {
       const confirmation = await agentAction<Confirmation>(`suggestions/${id}/accept`);
       setPendingConfirmation(confirmation);
       setState((current) => ({ ...current, pendingConfirmation: confirmation }));
     } catch (actionError) {
       setActionError(actionError instanceof Error ? actionError.message : "Preflight failed.");
+    } finally {
+      setPreparing(null);
     }
+  }
+
+  /** Clears the last run's steps so the panel shows only this preparation's, as the Worker sends them. */
+  function startPreparing(what: string) {
+    setPreparing(what);
+    setActionError("");
+    setState((current) => ({ ...current, writeProgress: null }));
   }
 
   async function dismissSuggestion(id: string) {
@@ -462,7 +475,8 @@ export function App() {
   }
 
   async function requestImageAttachment() {
-    if (!generatedImage) return;
+    if (!generatedImage || preparing) return;
+    startPreparing("image");
     try {
       const confirmation = await agentAction<Confirmation>("confirmations", {
         action: "attach-generated-image",
@@ -473,6 +487,8 @@ export function App() {
       setState((current) => ({ ...current, pendingConfirmation: confirmation }));
     } catch (actionError) {
       setActionError(actionError instanceof Error ? actionError.message : "Preflight failed.");
+    } finally {
+      setPreparing(null);
     }
   }
 
@@ -965,7 +981,7 @@ export function App() {
                 </details>
               </section>
             )}
-            {!pendingConfirmation && (
+            {!pendingConfirmation && !preparing && (
               <WriteProgress progress={state.writeProgress} running={false} />
             )}
             {openedCase && (
@@ -1062,8 +1078,16 @@ export function App() {
             {!pendingConfirmation && (
               <ActionCards
                 suggestions={state.suggestions ?? []}
+                preparing={preparing}
                 onAccept={(id) => void acceptSuggestion(id)}
                 onDismiss={(id) => void dismissSuggestion(id)}
+              />
+            )}
+            {!pendingConfirmation && preparing && (
+              <WriteProgress
+                running
+                phase="prepare"
+                progress={state.writeProgress?.phase === "prepare" ? state.writeProgress : null}
               />
             )}
             {pendingConfirmation && (
@@ -1305,12 +1329,14 @@ export function App() {
                         type="button"
                         className="secondary-button attach-image-button"
                         onClick={() => void requestImageAttachment()}
+                        aria-busy={preparing === "image"}
                         disabled={
                           pendingConfirmation !== null ||
+                          preparing !== null ||
                           writeBlock("attach-generated-image") !== null
                         }
                       >
-                        Attach to campaign
+                        {preparing === "image" ? "Preparing…" : "Attach to campaign"}
                       </button>
                     )}
                     {generatedImage.lifecycle === "draft" && (

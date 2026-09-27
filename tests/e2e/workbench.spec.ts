@@ -85,12 +85,31 @@ test("builds the workspace from the chat and completes a durable turn", async ({
   await page.screenshot({
     path: `artifacts/evidence/WU-038/action-card-${testInfo.project.name}.png`,
   });
+  // Hold the request so preparing stays on screen: the card shows it's working right away.
+  let releasePrepare = () => {};
+  const preparing = new Promise<void>((resolve) => {
+    releasePrepare = resolve;
+  });
+  await page.route("**/agent/suggestions/*/accept", async (route) => {
+    await preparing;
+    await route.continue();
+  });
   await page
     .getByTestId("action-card")
     .filter({ hasText: "Request a review" })
     .getByRole("button", { name: "Prepare review request" })
     .click();
+  await expect(page.getByRole("button", { name: "Preparing…" })).toBeDisabled();
+  const preparingPanel = page.getByRole("region", { name: "Preparing the confirmation" });
+  await expect(preparingPanel).toBeVisible();
+  await expect(preparingPanel).toBeInViewport({ ratio: 0.9 });
+  await page.screenshot({
+    path: `artifacts/evidence/WU-049/prepare-progress-${testInfo.project.name}.png`,
+  });
+  releasePrepare();
   await expect(page.getByRole("heading", { name: "Create Salesforce review task?" })).toBeVisible();
+  await page.unroute("**/agent/suggestions/*/accept");
+  await expect(preparingPanel).toHaveCount(0);
   await expect(
     page.locator(".confirmation-card").getByRole("link", { name: /701jV000004GglIQAS/ }),
   ).toBeVisible();
