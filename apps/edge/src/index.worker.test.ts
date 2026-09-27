@@ -108,7 +108,7 @@ describe("edge runtime", () => {
       errorCode: "UPSTREAM_UNAVAILABLE",
       toolCount: 1,
     });
-    expect(connector.message).toContain("1 of 18 governed Salesforce tools");
+    expect(connector.message).toContain("1 of 17 governed Salesforce tools");
   });
   it("counts governed Salesforce tools once when discovery returns duplicate aliases", () => {
     const connector = connectorFromMcp(true, {
@@ -118,7 +118,7 @@ describe("edge runtime", () => {
         { serverId: "salesforce", name: "tool_salesforce_check_write_access" },
       ],
     } as never);
-    expect(connector).toMatchObject({ state: "ready", toolCount: 18 });
+    expect(connector).toMatchObject({ state: "ready", toolCount: 17 });
   });
   it("runs the browserless Salesforce write preflight in local mode", async () => {
     const response = await SELF.fetch(
@@ -348,15 +348,15 @@ describe("edge runtime", () => {
       error: { code: "VALIDATION_FAILED" },
     });
   });
-  it("binds a confirmed local draft save to its campaign and idempotency key", async () => {
+  it("binds a confirmed local review request to its campaign and idempotency key", async () => {
     await openCatalogCampaign();
     const preflight = await SELF.fetch("https://example.test/agent/confirmations", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        action: "save-draft-campaign",
+        action: "create-review-task",
         recordId: "701jV000004GglIQAS",
-        summary: "A bounded fictional Northstar draft brief.",
+        summary: "Review the campaign with current readiness findings.",
       }),
     });
     expect(preflight.status).toBe(201);
@@ -368,7 +368,6 @@ describe("edge runtime", () => {
     await expect(execute.json()).resolves.toMatchObject({
       result: {
         source: "local-fixture",
-        recordId: "701jV000004GglIQAS",
         campaignId: "701jV000004GglIQAS",
         idempotencyKey: confirmation.idempotencyKey,
         readBack: true,

@@ -19,6 +19,8 @@ export const MAX_OUTPUT_TOKENS = 4096;
 export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly string[]) {
   // Scenario guidance is added only when its plan is active, so it cannot steer other requests.
   const restaurantPlan = toolPlan?.some((name) => name.endsWith("get_restaurant_profile"));
+  const briefPlan = toolPlan?.some((name) => name.endsWith("draft_campaign_brief"));
+  const refinePlan = toolPlan?.some((name) => name.endsWith("refine_campaign_preview"));
   const graphPlan = toolPlan?.some((name) => name.startsWith("graph_"));
   const memoryPlan = toolPlan?.some((name) =>
     /_(?:recall_decisions|recall_recent_work)$/.test(name),
@@ -35,7 +37,17 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
     "Format answers in concise Markdown: short paragraphs, bold labels, bullet lists, and small tables when they help. Never use raw HTML.",
     ...(restaurantPlan
       ? [
-          "For this restaurant campaign, read the restaurant profile, then the current weather for its city, then look up similar past pushes in the knowledge graph for that location, daypart, and weather bucket (they show which menu items performed best), then ask the campaign content tool for a draft that uses the menu, favorites, local time of day, weather, and what performed best before. For a push campaign, present the featured items, two or three notification variants, a send time, and why each fits. For an email, present a subject line, a preheader, the body, a call to action, and a send time, and explain why it fits. Cite past performance, and include **Campaign:** and **Brand:** Coastline Kitchen lines. It is a draft; never say it was scheduled or sent.",
+          "For this restaurant campaign, read the restaurant profile, then the current weather for its city, then look up similar past pushes in the knowledge graph for that location, daypart, and weather bucket (they show which menu items performed best). Then ask the Marketing Cloud Campaign Creation agent for the campaign brief: its objective must name Coastline Kitchen, the channel requested, the audience and city, the featured menu items, the local time of day, the weather, and what performed best before. Explain briefly how the context shaped the brief and cite past performance.",
+        ]
+      : []),
+    ...(briefPlan
+      ? [
+          "draft_campaign_brief asks the Northstar Campaign Creation agent (a Marketing Cloud Next Campaign Creation agent) to run its Draft a Campaign Brief action. Send one complete request: for a new brief, 'Draft a campaign brief for …' with the full objective; to revise the brief in focus, 'Revise this campaign brief' followed by its current fields and the requested change. Present the brief the agent returns as labeled lines: **Name:**, **Description:**, **Key Message:**, **Target Audience:**, **Primary Goal:**, **Primary CTAs:**, **Primary KPI:**, **Agent Guardrails:**, **Priority:**; do not invent fields it didn't return. Say that the agent drafted it and nothing is saved yet: saving it to Marketing Cloud goes through a confirmation card, after which the agent drafts the campaign preview. Marketing Cloud previews here plan email and SMS steps; if the user asked for push, say the brief records that and the preview may use email.",
+        ]
+      : []),
+    ...(refinePlan
+      ? [
+          "refine_campaign_preview asks the Northstar Campaign Creation agent to run its Refine Campaign Preview action on the saved brief. Send 'Refine the campaign preview on brief <Brief ID from the workspace focus>: <the requested change>'. Then summarize what the agent changed; the workspace reloads the preview from Salesforce.",
         ]
       : []),
     ...(graphPlan
@@ -129,7 +141,7 @@ const TOOL_PLANS: ReadonlyArray<readonly [readonly string[], (prompt: string) =>
       "get_restaurant_profile",
       "get_current_weather",
       "find_similar_past_pushes",
-      "draft_campaign_content",
+      "draft_campaign_brief",
     ],
     // A push campaign, or any campaign or email for the restaurant: both use the same context.
     (p) =>
@@ -148,7 +160,12 @@ const DRAFTING_TOOLS = new Set([
   "refine_campaign_preview",
 ]);
 
-export type PlanContext = { hasFocus?: boolean };
+export type PlanContext = {
+  hasFocus?: boolean;
+  focusKind?: FocusKind;
+  /** The focus is a brief saved in Marketing Cloud, so changes refine its campaign preview. */
+  briefSaved?: boolean;
+};
 
 /**
  * A change to the draft in focus: "make it warmer", "shorten the body", "use the burrito
@@ -207,19 +224,22 @@ export function draftIntent(
   const plan = requestedToolPlan(prompt, context);
   const last = plan?.at(-1);
   if (last && DRAFTING_TOOLS.has(last)) {
-    if (last === "draft_campaign_brief") return { mode: "draft", kind: "brief" };
-    if (last === "refine_campaign_preview") return { mode: "draft", kind: "campaign" };
+    if (last === "draft_campaign_brief")
+      return {
+        mode:
+          context.hasFocus && context.focusKind === "brief" && isRevisionRequest(prompt)
+            ? "revise"
+            : "draft",
+        kind: "brief",
+      };
+    // Refining a saved brief's preview changes Marketing Cloud, not the draft in focus.
+    if (last === "refine_campaign_preview")
+      return context.briefSaved ? null : { mode: "draft", kind: "campaign" };
     if (/\bpush\b|\bnotification/i.test(prompt)) return { mode: "draft", kind: "push-message" };
     if (/\bemail\b|subject line|preheader/i.test(prompt)) return { mode: "draft", kind: "email" };
     return { mode: "draft", kind: "content" };
   }
   if (plan) return null;
-  if (
-    wantsSalesforceRecord(prompt) &&
-    /\bcampaign\b/i.test(prompt) &&
-    /\b(?:create|set up|start|make)\b/i.test(prompt)
-  )
-    return { mode: "draft", kind: "campaign" };
   if (context.hasFocus && context.focusKind && isRevisionRequest(prompt))
     return { mode: "revise", kind: context.focusKind };
   return null;
@@ -228,8 +248,25 @@ export function draftIntent(
 /** The ordered tools a prompt requires, or null to let the model choose. */
 export function requestedToolPlan(
   prompt: string,
-  _context: PlanContext = {},
+  context: PlanContext = {},
 ): readonly string[] | null {
+  // Changes to a Marketing Cloud brief go back to the Campaign Creation agent: a re-draft
+  // before the brief is saved, a preview refinement after.
+  if (context.hasFocus && context.focusKind === "brief" && isRevisionRequest(prompt))
+    return [context.briefSaved ? "refine_campaign_preview" : "draft_campaign_brief"];
+  if (
+    context.briefSaved &&
+    /\b(?:preview|email [12]|second email|first email|step \d)\b/i.test(prompt) &&
+    isRevisionRequest(prompt)
+  )
+    return ["refine_campaign_preview"];
+  // A new campaign "in Salesforce" or "in Marketing Cloud" starts with the agent's brief.
+  if (
+    (wantsSalesforceRecord(prompt) || /\bmarketing cloud\b/i.test(prompt)) &&
+    /\bcampaign\b/i.test(prompt) &&
+    /\b(?:create|set up|start|make|build|plan)\b/i.test(prompt)
+  )
+    return ["draft_campaign_brief"];
   const plan =
     TOOL_PLANS.find(([, matches]) => matches(prompt))?.[0] ??
     (() => {

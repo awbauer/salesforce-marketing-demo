@@ -23,7 +23,7 @@ const forbidden = [
 ];
 const orchestratorSource = await readFile("apps/edge/src/orchestrator.ts", "utf8");
 const confirmationMigration = await readFile(
-  "migrations/0003_expand_confirmation_actions.sql",
+  "migrations/0004_marketing_cloud_agent_actions.sql",
   "utf8",
 );
 const failures = required
@@ -41,9 +41,12 @@ const auditedActions = [...auditActionClause.matchAll(/'([^']+)'/g)]
   .map((match) => match[1])
   .sort();
 const allowedActions = [...PROOF_DEFAULTS.allowedWrites].sort();
-if (JSON.stringify(auditedActions) !== JSON.stringify(allowedActions))
+// Retired actions stay in the audit's CHECK so rows written before they were retired remain valid.
+const RETIRED_ACTIONS = ["save-brief", "save-campaign", "save-draft-campaign", "save-message"];
+const expectedAudit = [...allowedActions, ...RETIRED_ACTIONS].sort();
+if (JSON.stringify(auditedActions) !== JSON.stringify(expectedAudit))
   failures.push(
-    `Confirmation audit actions differ from the governed write contract: expected ${allowedActions.length}, found ${auditedActions.length}`,
+    `Confirmation audit actions differ from the governed write contract: expected ${expectedAudit.length}, found ${auditedActions.length}`,
   );
 for (const tool of catalog.tools) {
   if (!["read", "draft", "write"].includes(tool.riskClass))

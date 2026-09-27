@@ -63,19 +63,23 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   ),
   tool(
     "draft_campaign_brief",
-    "salesforce",
-    "Agent-drafted campaign brief; the draft lands in the workspace focus.",
+    "marketing-cloud",
+    "The Campaign Creation agent's Draft a Campaign Brief action; the brief becomes the workspace focus.",
   ),
-  tool("refine_campaign_preview", "salesforce", "Refines a campaign preview without saving it."),
+  tool(
+    "refine_campaign_preview",
+    "marketing-cloud",
+    "The Campaign Creation agent's Refine Campaign Preview action, on a brief saved in Marketing Cloud.",
+  ),
   tool(
     "draft_campaign_content",
     "salesforce",
-    "Agent-drafted email, push, or SMS copy grounded in the context gathered this turn.",
+    "The Content Builder agent's Draft Content action: copy for an email, push, or SMS.",
   ),
   tool(
     "create_content_section",
     "salesforce",
-    "Drafts one content section, such as a hero, header, or footer.",
+    "The Content Builder agent's Create Section with Content action: a hero, header, or footer.",
   ),
   tool(
     "validate_content_against_brand",
@@ -103,24 +107,19 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
     "Read-only Apex check, run as the signed-in user, of every permission a write needs.",
   ),
   tool(
-    "save_campaign",
-    "governance",
-    "Confirmed write: creates or updates a Campaign from the focus draft. Never available to the model.",
+    "save_marketing_brief",
+    "marketing-cloud",
+    "Confirmed write: the Campaign Creation agent saves the brief (Save Campaign Brief) and drafts its preview.",
   ),
   tool(
-    "save_brief",
-    "governance",
-    "Confirmed write: creates or updates a Northstar brief on a campaign. Never available to the model.",
+    "create_marketing_campaign",
+    "marketing-cloud",
+    "Confirmed write: the Campaign Creation agent creates the campaign and its flow (Create Campaign, Save Campaign).",
   ),
   tool(
-    "save_message",
-    "governance",
-    "Confirmed write: creates or updates an email, push, or SMS message draft. Never available to the model.",
-  ),
-  tool(
-    "save_campaign_brief",
-    "governance",
-    "Confirmed write: saves a brief into a campaign's description. Never available to the model.",
+    "get_marketing_records",
+    "marketing-cloud",
+    "Read-back of a Brief, its preview steps, and the Campaign and flow created from it.",
   ),
   tool(
     "create_campaign_review_request",
@@ -193,10 +192,14 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   // Confirmation actions.
   ...(
     [
-      ["save-campaign", "Create or update a Salesforce Campaign from the focus draft."],
-      ["save-brief", "Create or update a Northstar brief record from the focus draft."],
-      ["save-message", "Create or update an email, push, or SMS message draft record."],
-      ["save-draft-campaign", "Save the focus brief into the open campaign's description."],
+      [
+        "save-marketing-brief",
+        "Have the Campaign Creation agent save the focus as a Marketing Cloud brief.",
+      ],
+      [
+        "create-marketing-campaign",
+        "Have the Campaign Creation agent create the campaign and its flow from the saved brief.",
+      ],
       ["create-review-task", "Create a Salesforce review task for the open campaign."],
       ["attach-generated-image", "Attach an approved generated image to the open campaign."],
     ] as const
@@ -205,7 +208,7 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
       kind: "Write action",
       name,
       summary: `${summary} Needs a permission check and your confirmation.`,
-      section: "governance",
+      section: name.includes("marketing") ? "marketing-cloud" : "governance",
     }),
   ),
 
@@ -310,13 +313,9 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
       ["NorthstarCheckWriteAccess", "Apex: the read-only permission check run as the user."],
       ["NorthstarConfirmationVerifier", "Apex: verifies the signed confirmation before any write."],
       [
-        "NorthstarRecordWrites",
-        "Apex: shared, user-mode create and update logic for record saves.",
+        "NorthstarGetMarketingRecords",
+        "Apex: reads back the Brief, preview steps, Campaign, and flow the agent created.",
       ],
-      ["NorthstarSaveCampaign", "Apex action behind save_campaign."],
-      ["NorthstarSaveBrief", "Apex action behind save_brief."],
-      ["NorthstarSaveMessage", "Apex action behind save_message."],
-      ["NorthstarSaveCampaignBrief", "Apex action behind save_campaign_brief."],
       [
         "NorthstarCreateCampaignReviewRequest",
         "Apex action behind create_campaign_review_request.",
@@ -337,8 +336,6 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
         "NorthstarValidateCampaignContent",
         "Apex action: readiness checks on campaign fields, including instruction-like text.",
       ],
-      ["Northstar_Brief__c", "Custom object: a campaign brief saved from the workbench."],
-      ["Northstar_Message__c", "Custom object: an email, push, or SMS draft; never sent."],
       [
         "Northstar_Confirmation_Config__c",
         "Custom setting holding the key Apex uses to verify signed confirmations.",
@@ -350,9 +347,11 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
       name,
       summary,
       section:
-        name.startsWith("Northstar_") || /Verifier|CheckWrite|RecordWrites/.test(name)
-          ? "governance"
-          : "salesforce",
+        name === "NorthstarGetMarketingRecords"
+          ? "marketing-cloud"
+          : name.startsWith("Northstar_") || /Verifier|CheckWrite/.test(name)
+            ? "governance"
+            : "salesforce",
     }),
   ),
 ];

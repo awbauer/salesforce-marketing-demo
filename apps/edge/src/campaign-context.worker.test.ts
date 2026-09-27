@@ -3,7 +3,13 @@ import { describe, expect, it } from "vitest";
 import { conditionFromWmo, fetchCurrentWeather, openMeteoUrl } from "./campaign-context/open-meteo";
 import type { RESTAURANT_PROFILES } from "./campaign-context/restaurant-profile";
 import { connectCampaignContextTools } from "./campaign-context/server";
-import { draftIntent, missingPlannedTool, selectToolPlan, stepToolChoice } from "./turn-policy";
+import {
+  draftIntent,
+  missingPlannedTool,
+  requestedToolPlan,
+  selectToolPlan,
+  stepToolChoice,
+} from "./turn-policy";
 
 const PUSH_PROMPT =
   "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
@@ -111,12 +117,12 @@ describe("campaign-context MCP", () => {
     expect(text).toContain("get_current_weather");
   });
 
-  it("plans Coastline email and push campaigns as profile, weather, past pushes, then content", () => {
+  it("plans Coastline campaigns as profile, weather, past pushes, then the agent's brief", () => {
     const names = [
       "context_get_restaurant_profile",
       "context_get_current_weather",
       "graph_find_similar_past_pushes",
-      "tool_salesforce_ns_draft_campaign_content",
+      "tool_salesforce_ns_draft_campaign_brief",
     ];
     const plan = selectToolPlan(PUSH_PROMPT, names);
     expect(plan).toEqual(names);
@@ -133,11 +139,12 @@ describe("campaign-context MCP", () => {
     expect(selectToolPlan(PUSH_PROMPT, names.slice(0, 2))).toBeUndefined();
   });
 
-  it("marks drafting and revision turns so their answers are saved to the focus", () => {
-    expect(draftIntent(PUSH_PROMPT)).toEqual({ mode: "draft", kind: "push-message" });
+  it("marks drafting and revision turns so their drafts are saved to the focus", () => {
+    // Campaign requests end with the Marketing Cloud Campaign Creation agent's brief.
+    expect(draftIntent(PUSH_PROMPT)).toEqual({ mode: "draft", kind: "brief" });
     expect(draftIntent("Draft an email campaign for Coastline Kitchen")).toEqual({
       mode: "draft",
-      kind: "email",
+      kind: "brief",
     });
     expect(draftIntent("Draft a campaign brief for the spring launch")).toEqual({
       mode: "draft",
@@ -145,8 +152,19 @@ describe("campaign-context MCP", () => {
     });
     expect(draftIntent("Create a new campaign for the spring menu in Salesforce")).toEqual({
       mode: "draft",
-      kind: "campaign",
+      kind: "brief",
     });
+    expect(requestedToolPlan("Create a new campaign for the spring menu in Salesforce")).toEqual([
+      "draft_campaign_brief",
+    ]);
+    // A brief's revision goes back to the agent: a re-draft before saving, a refinement after.
+    const brief = { hasFocus: true, focusKind: "brief" as const };
+    expect(requestedToolPlan("Make it warmer", brief)).toEqual(["draft_campaign_brief"]);
+    expect(draftIntent("Make it warmer", brief)).toEqual({ mode: "revise", kind: "brief" });
+    expect(requestedToolPlan("Make it warmer", { ...brief, briefSaved: true })).toEqual([
+      "refine_campaign_preview",
+    ]);
+    expect(draftIntent("Make it warmer", { ...brief, briefSaved: true })).toBeNull();
     expect(draftIntent("Make it warmer", { hasFocus: true, focusKind: "email" })).toEqual({
       mode: "revise",
       kind: "email",

@@ -340,13 +340,13 @@ async function seedEvalMemory(backend, workspaceId) {
     ...stamp(3),
     decision: {
       kind: "confirmed-write",
-      outcome: "Created Message “Rainy-day comfort” (a0C000000000001).",
+      outcome: "Saved the brief “Rainy-day comfort” (21y000000000001).",
       note: "Saved from version 2 of the draft.",
     },
     record: {
       system: "salesforce",
-      objectType: "Northstar_Message__c",
-      recordId: "a0C000000000001",
+      objectType: "Brief",
+      recordId: "21y000000000001",
       title: "Rainy-day comfort",
     },
     draftRef: { focusId: "eval-focus", version: 2 },

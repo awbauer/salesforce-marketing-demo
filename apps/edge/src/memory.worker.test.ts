@@ -118,7 +118,7 @@ describe("long-term memory in the workspace", () => {
     const prepared = await SELF.fetch("https://example.test/agent/confirmations", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "save-message" }),
+      body: JSON.stringify({ action: "save-marketing-brief" }),
     });
     expect(prepared.status).toBe(201);
     const executed = await SELF.fetch("https://example.test/agent/confirmations/execute", {

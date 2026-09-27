@@ -32,14 +32,6 @@ private class NorthstarCampaignActionsTest {
         );
     }
 
-    private static void authorizeBrief(NorthstarSaveCampaignBrief.Input input) {
-        Long expiresAt = DateTime.now().addMinutes(4).getTime() / 1000;
-        input.confirmationId = signedConfirmation(
-            'save-draft-campaign', input.campaignId, input.confirmationId, input.requestHash,
-            input.idempotencyKey, expiresAt, 'test-evaluator'
-        );
-    }
-
     // A valid 1x1 PNG; fictional test content only.
     private static final String TEST_PNG_BASE64 =
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -253,56 +245,6 @@ private class NorthstarCampaignActionsTest {
                 System.assert(expected.getMessage().contains('verification failed'));
             }
             System.assertEquals(0, [SELECT COUNT() FROM Task WHERE Northstar_Idempotency_Key__c = :input.idempotencyKey]);
-        }
-    }
-
-    @IsTest
-    static void savesDraftBriefIdempotentlyAndReadsItBack() {
-        User evaluator = createEvaluator(true);
-        Campaign campaign = [SELECT Id FROM Campaign LIMIT 1];
-        System.runAs(evaluator) {
-            NorthstarSaveCampaignBrief.Input input = new NorthstarSaveCampaignBrief.Input();
-            input.campaignId = campaign.Id;
-            input.brief = 'Approved fictional Northstar draft brief. No customer-level data.';
-            input.confirmationId = '123c6b9f-a818-4a08-9304-ce96f40bb52d';
-            input.requestHash = '89900e497bb7ea4da823afc191334c87de4dce871cdade03af23ef5a67fcbdc8';
-            input.idempotencyKey = '598dd8e2-513e-46e2-b48f-0704ce2b9b83';
-            authorizeBrief(input);
-            Test.startTest();
-            NorthstarSaveCampaignBrief.Output first = NorthstarSaveCampaignBrief.run(
-                new List<NorthstarSaveCampaignBrief.Input>{ input }
-            )[0];
-            NorthstarSaveCampaignBrief.Output replay = NorthstarSaveCampaignBrief.run(
-                new List<NorthstarSaveCampaignBrief.Input>{ input }
-            )[0];
-            Test.stopTest();
-            System.assertEquals(false, first.replayed);
-            System.assertEquals(true, replay.replayed);
-            System.assertEquals(true, replay.readBack);
-            System.assertEquals(input.brief, [SELECT Description FROM Campaign WHERE Id = :campaign.Id].Description);
-        }
-    }
-
-    @IsTest
-    static void deniesDraftWriteWithoutEvaluatorPermissionSet() {
-        User unprivileged = createEvaluator(false);
-        Campaign campaign = [SELECT Id FROM Campaign LIMIT 1];
-        System.runAs(unprivileged) {
-            NorthstarSaveCampaignBrief.Input input = new NorthstarSaveCampaignBrief.Input();
-            input.campaignId = campaign.Id;
-            input.brief = 'This write must be denied.';
-            input.confirmationId = '383ba994-d706-45fb-b6ec-911b5082948f';
-            input.requestHash = '9ac5e2dbbb9d40033fefd745ce25dd203531b2f7788583758636c449c0238b8c';
-            input.idempotencyKey = 'bf072f08-3c44-4fd6-81ed-eef026ac43ed';
-            authorizeBrief(input);
-            try {
-                NorthstarSaveCampaignBrief.run(
-                    new List<NorthstarSaveCampaignBrief.Input>{ input }
-                );
-                System.assert(false, 'Expected USER_MODE permission denial');
-            } catch (Exception expected) {
-                System.assertNotEquals(null, expected.getMessage());
-            }
         }
     }
 

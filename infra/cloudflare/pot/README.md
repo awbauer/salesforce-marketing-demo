@@ -51,7 +51,7 @@ The three runtime secrets `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, and `CONFIRMATION_
 
 Two optional runtime switches pause risky behavior without a code change. They are Worker secrets rather than `wrangler.jsonc` variables because Workers Builds redeploys `vars` from source on every merge, which would reset them. When unset, everything is enabled.
 
-- `WRITES_ENABLED`: set it to `false` to pause every confirmed Salesforce write (save brief, review task, image attach). Preflight and execute return `503 WRITES_DISABLED`, and the UI shows a paused notice and disables the write buttons.
+- `WRITES_ENABLED`: set it to `false` to pause every confirmed Salesforce write: the Marketing Cloud agent's brief and campaign saves, review tasks, and image attachments. Preflight and execute return `503 WRITES_DISABLED`, and the UI shows a paused notice and disables the write buttons.
 - `DISABLED_TOOLS`: a comma-separated list of curated tool names, for example `attach_campaign_image,summarize_campaign`. Disabled read tools are removed from the model's tool set, and a routed request explains that an operator turned the tool off. Disabled write tools are blocked like paused writes. Unknown names are ignored.
 - `MEMORY_ENABLED`: set it to `false` to stop long-term memory (ADR-007). Nothing new is remembered, the recall tools are withheld (a recall question says an operator turned them off), and the Memory tab says memory is off. Stored memory stays until it expires or is forgotten.
 
@@ -61,6 +61,14 @@ pnpm exec wrangler secret delete WRITES_ENABLED --config wrangler.jsonc
 ```
 
 `GET /agent/operations` reports the active controls. `GET /agent/audit/export` downloads the caller's confirmed-write audit rows, memory remembers and forgets, and turn summaries from the 24-hour retention window. Older turns and audit rows are pruned on every write and hourly by the cron.
+
+## Marketing Cloud agent writes (ADR-008)
+
+Briefs and campaigns are created by the `Northstar_Campaign_Creation` agent (a Marketing Cloud Next Campaign Creation agent) through its Hosted MCP tools `save_marketing_brief` and `create_marketing_campaign`; `get_marketing_records` reads them back.
+
+- **Deploy order:** merge the pull request, which deploys the MCP definition and Apex through CI, then apply D1 migrations with `pnpm exec wrangler d1 migrations apply APP_DB --remote --config wrangler.jsonc` and deploy the Worker. Refresh the Cloudflare MCP portal so it lists the new tools.
+- **Agent changes:** edit `salesforce/force-app/main/default/aiAuthoringBundles/Northstar_Campaign_Creation`, validate with `sf agent validate authoring-bundle`, and publish with `sf agent publish authoring-bundle`; it must stay on the `MktCloud__CampaignCreationAgent` template.
+- **Retired metadata:** after the new MCP definition is live, delete `NorthstarSaveCampaign`, `NorthstarSaveBrief`, `NorthstarSaveMessage`, `NorthstarSaveCampaignBrief`, `NorthstarRecordWrites`, `NorthstarRecordActionsTest`, `Northstar_Brief__c`, `Northstar_Message__c`, and `Campaign.Northstar_Brand__c` from the proof org.
 
 ## Neo4j knowledge graph
 

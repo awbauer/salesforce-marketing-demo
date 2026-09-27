@@ -132,38 +132,83 @@ describe("workspace panel", () => {
     expect(within(card).queryByRole("button", { name: "Save to Salesforce as brief" })).toBeNull();
   });
 
-  it("updates the focus lifecycle from Salesforce read-back and links the saved record", () => {
+  it("follows the Marketing Cloud lifecycle from read-back: brief, preview, campaign, flow", () => {
     const focus: FocusItem = {
       id: "f1",
-      kind: "email",
+      kind: "brief",
       current: 2,
       versions: [
         {
           version: 2,
           title: "Coastline afternoon email",
           summary: "A weather-aware email.",
-          fields: [{ label: "Subject", value: "A sunny afternoon treat" }],
+          fields: [{ label: "Key Message", value: "A sunny afternoon treat" }],
           changeNote: "Approved draft",
           basedOn: [],
           createdAt: new Date().toISOString(),
         },
       ],
       saved: {
-        objectType: "Northstar_Message__c",
-        recordId: "a0C000000000001",
+        objectType: "Brief",
+        recordId: "21yjV0000002NIHQA2",
         version: 2,
-        campaignId: "701000000000001",
+        preview: [
+          {
+            stepNumber: 1,
+            stepType: "Message",
+            channel: "EMAIL",
+            waitNumber: 0,
+            waitUnit: "Days",
+            subject: "Warm up with Spicy Tortilla Soup",
+          },
+          {
+            stepNumber: 2,
+            stepType: "Message",
+            channel: "EMAIL",
+            waitNumber: 2,
+            waitUnit: "Days",
+            subject: "Don't miss out",
+          },
+        ],
       },
     };
     const { rerender } = render(<FocusCard focus={focus} cards={[]} />);
     const card = screen.getByTestId("workspace-focus");
-    expect(within(card).getByText("Saved in Salesforce")).not.toBeNull();
+    expect(within(card).getByText("Brief saved in Marketing Cloud")).not.toBeNull();
     expect(within(card).queryByText("Draft in progress")).toBeNull();
     expect(
       within(card)
-        .getByRole("link", { name: /Open Message in Salesforce/ })
+        .getByRole("link", { name: /Open Brief in Salesforce/ })
         .getAttribute("href"),
-    ).toContain("/lightning/r/Northstar_Message__c/a0C000000000001/view");
+    ).toContain("/lightning/r/Brief/21yjV0000002NIHQA2/view");
+    expect(within(card).getByText("Warm up with Spicy Tortilla Soup")).not.toBeNull();
+    expect(within(card).getByText(/after 2 days/)).not.toBeNull();
+
+    rerender(
+      <FocusCard
+        focus={{
+          ...focus,
+          saved: {
+            ...(focus.saved as NonNullable<FocusItem["saved"]>),
+            campaignId: "701jV00000C75VVQAZ",
+            campaign: {
+              id: "701jV00000C75VVQAZ",
+              name: "Rainy Day Comfort Campaign",
+              stage: "In Planning",
+              flow: {
+                apiName: "flow_701jV00000C75VVQAZ_1",
+                label: "Rainy Day Comfort Campaign Flow",
+                versionId: "301jV00000C73yNQAR",
+                active: false,
+              },
+            },
+          },
+        }}
+        cards={[]}
+      />,
+    );
+    expect(within(card).getByText("Campaign created in Marketing Cloud")).not.toBeNull();
+    expect(within(card).getByText(/Rainy Day Comfort Campaign Flow/)).not.toBeNull();
 
     const revised: FocusItem = {
       ...focus,
@@ -179,7 +224,8 @@ describe("workspace panel", () => {
   });
 
   it("names Salesforce objects in plain words", () => {
-    expect(objectLabel("Northstar_Message__c")).toBe("Message");
+    expect(objectLabel("Flow")).toBe("Campaign flow");
+    expect(objectLabel("Brief")).toBe("Brief");
     expect(objectLabel("Campaign")).toBe("Campaign");
     expect(objectLabel("Custom_Thing__c")).toBe("Custom Thing");
   });

@@ -500,6 +500,65 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
       />
     </Figure>
   ),
+  "marketing-cloud": () => (
+    <Figure
+      label="How a campaign is created in Marketing Cloud Next"
+      caption="Every record is created by the Campaign Creation agent's standard actions, after you confirm; the workbench reads each one back."
+    >
+      <Lanes
+        lanes={[
+          {
+            label: "Draft",
+            steps: [
+              { title: "Your request + context", tone: "person", glyph: "?" },
+              {
+                title: "Draft a Campaign Brief",
+                caption: "Campaign Creation agent",
+                tone: "tool",
+                glyph: "◆",
+              },
+              { title: "Brief in the focus", caption: "nothing saved", tone: "output", glyph: "✎" },
+            ],
+          },
+          {
+            label: "Save brief",
+            steps: [
+              {
+                title: "You confirm",
+                caption: "permission check first",
+                tone: "guard",
+                glyph: "✓",
+              },
+              {
+                title: "Save Brief → Draft Preview",
+                caption: "Brief + BriefPlanSteps",
+                tone: "store",
+                glyph: "◇",
+              },
+            ],
+          },
+          {
+            label: "Create campaign",
+            steps: [
+              { title: "You confirm", tone: "guard", glyph: "✓" },
+              {
+                title: "Create → Save Campaign",
+                caption: "Campaign + draft flow",
+                tone: "store",
+                glyph: "◇",
+              },
+              {
+                title: "Activate in Marketing Cloud",
+                caption: "never from the workbench",
+                tone: "person",
+                glyph: "→",
+              },
+            ],
+          },
+        ]}
+      />
+    </Figure>
+  ),
   "long-term-memory": () => (
     <Figure
       label="How long-term memory is written, recalled, and forgotten"

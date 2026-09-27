@@ -26,13 +26,6 @@
       "autonomous": true
     },
     {
-      "name": "save_campaign_brief",
-      "riskClass": "write",
-      "source": "salesforce-apex",
-      "autonomous": false,
-      "allowedWrite": "save-draft-campaign"
-    },
-    {
       "name": "draft_campaign_content",
       "riskClass": "draft",
       "source": "salesforce-agentforce",
@@ -75,6 +68,20 @@
       "autonomous": true
     },
     {
+      "name": "save_marketing_brief",
+      "riskClass": "write",
+      "source": "salesforce-agentforce",
+      "autonomous": false,
+      "allowedWrite": "save-marketing-brief"
+    },
+    {
+      "name": "create_marketing_campaign",
+      "riskClass": "write",
+      "source": "salesforce-agentforce",
+      "autonomous": false,
+      "allowedWrite": "create-marketing-campaign"
+    },
+    {
       "name": "create_campaign_review_request",
       "riskClass": "write",
       "source": "salesforce-apex",
@@ -89,31 +96,16 @@
       "allowedWrite": "attach-generated-image"
     },
     {
-      "name": "save_campaign",
-      "riskClass": "write",
-      "source": "salesforce-apex",
-      "autonomous": false,
-      "allowedWrite": "save-campaign"
-    },
-    {
-      "name": "save_brief",
-      "riskClass": "write",
-      "source": "salesforce-apex",
-      "autonomous": false,
-      "allowedWrite": "save-brief"
-    },
-    {
-      "name": "save_message",
-      "riskClass": "write",
-      "source": "salesforce-apex",
-      "autonomous": false,
-      "allowedWrite": "save-message"
-    },
-    {
       "name": "check_write_access",
       "riskClass": "read",
       "source": "salesforce-apex",
       "autonomous": false
+    },
+    {
+      "name": "get_marketing_records",
+      "riskClass": "read",
+      "source": "salesforce-apex",
+      "autonomous": true
     }
   ]
 }

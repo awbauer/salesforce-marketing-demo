@@ -67,11 +67,11 @@ async function seeded(workspaceId = "workspace-a") {
   });
   const decision = await recordDecision(backend, {
     ...stamp(workspaceId, 10),
-    decision: { kind: "confirmed-write", outcome: "Created Message.", note: "From version 2." },
+    decision: { kind: "confirmed-write", outcome: "Saved the brief.", note: "From version 2." },
     record: {
       system: "salesforce",
-      objectType: "Northstar_Message__c",
-      recordId: "a0C000000000001",
+      objectType: "Brief",
+      recordId: "21y000000000001",
       title: "Rainy-day comfort",
     },
     draftRef: { focusId: "focus-1", version: 2 },
@@ -92,7 +92,7 @@ describe("long-term memory", () => {
       source: "Confirmed Salesforce write, read back",
       author: "teammate a1b2c3",
       draft: { id: second.id, version: 2 },
-      records: [{ objectType: "Northstar_Message__c", recordId: "a0C000000000001" }],
+      records: [{ objectType: "Brief", recordId: "21y000000000001" }],
     });
     expect(v2?.supersedes).toMatchObject({ id: first.id, version: 1 });
     expect(v1?.supersedes).toBeUndefined();
@@ -131,14 +131,14 @@ describe("long-term memory", () => {
     const context = { workspaceId: "workspace-a", now: () => now };
     const recalled = await tool("recall_decisions").run(
       backend,
-      { subject: "a0C000000000001", limit: 5 },
+      { subject: "21y000000000001", limit: 5 },
       context,
     );
     expect(recalled.items).toHaveLength(1);
     expect(recalled.items[0]).toMatchObject({
       when: "2026-09-26 17:50 UTC (less than a day ago)",
       source: "Confirmed Salesforce write, read back",
-      records: ["Message Rainy-day comfort (a0C000000000001)"],
+      records: ["Brief Rainy-day comfort (21y000000000001)"],
     });
     expect(recalled.note).toMatch(/re-check Salesforce/);
     expect(recalled.paths.map((path) => path.relationships[0]?.type)).toEqual([

@@ -13,12 +13,10 @@ export const PROOF_DEFAULTS = Object.freeze({
   roles: ["evaluator", "demo-admin"] as const,
   browsers: ["chrome", "edge"] as const,
   allowedWrites: [
-    "save-draft-campaign",
+    "save-marketing-brief",
+    "create-marketing-campaign",
     "create-review-task",
     "attach-generated-image",
-    "save-campaign",
-    "save-brief",
-    "save-message",
   ] as const,
 });
 
@@ -77,40 +75,58 @@ export const PermissionReportSchema = z.object({
 });
 export type PermissionReport = z.infer<typeof PermissionReportSchema>;
 
-/** What a confirmed record write will send to Salesforce, authored by the server from the focus. */
-export const RecordWriteSchema = z.object({
-  objectType: z.enum(["Campaign", "Northstar_Brief__c", "Northstar_Message__c"]),
-  objectLabel: z.string(),
-  /** The record to update; absent when the write creates one. */
-  recordId: z.string().optional(),
-  campaignId: z.string().optional(),
-  newCampaignName: z.string().max(80).optional(),
-  brand: z.string().max(80).optional(),
-  title: z.string().min(1).max(80),
-  channel: z.enum(["Email", "Push", "SMS"]).optional(),
-  subject: z.string().max(255).optional(),
-  preheader: z.string().max(255).optional(),
-  objective: z.string().max(255).optional(),
-  audience: z.string().max(255).optional(),
-  sendTime: z.string().max(120).optional(),
-  body: z.string().min(1).max(32000),
-  draftFields: z.string().max(32000),
+/**
+ * A Marketing Cloud Next brief as the Campaign Creation agent's Save Campaign Brief action takes
+ * it. The server authors it from the draft in focus, so the confirmation card shows exactly what
+ * the agent is asked to save.
+ */
+export const MarketingBriefSchema = z.object({
+  name: z.string().min(1).max(80),
+  description: z.string().min(1).max(2000),
+  keyMessage: z.string().min(1).max(2000),
+  targetAudience: z.string().min(1).max(2000),
+  primaryGoal: z.string().max(2000).optional(),
+  primaryCtas: z.string().max(2000).optional(),
+  primaryKpi: z.string().max(2000).optional(),
+  agentGuardrails: z.string().max(2000).optional(),
+  priority: z.string().max(2000).optional(),
 });
-export type RecordWrite = z.infer<typeof RecordWriteSchema>;
+export type MarketingBrief = z.infer<typeof MarketingBriefSchema>;
+
+/** Labels for brief fields, in the order Marketing Cloud shows them. */
+export const MARKETING_BRIEF_FIELDS = [
+  ["name", "Name"],
+  ["description", "Description"],
+  ["keyMessage", "Key Message"],
+  ["targetAudience", "Target Audience"],
+  ["primaryGoal", "Primary Goal"],
+  ["primaryCtas", "Primary CTAs"],
+  ["primaryKpi", "Primary KPI"],
+  ["agentGuardrails", "Agent Guardrails"],
+  ["priority", "Priority"],
+] as const satisfies ReadonlyArray<readonly [keyof MarketingBrief, string]>;
+
+/**
+ * What a confirmed Marketing Cloud write asks the Campaign Creation agent to do: save a brief
+ * (and draft its campaign preview), or create the campaign and its flow from a saved brief.
+ */
+export const MarketingWriteSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("brief"), brief: MarketingBriefSchema }),
+  z.object({
+    kind: z.literal("campaign"),
+    briefId: z.string().regex(/^[a-zA-Z0-9]{15,18}$/),
+    briefName: z.string().min(1).max(80),
+    campaignName: z.string().max(80).optional(),
+  }),
+]);
+export type MarketingWrite = z.infer<typeof MarketingWriteSchema>;
 
 export const ConfirmationSchema = z.object({
   id: z.string().uuid(),
-  action: z.enum([
-    "save-draft-campaign",
-    "create-review-task",
-    "attach-generated-image",
-    "save-campaign",
-    "save-brief",
-    "save-message",
-  ]),
-  /** The record the write is bound to: the one updated, its parent campaign, or "new". */
+  action: z.enum(PROOF_DEFAULTS.allowedWrites),
+  /** The record the write is bound to: the campaign, the brief a campaign comes from, or "new". */
   recordId: z.string().regex(/^(?:[a-zA-Z0-9]{15,18}|new)$/),
-  write: RecordWriteSchema.optional(),
+  write: MarketingWriteSchema.optional(),
   permissions: PermissionReportSchema.optional(),
   imageId: z.string().uuid().optional(),
   contentHash: z
@@ -165,18 +181,200 @@ export const PHASE_2_AUTONOMOUS_TOOLS = Object.freeze([
   "recommend_buyer_group_members",
   "summarize_account_engagement",
   "check_campaign_readiness",
+  "get_marketing_records",
 ] as const);
 
 export const PHASE_2_CURATED_TOOLS = Object.freeze([
   ...PHASE_2_AUTONOMOUS_TOOLS,
-  "save_campaign_brief",
+  "save_marketing_brief",
+  "create_marketing_campaign",
   "create_campaign_review_request",
   "attach_campaign_image",
-  "save_campaign",
-  "save_brief",
-  "save_message",
   "check_write_access",
 ] as const);
+
+/** The Salesforce agents behind the Hosted MCP tools, as published in the org. */
+export const SALESFORCE_AGENTS = Object.freeze({
+  Northstar_Campaign_Creation: {
+    label: "Northstar Campaign Creation",
+    kind: "Marketing Cloud Next Campaign Creation agent",
+    template: "MktCloud__CampaignCreationAgent",
+  },
+  Northstar_Content_Builder: {
+    label: "Northstar Content Builder",
+    kind: "Marketing Cloud Next Content Builder agent",
+    template: "sfdc_cms__ContentBuilderAgent",
+  },
+  Northstar_Account_Discovery: {
+    label: "Northstar Account Discovery",
+    kind: "Marketing account discovery agent",
+    template: null,
+  },
+  Campaign_Readiness_Governance: {
+    label: "Campaign Readiness and Governance",
+    kind: "Custom Agentforce agent",
+    template: null,
+  },
+} as const);
+export type SalesforceAgentName = keyof typeof SALESFORCE_AGENTS;
+
+export type SalesforceToolDetail = {
+  /** The agent the tool invokes, or none for a direct Apex action. */
+  agent?: SalesforceAgentName;
+  /** The agent's subagent (topic) that handles the request. */
+  subagent?: string;
+  /** The standard or custom actions it runs, in order, with their targets. */
+  actions: ReadonlyArray<{ label: string; target: string }>;
+  /** Records it creates in Salesforce, if any. */
+  creates?: readonly string[];
+};
+
+const MC = {
+  draftBrief: {
+    label: "Marketing Cloud: Draft a Campaign Brief",
+    target: "flow://MktCloud__GenerateBrief",
+  },
+  saveBrief: {
+    label: "Marketing Cloud: Save Campaign Brief",
+    target: "standardInvocableAction://saveBrief",
+  },
+  preview: {
+    label: "Marketing Cloud: Draft a Campaign Preview",
+    target: "flow://MktCloud__GenerateCampaignFromBrief",
+  },
+  refine: {
+    label: "Marketing Cloud: Refine Campaign Preview",
+    target: "flow://MktCloud__RefineCampaignPreview",
+  },
+  createCampaign: {
+    label: "Marketing Cloud: Create Campaign",
+    target: "standardInvocableAction://createCampaign",
+  },
+  saveCampaign: {
+    label: "Marketing Cloud: Save Campaign",
+    target: "flow://MktCloud__SaveCampaign",
+  },
+  draftContent: {
+    label: "Marketing Cloud: Draft Content",
+    target: "standardInvocableAction://generateOrRefineTextForProperty",
+  },
+  section: {
+    label: "Marketing Cloud: Create Section with Content",
+    target: "standardInvocableAction://createOrRefineSectionWithContent",
+  },
+} as const;
+const apex = (name: string, label: string) => ({ label, target: `apex://${name}` });
+
+/**
+ * For each Salesforce tool: the agent, subagent, and actions behind it, so tool calls can show
+ * which Salesforce agent did the work. Agent-backed tools list the actions the agent's script
+ * routes that request to.
+ */
+export const SALESFORCE_TOOL_DETAILS: Record<string, SalesforceToolDetail> = {
+  draft_campaign_brief: {
+    agent: "Northstar_Campaign_Creation",
+    subagent: "Marketing Campaigns",
+    actions: [MC.draftBrief],
+  },
+  save_marketing_brief: {
+    agent: "Northstar_Campaign_Creation",
+    subagent: "Marketing Campaigns",
+    actions: [MC.saveBrief, MC.preview],
+    creates: ["Brief", "BriefPlanStep"],
+  },
+  refine_campaign_preview: {
+    agent: "Northstar_Campaign_Creation",
+    subagent: "Campaign Refinement",
+    actions: [MC.refine],
+  },
+  create_marketing_campaign: {
+    agent: "Northstar_Campaign_Creation",
+    subagent: "Marketing Campaigns",
+    actions: [MC.createCampaign, MC.saveCampaign],
+    creates: ["Campaign", "Campaign flow"],
+  },
+  draft_campaign_content: {
+    agent: "Northstar_Content_Builder",
+    subagent: "Content Creation",
+    actions: [MC.draftContent],
+  },
+  create_content_section: {
+    agent: "Northstar_Content_Builder",
+    subagent: "Content Creation",
+    actions: [MC.section],
+  },
+  summarize_campaign: {
+    agent: "Campaign_Readiness_Governance",
+    subagent: "Campaign Intake",
+    actions: [apex("NorthstarGetCampaignContext", "Get Campaign Context")],
+  },
+  generate_campaign_insights: {
+    agent: "Campaign_Readiness_Governance",
+    subagent: "Campaign Intake",
+    actions: [apex("NorthstarGetCampaignContext", "Get Campaign Context")],
+  },
+  check_campaign_readiness: {
+    agent: "Campaign_Readiness_Governance",
+    subagent: "Campaign Intake, Audience and Consent, Brand and Content",
+    actions: [
+      apex("NorthstarGetCampaignContext", "Get Campaign Context"),
+      apex("NorthstarGetConsentSummary", "Get Audience and Consent Summary"),
+      apex("NorthstarValidateCampaignContent", "Validate Campaign Content"),
+    ],
+  },
+  validate_content_against_brand: {
+    agent: "Campaign_Readiness_Governance",
+    subagent: "Brand and Content",
+    actions: [apex("NorthstarValidateCampaignContent", "Validate Campaign Content")],
+  },
+  get_account_marketing_signals: {
+    agent: "Northstar_Account_Discovery",
+    subagent: "Account Activity Summary",
+    actions: [
+      {
+        label: "Get Recent Activities",
+        target: "api://Marketing-AccountDiscovery.getEngagementActivities",
+      },
+      { label: "Get Marketing Scores", target: "api://Marketing-Scoring.getRecordIdScores" },
+    ],
+  },
+  summarize_account_engagement: {
+    agent: "Northstar_Account_Discovery",
+    subagent: "Account Activity Summary",
+    actions: [
+      {
+        label: "Get Recent Activities",
+        target: "api://Marketing-AccountDiscovery.getEngagementActivities",
+      },
+      {
+        label: "Summarize Conversations",
+        target: "api://Marketing-AccountDiscovery.summarizeConversations",
+      },
+    ],
+  },
+  recommend_buyer_group_members: {
+    agent: "Northstar_Account_Discovery",
+    subagent: "Buyer Group Recommendations",
+    actions: [
+      {
+        label: "Find New Buyer Group Members",
+        target: "api://Marketing-AccountDiscovery.recommendOpportunityContacts",
+      },
+    ],
+  },
+  get_marketing_records: {
+    actions: [apex("NorthstarGetMarketingRecords", "Get Marketing Records")],
+  },
+  check_write_access: { actions: [apex("NorthstarCheckWriteAccess", "Check Write Access")] },
+  create_campaign_review_request: {
+    actions: [apex("NorthstarCreateCampaignReviewRequest", "Create Campaign Review Request")],
+    creates: ["Task"],
+  },
+  attach_campaign_image: {
+    actions: [apex("NorthstarAttachCampaignImage", "Attach Campaign Image")],
+    creates: ["ContentVersion"],
+  },
+};
 
 /** Read-only tools served by the campaign-context MCP (mocked restaurant profile and live weather). */
 export const CAMPAIGN_CONTEXT_TOOLS = Object.freeze([
@@ -271,6 +469,35 @@ export const FocusFieldSchema = z.object({
   value: z.string().min(1).max(1200),
 });
 
+/** One step of a Marketing Cloud Next campaign preview (a BriefPlanStep). */
+export const MarketingPreviewStepSchema = z.object({
+  stepNumber: z.number().int().nonnegative(),
+  stepType: z.string().max(40),
+  channel: z.string().max(40).nullable(),
+  waitNumber: z.number().int().nonnegative().nullable(),
+  waitUnit: z.string().max(20).nullable(),
+  subject: z.string().max(500).optional(),
+  preheader: z.string().max(500).optional(),
+  body: z.string().max(4000).optional(),
+});
+export type MarketingPreviewStep = z.infer<typeof MarketingPreviewStepSchema>;
+
+/** The Campaign and campaign flow the agent created from a brief, as read back. */
+export const MarketingCampaignSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  stage: z.string().nullable(),
+  flow: z
+    .object({
+      apiName: z.string(),
+      label: z.string(),
+      versionId: z.string().nullable(),
+      active: z.boolean(),
+    })
+    .nullable(),
+});
+export type MarketingCampaign = z.infer<typeof MarketingCampaignSchema>;
+
 export const FocusVersionSchema = z.object({
   version: z.number().int().positive(),
   title: z.string().min(1).max(160),
@@ -292,13 +519,18 @@ export const FocusItemSchema = z.object({
   kind: FocusKindSchema,
   current: z.number().int().positive(),
   versions: z.array(FocusVersionSchema).min(1).max(20),
-  /** The Salesforce record this draft was saved as, so later versions update it. */
+  /**
+   * Where this draft lives in Marketing Cloud Next, as read back after the Campaign Creation
+   * agent saved it: the Brief, its campaign preview, and the Campaign and flow created from it.
+   */
   saved: z
     .object({
       objectType: z.string(),
       recordId: z.string(),
       version: z.number().int().positive(),
       campaignId: z.string().optional(),
+      preview: z.array(MarketingPreviewStepSchema).max(12).optional(),
+      campaign: MarketingCampaignSchema.optional(),
     })
     .optional(),
 });
@@ -568,10 +800,8 @@ export const TurnTraceSchema = z.object({
 export type TurnTrace = z.infer<typeof TurnTraceSchema>;
 
 export const WRITE_TOOL_BY_ACTION = Object.freeze({
-  "save-campaign": "save_campaign",
-  "save-brief": "save_brief",
-  "save-message": "save_message",
-  "save-draft-campaign": "save_campaign_brief",
+  "save-marketing-brief": "save_marketing_brief",
+  "create-marketing-campaign": "create_marketing_campaign",
   "create-review-task": "create_campaign_review_request",
   "attach-generated-image": "attach_campaign_image",
 } as const);

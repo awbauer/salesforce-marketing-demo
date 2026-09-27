@@ -22,13 +22,14 @@ import { useAgent } from "agents/react";
 import type { UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
 import { ActionCards } from "./ActionCards";
-import { PermissionDetails, RecordWriteDetails } from "./ConfirmationDetails";
+import { MarketingWriteDetails, PermissionDetails } from "./ConfirmationDetails";
 import { EvaluationView } from "./EvaluationView";
 import { GraphEvidencePanel } from "./GraphEvidence";
 import { GraphView } from "./graph/GraphView";
 import { HistoryView } from "./HistoryView";
 import { LearnView } from "./learn/LearnView";
 import { Markdown } from "./Markdown";
+import { SalesforceAgentsPanel } from "./SalesforceAgents";
 import { executionTrace } from "./turn-trace";
 import { WorkspacePanel } from "./WorkspacePanel";
 
@@ -92,11 +93,12 @@ function TechnicalTrace({
 }
 
 const CONFIRMATION_COPY = {
-  "save-campaign": { title: "Save campaign to Salesforce?", confirm: "Confirm save" },
-  "save-brief": { title: "Save brief to Salesforce?", confirm: "Confirm save" },
-  "save-message": { title: "Save message to Salesforce?", confirm: "Confirm save" },
+  "save-marketing-brief": { title: "Save brief in Marketing Cloud?", confirm: "Confirm save" },
+  "create-marketing-campaign": {
+    title: "Create the campaign in Marketing Cloud?",
+    confirm: "Confirm create",
+  },
   "create-review-task": { title: "Create Salesforce review task?", confirm: "Confirm create" },
-  "save-draft-campaign": { title: "Save draft brief to Salesforce?", confirm: "Confirm save" },
   "attach-generated-image": {
     title: "Attach image to the Salesforce campaign?",
     confirm: "Confirm attach",
@@ -124,6 +126,8 @@ export function App() {
     title: string;
     objectType: string;
     recordId: string;
+    agent: string;
+    actions: string[];
   } | null>(null);
   const [attachedImage, setAttachedImage] = useState<{
     contentDocumentId: string;
@@ -435,6 +439,11 @@ export function App() {
           title?: string;
           contentSize?: number;
           contentHash?: string;
+          agent?: { label: string; kind: string };
+          actions?: Array<{ label: string }>;
+          brief?: { id: string; name: string };
+          preview?: unknown[];
+          campaign?: { id: string; name: string; flow: { label: string } | null };
         };
       }>(`confirmations/${decision}`);
       setPendingConfirmation(null);
@@ -462,26 +471,27 @@ export function App() {
             image.id === attachedId ? { ...image, lifecycle: "attached" } : image,
           ),
         );
-      } else if (
-        decision === "execute" &&
-        result.result?.readBack &&
-        (action === "save-draft-campaign" || pendingConfirmation?.write)
-      ) {
+      } else if (decision === "execute" && result.result?.readBack && pendingConfirmation?.write) {
         setActionError("");
-        const write = pendingConfirmation?.write;
+        const campaign = result.result.campaign;
+        const brief = result.result.brief;
         setSavedRecord(
-          write
+          campaign
             ? {
-                label: write.objectLabel,
-                title: write.title,
-                objectType: write.objectType,
-                recordId: result.result.recordId,
+                label: "Campaign and flow created in Marketing Cloud",
+                title: `${campaign.name}${campaign.flow ? ` · ${campaign.flow.label}` : ""}`,
+                objectType: "Campaign",
+                recordId: campaign.id,
+                agent: result.result.agent?.label ?? "Campaign Creation agent",
+                actions: (result.result.actions ?? []).map((item) => item.label),
               }
             : {
-                label: "Brief",
-                title: pendingConfirmation?.focus?.title ?? "Draft brief",
-                objectType: "Campaign",
-                recordId: result.result.campaignId,
+                label: "Brief saved in Marketing Cloud",
+                title: `${brief?.name ?? ""} · ${result.result.preview?.length ?? 0}-step campaign preview`,
+                objectType: "Brief",
+                recordId: brief?.id ?? result.result.recordId,
+                agent: result.result.agent?.label ?? "Campaign Creation agent",
+                actions: (result.result.actions ?? []).map((item) => item.label),
               },
         );
       } else if (decision === "execute" && result.result?.readBack) {
@@ -765,6 +775,7 @@ export function App() {
                 ) : (
                   <p>{messageText(message)}</p>
                 )}
+                {message.role === "assistant" && <SalesforceAgentsPanel message={message} />}
                 {message.role === "assistant" && <GraphEvidencePanel message={message} />}
                 {message.role === "assistant" && (
                   <TechnicalTrace
@@ -851,8 +862,12 @@ export function App() {
             {savedRecord && (
               <section className="success-banner" role="status">
                 <div>
-                  <strong>{savedRecord.label} saved to Salesforce</strong>
+                  <strong>{savedRecord.label}</strong>
                   <span>{` · ${savedRecord.title}`}</span>
+                  <small className="saved-agent">
+                    By the {savedRecord.agent} agent · {savedRecord.actions.join(" → ")} · read back
+                    from Salesforce
+                  </small>
                 </div>
                 <a
                   href={salesforceRecordUrl(savedRecord.objectType, savedRecord.recordId)}
@@ -931,7 +946,7 @@ export function App() {
                   {CONFIRMATION_COPY[pendingConfirmation.action].title}
                 </h3>
                 <p className="confirmation-summary">{pendingConfirmation.summary}</p>
-                <RecordWriteDetails confirmation={pendingConfirmation} />
+                <MarketingWriteDetails confirmation={pendingConfirmation} />
                 {pendingConfirmation.action === "attach-generated-image" &&
                   generatedImage &&
                   generatedImage.id === pendingConfirmation.imageId && (

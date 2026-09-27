@@ -127,13 +127,13 @@ const inputs = [
     ...stamp(10),
     decision: {
       kind: "confirmed-write",
-      outcome: "Created Message “Coastline rainy-day push” (a0C000000000001).",
+      outcome: "Saved the brief “Coastline rainy-day push” (21y000000000001).",
       note: "Saved from version 2 of the draft.",
     },
     record: {
       system: "salesforce",
-      objectType: "Northstar_Message__c",
-      recordId: "a0C000000000001",
+      objectType: "Brief",
+      recordId: "21y000000000001",
       title: "Coastline rainy-day push",
     },
     draftRef: { focusId: "focus-parity", version: 2 },
@@ -150,7 +150,7 @@ try {
     ["list_memory", (backend) => listMemory(backend, workspaceId, now)],
     ...MEMORY_TOOL_SPECS.flatMap((spec) =>
       (spec.name === "recall_decisions"
-        ? [{ subject: "coastline" }, { subject: "a0C000000000001" }, { subject: "nothing here" }]
+        ? [{ subject: "coastline" }, { subject: "21y000000000001" }, { subject: "nothing here" }]
         : spec.name === "recall_recent_work"
           ? [{ limit: 5 }]
           : [{ memoryId: inputs[2].id }, { memoryId: inputs[1].id }]

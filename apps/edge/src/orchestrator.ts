@@ -20,8 +20,10 @@ import {
   PHASE_2_CURATED_TOOLS,
   PROOF_DEFAULTS,
   parseOperationControls,
+  SALESFORCE_AGENTS,
+  SALESFORCE_TOOL_DETAILS,
   policyResponse,
-  type RecordWrite,
+  type MarketingWrite,
   referentFromReply,
   type SuggestedAction,
   type TurnRecord,
@@ -45,7 +47,7 @@ import {
   CAMPAIGN_CONTEXT_TOOL_PREFIX,
   connectCampaignContextTools,
 } from "./campaign-context/server";
-import { applyFocusUpdate, type FocusInput, focusBriefText, focusFromAnswer } from "./focus";
+import { applyFocusUpdate, type FocusInput, focusFromAnswer } from "./focus";
 import { forcedToolCallMiddleware } from "./forced-tool-middleware";
 import {
   forgetMemory,
@@ -68,11 +70,20 @@ import {
   memorySubjects,
 } from "./memory";
 import {
-  applyRecordWrite,
+  agentRequest,
+  agentToolInput,
+  applyMarketingWrite,
+  briefFocusFromAgent,
   fixturePermissionReport,
+  idsFromAgentReply,
+  localAgentWrite,
+  type MarketingReadBack,
+  parseMarketingReadBack,
   parsePermissionReport,
-  planFocusWrite,
-} from "./record-writes";
+  planMarketingWrite,
+  toolText,
+  withRefreshedPreview,
+} from "./marketing-writes";
 import { buildTurnRecord } from "./turn-history";
 import {
   type DraftIntent,
@@ -124,13 +135,13 @@ const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 // Matches the Apex attachment limit, which keeps the decoded image inside the synchronous heap.
 const ATTACH_MAX_BYTES = 3 * 1024 * 1024;
 const ACTIVITY_LABELS = {
-  "save-campaign": "Campaign saved to Salesforce",
-  "save-brief": "Brief saved to Salesforce",
-  "save-message": "Message saved to Salesforce",
+  "save-marketing-brief": "Brief saved in Marketing Cloud",
+  "create-marketing-campaign": "Campaign and flow created in Marketing Cloud",
   "create-review-task": "Review request created",
-  "save-draft-campaign": "Draft campaign brief saved",
   "attach-generated-image": "Campaign image attached",
 } as const;
+/** The Marketing Cloud agent the workbench asks to save briefs and create campaigns. */
+const CAMPAIGN_AGENT = "Northstar_Campaign_Creation";
 const IMAGE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 const SEMANTIC_FAILURE_PATTERN =
@@ -260,87 +271,40 @@ export async function pruneConfirmationAudit(db: D1Database) {
   }
 }
 
-/** Apex inputs for a confirmed record write, from the server-authored write plan. */
-function recordWriteInputs(confirmation: Confirmation) {
-  const write = confirmation.write as RecordWrite;
-  const draft = {
-    draftId: confirmation.focus?.id,
-    draftVersion: confirmation.focus?.version,
-    draftFields: write.draftFields,
-  };
-  if (write.objectType === "Campaign")
-    return {
-      campaignId: write.recordId,
-      name: write.title,
-      brand: write.brand,
-      description: write.body,
-    };
-  const shared = {
-    campaignId: write.campaignId,
-    newCampaignName: write.newCampaignName,
-    brand: write.brand,
-    title: write.title,
-    audience: write.audience,
-    body: write.body,
-    ...draft,
-  };
-  return write.objectType === "Northstar_Brief__c"
-    ? { briefId: write.recordId, objective: write.objective, channel: write.channel, ...shared }
-    : {
-        messageId: write.recordId,
-        channel: write.channel,
-        subject: write.subject,
-        preheader: write.preheader,
-        sendTime: write.sendTime,
-        ...shared,
-      };
+/** What the local Campaign Creation agent stand-in replies when it drafts the fixture brief. */
+function localAgentBrief(keyMessage: string) {
+  return [
+    "Here is a draft campaign brief (local fixture):",
+    "Name: Rainy-day comfort: Spicy Tortilla Soup",
+    "Description: Lunch campaign for Coastline app users in Los Angeles, built from the weather and past rainy-day results.",
+    `Key Message: ${keyMessage}`,
+    "Target Audience: Coastline Kitchen app users in Los Angeles who order at lunch.",
+    "Primary Goal: Drive lunch app orders on rainy days.",
+    "Primary CTAs: Order now",
+    "Primary KPI: Lunch orders from the campaign",
+    "Agent Guardrails: Coastline Kitchen brand voice; no discounts over 20 percent. Requested channel: Mobile app push.",
+    "Priority: High",
+  ].join("\n");
 }
 
 /**
- * Local development's stand-in for the model's drafting: a fictional push draft for a drafting
- * request, and its next version for a revision of the focus.
+ * Local development's stand-in for the Campaign Creation agent's drafting: the fixture brief
+ * for a drafting request, and its next version for a revision of an unsaved brief.
  */
 function localFixtureDraft(utterance: string, focus: FocusItem | null): FocusInput | null {
   const drafting =
-    /\b(?:draft|write)\b/i.test(utterance) &&
-    /\b(?:push|message|notification|email|brief|content)\b/i.test(utterance);
+    /\b(?:draft|write|create|plan)\b/i.test(utterance) &&
+    /\b(?:push|message|notification|email|brief|content|campaign)\b/i.test(utterance);
   const revising = Boolean(focus) && isRevisionRequest(utterance);
   if (!drafting && !revising) return null;
-  const draft: FocusInput = {
-    kind: "push-message",
-    title: "Rainy-day comfort: Spicy Tortilla Soup",
-    summary:
-      "Lunch push for Coastline app users in Los Angeles, built from the weather and past rainy-day results (fictional fixture).",
-    fields: [
-      { label: "Headline", value: "Rain outside? Soup's on." },
-      {
-        label: "Body",
-        value:
-          "Warm up with Spicy Tortilla Soup, ready in minutes at Coastline Kitchen Arts District.",
-      },
-      { label: "Send time", value: "11:15 a.m. local" },
-      { label: "Audience", value: "Coastline app · Los Angeles (push opt-ins)" },
-      { label: "Channel", value: "Mobile app push" },
-      { label: "Campaign", value: "Coastline Weather Moments" },
-      { label: "Brand", value: "Coastline Kitchen" },
-    ],
-    changeNote: "First draft from the fixture context",
-  };
-  if (!drafting && focus) {
-    const current = currentFocusVersion(focus);
-    return {
-      kind: focus.kind,
-      title: current.title,
-      summary: current.summary,
-      fields: current.fields.map((field) =>
-        field.label === "Headline"
-          ? { ...field, value: "Rain outside? Warm soup is waiting." }
-          : field,
-      ),
-      changeNote: utterance.trim().slice(0, 240),
-    };
-  }
-  return draft;
+  return briefFocusFromAgent(
+    localAgentBrief(
+      revising && !drafting ? "Rain outside? Warm soup is waiting." : "Rain outside? Soup's on.",
+    ),
+    revising && !drafting
+      ? utterance.trim().slice(0, 240)
+      : "Drafted by the Campaign Creation agent",
+  );
 }
 
 type ToolResultListener = (toolName: string, input: unknown, output: unknown) => void;
@@ -666,6 +630,10 @@ export class MarketingOrchestrator extends AIChatAgent<
   waitForMcpConnections = false;
   private principalSubject = "unknown";
   private imageGenerationInFlight = false;
+  /** Set when the Campaign Creation agent drafted the brief in focus during this turn. */
+  private agentBriefThisTurn = false;
+  /** Local development's Marketing Cloud records, created by the local agent stand-in. */
+  private localMarketing = new Map<string, MarketingReadBack>();
 
   private async productionChatResponse(
     messages: UIMessage[],
@@ -717,7 +685,9 @@ export class MarketingOrchestrator extends AIChatAgent<
     const planContext = {
       hasFocus: Boolean(this.state.workingSet.focus),
       focusKind: this.state.workingSet.focus?.kind,
+      briefSaved: this.state.workingSet.focus?.saved?.objectType === "Brief",
     };
+    this.agentBriefThisTurn = false;
     const workersAI = createWorkersAI({
       binding: this.env.AI,
       gateway: { id: this.env.AI_GATEWAY_ID },
@@ -767,9 +737,10 @@ export class MarketingOrchestrator extends AIChatAgent<
             system: orchestratorSystemPrompt(workspace, toolPlan),
             messages: await convertToModelMessages(turnMessages),
             tools,
-            // A revision rewrites the draft in focus; it needs no tools.
+            // A revision with no agent to ask rewrites the draft in focus without tools; a brief's
+            // revision goes back to the Marketing Cloud agent through its plan.
             prepareStep: ({ stepNumber }: { stepNumber: number }) =>
-              drafting?.mode === "revise"
+              drafting?.mode === "revise" && !toolPlan
                 ? { toolChoice: "none" as const, activeTools: [] as string[] }
                 : stepToolChoice(toolPlan, stepNumber),
             stopWhen: stepCountIs(MAX_TURN_STEPS),
@@ -784,7 +755,13 @@ export class MarketingOrchestrator extends AIChatAgent<
           );
           if (turn.outcome !== "completed")
             console.warn(`[orchestrator] turn ended with outcome ${turn.outcome}`);
+          else if (this.agentBriefThisTurn) this.afterAgentBrief(prompt);
           else if (drafting) this.saveDraftFromAnswer(turn.answer, drafting, prompt);
+          if (
+            turn.outcome === "completed" &&
+            toolPlan?.some((name) => name.endsWith("refine_campaign_preview"))
+          )
+            await this.refreshPreview();
           await this.recordTurn(
             prompt,
             { model: PROOF_DEFAULTS.orchestratorModel, route: "model", requiredTool },
@@ -1270,13 +1247,11 @@ export class MarketingOrchestrator extends AIChatAgent<
     imageId?: unknown;
   }): Promise<Response> {
     const action = body.action;
-    const recordAction =
-      action === "save-campaign" || action === "save-brief" || action === "save-message";
+    const marketingAction =
+      action === "save-marketing-brief" || action === "create-marketing-campaign";
     if (
-      !recordAction &&
-      ((action !== "save-draft-campaign" &&
-        action !== "create-review-task" &&
-        action !== "attach-generated-image") ||
+      !marketingAction &&
+      ((action !== "create-review-task" && action !== "attach-generated-image") ||
         typeof body.recordId !== "string" ||
         !/^[a-zA-Z0-9]{15,18}$/.test(body.recordId))
     )
@@ -1286,17 +1261,20 @@ export class MarketingOrchestrator extends AIChatAgent<
       );
     const preflightBlocked = this.writeBlocked(action as Confirmation["action"]);
     if (preflightBlocked) return preflightBlocked;
-    // Record writes are planned from the focus draft; the server authors every value.
+    // Marketing Cloud writes are planned from the focus draft; the server authors every value
+    // the Campaign Creation agent is asked to save.
     const plan =
-      recordAction && this.state.workingSet.focus
-        ? planFocusWrite(this.state.workingSet.focus, this.state.workingSet)
+      marketingAction && this.state.workingSet.focus
+        ? planMarketingWrite(this.state.workingSet.focus)
         : null;
-    if (recordAction && (!plan || plan.action !== action))
+    if (marketingAction && (!plan || plan.action !== action))
       return json(
         {
           error: {
             code: "VALIDATION_FAILED",
-            message: "Draft something in the chat first; saving writes the workspace draft.",
+            message: this.state.workingSet.focus?.saved?.campaign
+              ? "This draft's campaign already exists in Marketing Cloud."
+              : "Draft a campaign brief in the chat first; the Marketing Cloud agent saves the workspace draft.",
           },
         },
         { status: 400 },
@@ -1314,11 +1292,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         { status: 409 },
       );
     // Salesforce decides whether this user may write; the card shows each check it ran.
-    const permissionCheck = await this.checkWriteAccess(
-      action as Confirmation["action"],
-      plan?.write,
-      recordId,
-    );
+    const permissionCheck = await this.checkWriteAccess(action as Confirmation["action"], recordId);
     if (!permissionCheck.permissions)
       return json(
         {
@@ -1374,17 +1348,15 @@ export class MarketingOrchestrator extends AIChatAgent<
     // writes the summary from the focus so the card states exactly what will be written.
     const focus = this.state.workingSet.focus;
     let focusRef: Confirmation["focus"];
-    if (focus && (plan || action === "save-draft-campaign" || action === "create-review-task")) {
+    if (focus && (plan || action === "create-review-task")) {
       const current = currentFocusVersion(focus);
       focusRef = { id: focus.id, version: current.version, title: current.title };
       if (!plan)
         summary =
-          action === "save-draft-campaign"
-            ? focusBriefText(focus)
-            : `Review "${current.title}" (version ${current.version}) with current campaign context, readiness findings, a due date, and a human review checklist.`.slice(
-                0,
-                500,
-              );
+          `Review "${current.title}" (version ${current.version}) with current campaign context, readiness findings, a due date, and a human review checklist.`.slice(
+            0,
+            500,
+          );
     }
     if (!summary)
       return json(
@@ -1440,14 +1412,13 @@ export class MarketingOrchestrator extends AIChatAgent<
    */
   private async checkWriteAccess(
     action: Confirmation["action"],
-    write: RecordWrite | undefined,
     recordId: string,
   ): Promise<{
     permissions?: PermissionReport;
     failure?: "catalog-incomplete" | "call-failed" | "invalid-response";
   }> {
     if ((this.env.ENVIRONMENT as string) === "local")
-      return { permissions: fixturePermissionReport(action, write, new Date()) };
+      return { permissions: fixturePermissionReport(action, new Date()) };
     await this.mcp.waitForConnections({ timeout: 5_000 });
     const entry = Object.entries(this.mcp.getAITools()).find(
       ([key]) => key === "check_write_access" || key.endsWith("_check_write_access"),
@@ -1455,19 +1426,10 @@ export class MarketingOrchestrator extends AIChatAgent<
     const tool = entry?.[1];
     if (!tool || !("execute" in tool) || typeof tool.execute !== "function")
       return { failure: "catalog-incomplete" };
-    const updating = write ? write.recordId : recordId;
     try {
       const output = await resolveToolResult(
         tool.execute(
-          {
-            inputs: [
-              {
-                action,
-                ...(updating ? { recordId: updating } : {}),
-                createsCampaign: Boolean(write?.newCampaignName),
-              },
-            ],
-          },
+          { inputs: [{ action, ...(recordId !== "new" ? { recordId } : {}) }] },
           { toolCallId: crypto.randomUUID(), messages: [], context: undefined },
         ),
       );
@@ -1479,80 +1441,178 @@ export class MarketingOrchestrator extends AIChatAgent<
   }
 
   /**
-   * Finishes a confirmed record write: checks Salesforce's read-back, links the focus to the
-   * saved record, and adds the created or updated records to the workspace.
+   * Runs a confirmed Marketing Cloud write by asking the Campaign Creation agent, through its
+   * Hosted MCP tool, to run its standard actions; then reads the result back from Salesforce.
+   * The confirmation is spent before the agent is called, so a second click can't resend it.
    */
-  private async completeRecordWrite(current: Confirmation, upstream: unknown) {
-    const write = current.write as RecordWrite;
-    const idField =
-      write.objectType === "Campaign"
-        ? "campaignId"
-        : write.objectType === "Northstar_Brief__c"
-          ? "briefId"
-          : "messageId";
-    const local = findToolField(upstream, "source") === "local-fixture";
-    const recordId = local ? findToolField(upstream, "recordId") : findToolField(upstream, idField);
-    const campaignId =
-      write.objectType === "Campaign" ? undefined : findToolField(upstream, "campaignId");
-    if (findToolField(upstream, "readBack") !== true || typeof recordId !== "string")
+  private async executeMarketingWrite(current: Confirmation) {
+    const write = current.write as MarketingWrite;
+    this.setState({ ...this.state, pendingConfirmation: null });
+    if ((this.env.ENVIRONMENT as string) === "local")
+      return this.completeMarketingWrite(current, localAgentWrite(write, this.localMarketing));
+    await this.mcp.waitForConnections({ timeout: 5_000 });
+    const tool = this.salesforceTool(WRITE_TOOL_BY_ACTION[current.action]);
+    if (!tool)
+      return json(
+        {
+          error: {
+            code: "UPSTREAM_UNAVAILABLE",
+            message:
+              "The Marketing Cloud Campaign Creation agent's tool isn't in the Salesforce catalog. Reconnect Salesforce and prepare the save again. Nothing was saved.",
+          },
+        },
+        { status: 503 },
+      );
+    let reply: unknown;
+    try {
+      reply = await resolveToolResult(
+        tool.execute(agentToolInput(tool, agentRequest(write)), {
+          toolCallId: current.id,
+          messages: [],
+          context: undefined,
+        }),
+      );
+    } catch (error) {
+      await this.recordConfirmationAudit(current, "denied");
+      return json(
+        {
+          error: {
+            code: "UPSTREAM_UNAVAILABLE",
+            message: `The Marketing Cloud agent didn't finish (${error instanceof Error ? error.message.slice(0, 160) : "unknown error"}). Check Marketing Cloud for the ${write.kind === "brief" ? "brief" : "campaign"} before preparing the save again.`,
+          },
+        },
+        { status: 502 },
+      );
+    }
+    return this.completeMarketingWrite(current, reply);
+  }
+
+  /**
+   * Finishes a confirmed Marketing Cloud write: reads back from Salesforce what the Campaign
+   * Creation agent says it created, and only then links the focus to the Brief (and Campaign and
+   * flow) and adds them to the workspace. The agent's reply is never taken as proof.
+   */
+  private async completeMarketingWrite(current: Confirmation, reply: unknown) {
+    const write = current.write as MarketingWrite;
+    const local = (this.env.ENVIRONMENT as string) === "local";
+    const agentReply = toolText(reply).slice(0, 4000);
+    const ids = idsFromAgentReply(agentReply);
+    const briefId = write.kind === "campaign" ? write.briefId : ids.briefId;
+    const readBack = await this.readMarketingRecords(
+      briefId ? { briefId } : { briefName: write.kind === "brief" ? write.brief.name : "" },
+    );
+    const briefOk =
+      readBack?.brief &&
+      (write.kind === "campaign" ||
+        readBack.brief.name.trim().toLowerCase() === write.brief.name.trim().toLowerCase());
+    const campaignOk = write.kind === "brief" || Boolean(readBack?.campaign);
+    if (!readBack || !briefOk || !campaignOk)
       return json(
         {
           error: {
             code: "CONFLICT",
-            message: "Salesforce did not return the required authoritative read-back.",
+            message: `The Marketing Cloud agent replied, but Salesforce doesn't show the ${write.kind === "brief" ? "saved brief" : "campaign"} it describes, so nothing is shown as saved. Agent reply: ${agentReply.slice(0, 240) || "(empty)"}`,
           },
         },
         { status: 409 },
       );
-    const result = {
-      recordId,
-      ...(typeof campaignId === "string" ? { campaignId } : {}),
-      created: findToolField(upstream, "created") === true,
-      campaignCreated: findToolField(upstream, "campaignCreated") === true,
-    };
+    const brief = readBack.brief as NonNullable<MarketingReadBack["brief"]>;
+    const campaign = readBack.campaign;
+    const recordId = write.kind === "campaign" && campaign ? campaign.id : brief.id;
     await this.recordConfirmationAudit(current, "executed", recordId);
     const executed = { ...current, status: "executed" as const };
     this.setState({
       ...this.state,
       pendingConfirmation: null,
-      workingSet: applyRecordWrite(this.state.workingSet, current, result, new Date()),
+      workingSet: applyMarketingWrite(this.state.workingSet, current, readBack, new Date()),
       activity: [
         {
           id: `${current.action}-${current.id}`,
           label: ACTIVITY_LABELS[current.action],
-          detail: `${local ? "Local fixture" : "Salesforce"} read-back · ${write.objectLabel} ${recordId}`,
+          detail:
+            write.kind === "brief"
+              ? `${SALESFORCE_AGENTS[CAMPAIGN_AGENT].label} agent · Brief ${brief.id} · ${readBack.steps.length}-step preview${local ? " (local fixture)" : ""}`
+              : `${SALESFORCE_AGENTS[CAMPAIGN_AGENT].label} agent · Campaign ${campaign?.id}${campaign?.flow ? ` · ${campaign.flow.label}` : ""}${local ? " (local fixture)" : ""}`,
           occurredAt: "Now",
           status: "complete",
         },
         ...this.state.activity,
       ],
     });
+    // The next step is the campaign itself, so it's offered right away.
+    if (write.kind === "brief") this.suggestFocusSave();
     await this.rememberConfirmedWrite(
       current,
       {
         system: "salesforce",
-        objectType: write.objectType,
+        objectType: write.kind === "brief" ? "Brief" : "Campaign",
         recordId,
-        title: write.title,
+        title: write.kind === "brief" ? brief.name : (campaign?.name ?? brief.name),
       },
       {
-        outcome: `${result.created ? "Created" : "Updated"} ${write.objectLabel} “${write.title}” (${recordId}), confirmed and read back from ${local ? "the local fixture" : "Salesforce"}.`,
-        note: current.focus ? `Saved from version ${current.focus.version} of the draft.` : "",
-        campaignId: result.campaignId,
+        outcome:
+          write.kind === "brief"
+            ? `The Marketing Cloud Campaign Creation agent saved the brief “${brief.name}” (${brief.id}) with a ${readBack.steps.length}-step campaign preview, read back from ${local ? "the local fixture" : "Salesforce"}.`
+            : `The Marketing Cloud Campaign Creation agent created the campaign “${campaign?.name}” (${campaign?.id})${campaign?.flow ? ` and its flow “${campaign.flow.label}”` : ""} from the brief “${brief.name}”, read back from ${local ? "the local fixture" : "Salesforce"}.`,
+        note: current.focus ? `From version ${current.focus.version} of the draft.` : "",
+        campaignId: campaign?.id,
       },
     );
     return json({
       confirmation: executed,
       result: {
         source: local ? "local-fixture" : "salesforce",
-        objectType: write.objectType,
-        objectLabel: write.objectLabel,
-        title: write.title,
-        ...result,
+        agent: { name: CAMPAIGN_AGENT, ...SALESFORCE_AGENTS[CAMPAIGN_AGENT] },
+        actions: SALESFORCE_TOOL_DETAILS[WRITE_TOOL_BY_ACTION[current.action]]?.actions ?? [],
+        agentReply,
+        brief: { id: brief.id, name: brief.name },
+        preview: readBack.steps,
+        ...(campaign ? { campaign } : {}),
+        recordId,
         readBack: true,
         idempotencyKey: current.idempotencyKey,
       },
     });
+  }
+
+  /**
+   * Reads a Brief, its preview steps, and its Campaign and flow from Salesforce. Local
+   * development reads the fixture records the local agent stand-in created.
+   */
+  private async readMarketingRecords(input: {
+    briefId?: string;
+    briefName?: string;
+  }): Promise<MarketingReadBack | null> {
+    if ((this.env.ENVIRONMENT as string) === "local") {
+      const found = input.briefId
+        ? this.localMarketing.get(input.briefId)
+        : [...this.localMarketing.values()].find((item) => item.brief?.name === input.briefName);
+      return found ?? { brief: null, steps: [], campaign: null };
+    }
+    const tool = this.salesforceTool("get_marketing_records");
+    if (!tool) return null;
+    try {
+      const output = await resolveToolResult(
+        tool.execute(
+          { inputs: [input] },
+          { toolCallId: crypto.randomUUID(), messages: [], context: undefined },
+        ),
+      );
+      return parseMarketingReadBack(output);
+    } catch {
+      return null;
+    }
+  }
+
+  /** A Salesforce Hosted MCP tool by its catalog name, if the connection lists it. */
+  private salesforceTool(name: string) {
+    const entry = Object.entries(this.mcp.getAITools()).find(
+      ([key]) => key === name || key.endsWith(`_${name}`),
+    );
+    const tool = entry?.[1];
+    return tool && "execute" in tool && typeof tool.execute === "function"
+      ? (tool as typeof tool & { execute: NonNullable<typeof tool.execute> })
+      : null;
   }
 
   /**
@@ -1563,14 +1623,16 @@ export class MarketingOrchestrator extends AIChatAgent<
     const focus = this.state.workingSet.focus;
     if (!focus)
       return "There's no draft in the workspace yet. Draft something first, then save it.";
-    const plan = planFocusWrite(focus, this.state.workingSet);
+    const plan = planMarketingWrite(focus);
+    if (!plan)
+      return "This draft's campaign already exists in Marketing Cloud. Open it from the Workspace to set its audience and activate its flow there.";
     const response = await this.prepareConfirmation({ action: plan.action });
     const body = (await response.json()) as Confirmation & {
       error?: { message?: string };
       permissions?: PermissionReport;
     };
     if (!response.ok)
-      return `I couldn't prepare that save. ${body.error?.message ?? "Try again from the Workspace."} Nothing was written to Salesforce.`;
+      return `I couldn't prepare that save. ${body.error?.message ?? "Try again from the Workspace."} Nothing was saved in Marketing Cloud.`;
     const permissions = body.permissions;
     const checked = permissions
       ? `Salesforce checked your permissions${permissions.source === "salesforce" ? ` as ${permissions.user}` : " (local fixture)"}: ${permissions.checks.length} of ${permissions.checks.length} checks passed (${permissions.checks.map((check) => check.label).join(", ")}).`
@@ -1578,10 +1640,31 @@ export class MarketingOrchestrator extends AIChatAgent<
     return [
       `**Ready to confirm:** ${body.summary}`,
       checked,
-      "Review the confirmation card and confirm it yourself; nothing is written to Salesforce until you do.",
+      `When you confirm, the ${SALESFORCE_AGENTS[CAMPAIGN_AGENT].label} agent (${SALESFORCE_AGENTS[CAMPAIGN_AGENT].kind}) runs ${(SALESFORCE_TOOL_DETAILS[WRITE_TOOL_BY_ACTION[plan.action]]?.actions ?? []).map((item) => item.label.replace("Marketing Cloud: ", "")).join(" → ")}. Nothing is saved until you confirm the card.`,
     ]
       .filter(Boolean)
       .join("\n\n");
+  }
+
+  /** After the agent drafts a brief: offer to save it, or prepare the save if asked to. */
+  private afterAgentBrief(prompt: string) {
+    if (wantsSalesforceRecord(prompt) || /\bmarketing cloud\b/i.test(prompt))
+      void this.proposeFocusSave().catch((error: unknown) =>
+        console.error("[orchestrator] could not prepare the Marketing Cloud save", error),
+      );
+    else this.suggestFocusSave();
+  }
+
+  /** Reloads the saved brief's campaign preview from Salesforce after the agent refined it. */
+  private async refreshPreview() {
+    const briefId = this.state.workingSet.focus?.saved?.recordId;
+    if (!briefId) return;
+    const readBack = await this.readMarketingRecords({ briefId });
+    if (readBack?.brief)
+      this.setState({
+        ...this.state,
+        workingSet: withRefreshedPreview(this.state.workingSet, readBack),
+      });
   }
 
   /**
@@ -1622,12 +1705,16 @@ export class MarketingOrchestrator extends AIChatAgent<
   private suggestFocusSave() {
     const focus = this.state.workingSet.focus;
     if (!focus) return;
-    const plan = planFocusWrite(focus, this.state.workingSet);
+    const plan = planMarketingWrite(focus);
+    if (!plan) return;
     this.suggest({
       action: "save-focus",
-      title: `${plan.write.recordId ? "Update" : "Save"} “${plan.write.title}” in Salesforce?`,
+      title:
+        plan.write.kind === "brief"
+          ? `Save “${plan.write.brief.name}” as a Marketing Cloud brief?`
+          : `Create the campaign for “${plan.write.briefName}” in Marketing Cloud?`,
       detail: plan.summary,
-      cta: plan.write.recordId ? "Review update" : "Review and save",
+      cta: plan.write.kind === "brief" ? "Review and save brief" : "Review campaign",
     });
   }
 
@@ -1646,9 +1733,18 @@ export class MarketingOrchestrator extends AIChatAgent<
           { error: { code: "CONFLICT", message: "There is no draft to save." } },
           { status: 409 },
         );
-      return this.prepareConfirmation({
-        action: planFocusWrite(focus, this.state.workingSet).action,
-      });
+      const plan = planMarketingWrite(focus);
+      if (!plan)
+        return json(
+          {
+            error: {
+              code: "CONFLICT",
+              message: "This draft's campaign already exists in Marketing Cloud.",
+            },
+          },
+          { status: 409 },
+        );
+      return this.prepareConfirmation({ action: plan.action });
     }
     return this.prepareConfirmation({
       action: "create-review-task",
@@ -1680,6 +1776,20 @@ export class MarketingOrchestrator extends AIChatAgent<
       at: new Date(),
     });
     if (next !== this.state.workingSet) this.setState({ ...this.state, workingSet: next });
+    // The brief the Marketing Cloud agent drafted becomes the focus, field for field.
+    if (baseToolName(toolName) === "draft_campaign_brief") {
+      const focus = this.state.workingSet.focus;
+      const brief = briefFocusFromAgent(
+        toolText(output),
+        focus?.kind === "brief"
+          ? "Revised by the Campaign Creation agent"
+          : "Drafted by the Campaign Creation agent",
+      );
+      if (brief) {
+        this.updateFocus(brief);
+        this.agentBriefThisTurn = true;
+      }
+    }
     // A readiness check on an open campaign is a natural moment to ask for a review.
     const campaign = openCampaign(next);
     if (baseToolName(toolName) === "check_campaign_readiness" && campaign)
@@ -1706,14 +1816,10 @@ export class MarketingOrchestrator extends AIChatAgent<
         system: "salesforce",
         objectType,
         recordId,
-        title:
-          (action === "save-draft-campaign"
-            ? this.state.workingSet.records.find((record) => record.recordId === recordId)?.title
-            : title) ?? `${ACTIVITY_LABELS[action]} ${recordId}`,
+        title: title ?? `${ACTIVITY_LABELS[action]} ${recordId}`,
       },
       WRITE_TOOL_BY_ACTION[action],
       new Date(),
-      action === "save-draft-campaign" ? "updated" : "created",
     );
   }
 
@@ -2002,20 +2108,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       url.pathname.endsWith("/diagnostics/salesforce-write-preflight") &&
       request.method === "POST"
     ) {
-      const result = await this.checkWriteAccess(
-        "save-message",
-        {
-          objectType: "Northstar_Message__c",
-          objectLabel: "Message",
-          newCampaignName: "Permission preflight",
-          brand: "Northstar",
-          title: "Permission preflight",
-          channel: "Email",
-          body: "Read-only production permission preflight.",
-          draftFields: "[]",
-        },
-        "new",
-      );
+      const result = await this.checkWriteAccess("save-marketing-brief", "new");
       if (!result.permissions)
         return json(
           {
@@ -2128,6 +2221,8 @@ export class MarketingOrchestrator extends AIChatAgent<
           { status: 409 },
         );
       }
+      // Briefs and campaigns are created by the Marketing Cloud Campaign Creation agent.
+      if (current.write) return this.executeMarketingWrite(current);
       if ((this.env.ENVIRONMENT as string) !== "local") {
         const signingKey = this.env.CONFIRMATION_SIGNING_KEY;
         if (!signingKey)
@@ -2192,14 +2287,7 @@ export class MarketingOrchestrator extends AIChatAgent<
               {
                 inputs: [
                   {
-                    ...(current.write
-                      ? recordWriteInputs(current)
-                      : {
-                          campaignId: current.recordId,
-                          ...(current.action === "save-draft-campaign"
-                            ? { brief: current.summary }
-                            : {}),
-                        }),
+                    campaignId: current.recordId,
                     ...(imagePayload ?? {}),
                     confirmationId: signedConfirmation,
                     requestHash: current.requestHash,
@@ -2222,7 +2310,6 @@ export class MarketingOrchestrator extends AIChatAgent<
             { status: 502 },
           );
         }
-        if (current.write) return this.completeRecordWrite(current, upstream);
         const campaignId = findToolField(upstream, "campaignId");
         const readBack = findToolField(upstream, "readBack");
         const sourceRecordId =
@@ -2338,26 +2425,6 @@ export class MarketingOrchestrator extends AIChatAgent<
             idempotencyKey: current.idempotencyKey,
             readBack: true,
           },
-        });
-      }
-      if (current.write) {
-        const created = !current.write.recordId;
-        return this.completeRecordWrite(current, {
-          readBack: true,
-          recordId:
-            current.write.recordId ??
-            (current.write.objectType === "Campaign"
-              ? "701000000000NEW"
-              : current.write.objectType === "Northstar_Brief__c"
-                ? "a0B000000000001"
-                : "a0C000000000001"),
-          campaignId:
-            current.write.objectType === "Campaign"
-              ? undefined
-              : (current.write.campaignId ?? "701000000000NEW"),
-          created,
-          campaignCreated: created && Boolean(current.write.newCampaignName),
-          source: "local-fixture",
         });
       }
       const executed = { ...current, status: "executed" as const };
@@ -2553,6 +2620,28 @@ export class MarketingOrchestrator extends AIChatAgent<
     // as real tool results, so the workspace behaves the same way.
     for (const [toolName, result] of LOCAL_FIXTURE_RESULTS)
       this.ingestToolResult(toolName, { message: "Review the sample campaign" }, result);
+    // A change to a saved brief refines its campaign preview, as the agent's refinement does.
+    const savedBrief = this.state.workingSet.focus?.saved;
+    if (savedBrief?.objectType === "Brief" && isRevisionRequest(utterance)) {
+      const stored = this.localMarketing.get(savedBrief.recordId);
+      if (stored?.steps[0])
+        stored.steps[0] = { ...stored.steps[0], subject: "Rain outside? Warm soup is waiting." };
+      await this.refreshPreview();
+      return scriptedResponse(
+        [
+          "The **Northstar Campaign Creation** agent refined the campaign preview (local fixture): the first email's subject is now “Rain outside? Warm soup is waiting.”\n\n",
+          "The workspace reloaded the preview from the brief. Nothing was sent or activated.",
+        ],
+        {
+          model: "local-fixture",
+          reasoning:
+            "Local development has no Salesforce: the local Campaign Creation agent stand-in refines the saved preview.",
+          abortSignal,
+          onComplete: (result) =>
+            this.recordTurn(utterance, { model: "local-fixture", route: "local-fixture" }, result),
+        },
+      );
+    }
     const localDraft = localFixtureDraft(utterance, this.state.workingSet.focus);
     if (localDraft) {
       const focus = this.updateFocus(localDraft);
@@ -2560,14 +2649,14 @@ export class MarketingOrchestrator extends AIChatAgent<
       const current = currentFocusVersion(focus);
       return scriptedResponse(
         [
-          `**${current.title}** (version ${current.version}) is in your workspace.\n\n`,
+          `The **Northstar Campaign Creation** agent (Marketing Cloud Next) drafted **${current.title}** (version ${current.version}) with its Draft a Campaign Brief action:\n\n`,
           ...current.fields.map((field) => `- **${field.label}:** ${field.value}\n`),
-          "\nIt is a draft: nothing was saved to Salesforce, scheduled, or sent.",
+          "\nIt's a draft brief: nothing is saved in Marketing Cloud until you confirm.",
         ],
         {
           model: "local-fixture",
           reasoning:
-            "Local development has no model: save the fictional fixture draft as the workspace focus.",
+            "Local development has no model: the local Campaign Creation agent stand-in drafts the fixture brief as the workspace focus.",
           abortSignal,
           onComplete: (result) =>
             this.recordTurn(utterance, { model: "local-fixture", route: "local-fixture" }, result),

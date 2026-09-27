@@ -11,6 +11,9 @@ export function salesforceRecordUrl(objectApiName: string, recordId: string) {
 /** A link to a record in its own system, when that system has one. */
 export function recordUrl(ref: RecordRef & { url?: string }) {
   if (ref.url) return ref.url;
+  // A Marketing Cloud campaign flow opens in Flow Builder by its version id.
+  if (ref.system === "salesforce" && ref.objectType === "Flow" && /^301/.test(ref.recordId))
+    return `${SALESFORCE_SANDBOX_ORIGIN}/builder_platform_interaction/flowBuilder.app?flowId=${encodeURIComponent(ref.recordId)}`;
   if (ref.system === "salesforce") return salesforceRecordUrl(ref.objectType, ref.recordId);
   return undefined;
 }

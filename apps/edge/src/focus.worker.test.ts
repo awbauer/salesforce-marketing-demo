@@ -1,14 +1,6 @@
-import { runInDurableObject, SELF } from "cloudflare:test";
 import { emptyWorkingSet, type WorkingSet } from "@northstar/contracts";
 import { describe, expect, it } from "vitest";
-import {
-  applyFocusUpdate,
-  type FocusInput,
-  focusBriefText,
-  focusFromAnswer,
-  focusPrompt,
-} from "./focus";
-import { agentStubFor, CATALOG_CAMPAIGN_ID, openCatalogCampaign } from "./worker.test-helpers";
+import { applyFocusUpdate, type FocusInput, focusFromAnswer, focusPrompt } from "./focus";
 import { workingSetPrompt } from "./working-set";
 
 const at = new Date("2026-09-26T18:00:00Z");
@@ -74,56 +66,6 @@ describe("workspace focus", () => {
     );
     expect(workingSetPrompt(set).startsWith("Current focus")).toBe(true);
     expect(focusPrompt(null)).toBe("");
-  });
-
-  it("writes the focus as brief text within the confirmation limit", () => {
-    const set = applyFocusUpdate(
-      emptyWorkingSet(),
-      draft({ fields: [{ label: "Body", value: "x".repeat(1000) }] }),
-      at,
-    );
-    const text = focusBriefText(set.focus as NonNullable<WorkingSet["focus"]>);
-    expect(text.startsWith("Push message: Rainy-day comfort (v1)")).toBe(true);
-    expect(text.length).toBeLessThanOrEqual(500);
-  });
-
-  it("binds a brief save to the focus version and marks the campaign updated", async () => {
-    await SELF.fetch("https://example.test/agent/working-set/reset", { method: "POST" });
-    const stub = await openCatalogCampaign();
-    await runInDurableObject(stub, (instance) => {
-      (instance as unknown as { updateFocus: (input: FocusInput) => unknown }).updateFocus(draft());
-    });
-    const preflight = await SELF.fetch("https://example.test/agent/confirmations", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        action: "save-draft-campaign",
-        recordId: CATALOG_CAMPAIGN_ID,
-        summary: "client text is ignored when a focus exists",
-      }),
-    });
-    expect(preflight.status).toBe(201);
-    const confirmation = (await preflight.json()) as {
-      summary: string;
-      focus: { version: number; title: string };
-    };
-    expect(confirmation.focus).toMatchObject({ version: 1, title: "Rainy-day comfort" });
-    expect(confirmation.summary).toContain("Headline: Rain outside? Soup's on.");
-    expect(confirmation.summary).not.toContain("client text");
-    const execute = await SELF.fetch("https://example.test/agent/confirmations/execute", {
-      method: "POST",
-    });
-    expect(execute.status).toBe(200);
-    const workingSet = await runInDurableObject(
-      await agentStubFor(),
-      (instance) => (instance as unknown as { state: { workingSet: WorkingSet } }).state.workingSet,
-    );
-    expect(
-      workingSet.records.find((record) => record.recordId === CATALOG_CAMPAIGN_ID),
-    ).toMatchObject({
-      relation: "updated",
-      title: "Fall Loyalty Reactivation",
-    });
   });
 
   it("reads a drafted answer's title, summary, and labeled lines into the focus", () => {
