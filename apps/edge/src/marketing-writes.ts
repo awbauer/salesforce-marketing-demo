@@ -427,17 +427,31 @@ export function briefFocusFromAgent(reply: string, changeNote: string): FocusInp
 
 /**
  * The arguments for an agent-backed MCP tool: the request goes in the tool's text parameter,
- * whatever the Hosted MCP names it, read from the tool's own input schema.
+ * whatever the Hosted MCP names it, read from the tool's own input schema. The AI SDK may hold
+ * that schema as a promise, and nothing about its shape is assumed.
  */
-export function agentToolInput(tool: { inputSchema?: unknown }, message: string) {
+export async function agentToolInput(tool: { inputSchema?: unknown }, message: string) {
   const raw = tool.inputSchema as { jsonSchema?: unknown } | undefined;
-  const schema = (raw?.jsonSchema ?? raw) as
-    | { properties?: Record<string, { type?: unknown }>; required?: string[] }
-    | undefined;
-  const properties = schema?.properties ?? {};
-  const strings = Object.keys(properties).filter((name) => properties[name]?.type === "string");
+  const resolved: unknown = await (raw && "jsonSchema" in raw ? raw.jsonSchema : raw);
+  const schema = (resolved && typeof resolved === "object" ? resolved : {}) as {
+    properties?: unknown;
+    required?: unknown;
+  };
+  const properties = (
+    schema.properties && typeof schema.properties === "object" ? schema.properties : {}
+  ) as Record<string, { type?: unknown } | undefined>;
+  const isString = (type: unknown) =>
+    type === "string" || (Array.isArray(type) && type.includes("string"));
+  const strings = Object.keys(properties).filter((name) => isString(properties[name]?.type));
+  const required = Array.isArray(schema.required)
+    ? schema.required.filter((name): name is string => typeof name === "string")
+    : [];
+  // Parameter names only, never values: the record of what the Hosted MCP tool expects.
+  console.log(
+    `[marketing] agent tool input: properties=${Object.keys(properties).join(",") || "none"} required=${JSON.stringify(schema.required ?? null).slice(0, 120)}`,
+  );
   const key =
-    schema?.required?.find((name) => strings.includes(name)) ??
+    required.find((name) => strings.includes(name)) ??
     strings.find((name) => /message|input|utterance|prompt|query|text/i.test(name)) ??
     strings[0] ??
     "message";
