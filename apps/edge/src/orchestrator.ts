@@ -438,7 +438,7 @@ export function connectorFromMcp(
       state: "error",
       toolCount,
       errorCode: "UPSTREAM_UNAVAILABLE",
-      message: `${toolCount} of ${PHASE_2_CURATED_TOOLS.length} governed Salesforce tools are available. An administrator must refresh the active Salesforce MCP server and synchronize the portal.`,
+      message: `${toolCount} of ${PHASE_2_CURATED_TOOLS.length} governed Salesforce tools are available. Missing: ${PHASE_2_CURATED_TOOLS.filter((name) => !discoveredTools.has(name)).join(", ")}. An administrator must synchronize the portal and enable these tools on its Salesforce server.`,
     };
   if (server.state === "ready")
     return {

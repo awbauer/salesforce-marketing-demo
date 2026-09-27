@@ -109,6 +109,9 @@ describe("edge runtime", () => {
       toolCount: 1,
     });
     expect(connector.message).toContain("1 of 17 governed Salesforce tools");
+    // The message names what's missing, so an administrator knows which tools to enable.
+    expect(connector.message).toContain("Missing: draft_campaign_brief, refine_campaign_preview,");
+    expect(connector.message).not.toMatch(/Missing:[^.]*summarize_campaign/);
   });
   it("counts governed Salesforce tools once when discovery returns duplicate aliases", () => {
     const connector = connectorFromMcp(true, {
