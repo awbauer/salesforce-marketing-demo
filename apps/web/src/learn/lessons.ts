@@ -25,7 +25,8 @@ export type DiagramId =
   | "images"
   | "push-plan"
   | "long-term-memory"
-  | "marketing-cloud";
+  | "marketing-cloud"
+  | "use-cases";
 
 export type TryIt =
   | { kind: "prompt"; label: string; prompt: string }
@@ -157,7 +158,7 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
   "graphrag-here": {
     diagram: "graph-tools",
     keyIdea:
-      "Six curated, read-only queries, each returning evidence paths, with a local copy that must match Neo4j exactly.",
+      "Eight curated, read-only queries, each returning evidence paths, with a local copy that must match Neo4j exactly.",
     tryIt: [
       { kind: "prompt", label: "Ask a graph question", prompt: BUYER_GROUP_PROMPT },
       { kind: "view", label: "Open the graph explorer", view: "graph" },
@@ -250,6 +251,24 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
         kind: "prompt",
         label: "Create a campaign in Marketing Cloud",
         prompt: "Create a campaign in Marketing Cloud for Coastline Kitchen's late-night tacos",
+      },
+    ],
+  },
+  "use-cases": {
+    diagram: "use-cases",
+    keyIdea:
+      "Each use case pairs a live outside service with the graph: the service says what's happening, and the graph says who it affects and how they can be reached.",
+    tryIt: [
+      {
+        kind: "prompt",
+        label: "Plan buyer-group outreach",
+        prompt: "Plan outreach to Acme Outfitters' buyer group for the next month",
+      },
+      {
+        kind: "prompt",
+        label: "Assess a weather disruption",
+        prompt:
+          "There are weather alerts near our San Diego location. Which customers are affected and what should we tell them?",
       },
     ],
   },

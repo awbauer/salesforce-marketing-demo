@@ -25,6 +25,7 @@ describe("learn page content", () => {
       "campaign-context",
       "long-term-memory",
       "marketing-cloud",
+      "use-cases",
     ])
       expect(
         sections.some((section) => section.id === id),

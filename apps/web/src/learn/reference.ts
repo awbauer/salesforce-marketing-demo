@@ -142,6 +142,17 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
     "campaign-context",
     "Live weather from Open-Meteo for a California city.",
   ),
+  // External-services MCP tools.
+  tool(
+    "get_public_holidays",
+    "use-cases",
+    "Upcoming public holidays for a country from Nager.Date, a free public API.",
+  ),
+  tool(
+    "get_weather_alerts",
+    "use-cases",
+    "Active National Weather Service alerts at a Coastline Kitchen location, most severe first.",
+  ),
   // Knowledge-graph MCP tools.
   tool(
     "get_graph_overview",
@@ -167,6 +178,16 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
     "find_similar_past_pushes",
     "graphrag-here",
     "Past Coastline pushes for a location, daypart, and weather, and which menu items performed best.",
+  ),
+  tool(
+    "plan_account_outreach",
+    "use-cases",
+    "An account's contacts in priority order, their consented channels, and the account's country.",
+  ),
+  tool(
+    "assess_location_impact",
+    "use-cases",
+    "The app audience near a location, how many can be notified by push, and campaigns to pause.",
   ),
   tool(
     "trace_content_lineage",

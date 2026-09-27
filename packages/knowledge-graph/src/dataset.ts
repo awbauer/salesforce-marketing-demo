@@ -57,6 +57,23 @@ export const ACCOUNTS = [
   "Lakeside Paddle Co.",
 ] as const;
 
+/** Each account's headquarters country (ISO 3166-1 alpha-2), for planning outreach around holidays. */
+export const ACCOUNT_COUNTRIES: Record<(typeof ACCOUNTS)[number], { code: string; name: string }> =
+  {
+    "Acme Outfitters": { code: "US", name: "United States" },
+    "Summit Trail Co.": { code: "CA", name: "Canada" },
+    "Redwood Rangers Club": { code: "US", name: "United States" },
+    "Harbor Point Sports": { code: "GB", name: "United Kingdom" },
+    "Blue Ridge Adventures": { code: "US", name: "United States" },
+    "Pacific Crest Supply": { code: "CA", name: "Canada" },
+    "Granite Peak Gear": { code: "DE", name: "Germany" },
+    "Riverbend Outdoor": { code: "US", name: "United States" },
+    "Northwind Expeditions": { code: "NO", name: "Norway" },
+    "Cedar Hollow Camps": { code: "US", name: "United States" },
+    "Silverline Cycling": { code: "NL", name: "Netherlands" },
+    "Lakeside Paddle Co.": { code: "AU", name: "Australia" },
+  };
+
 const ROLES = [
   { role: "Economic buyer", weight: 5 },
   { role: "Champion", weight: 6 },
@@ -265,7 +282,15 @@ export function buildDataset(seed = 20260926): Dataset {
   }
 
   for (const [accountIndex, account] of ACCOUNTS.entries()) {
-    const accountId = node("Account", `acct-${String(accountIndex + 1).padStart(2, "0")}`, account);
+    const accountId = node(
+      "Account",
+      `acct-${String(accountIndex + 1).padStart(2, "0")}`,
+      account,
+      {
+        country: ACCOUNT_COUNTRIES[account].code,
+        countryName: ACCOUNT_COUNTRIES[account].name,
+      },
+    );
     const roles = ROLES.filter(() => rand() < 0.75);
     for (const { role, weight } of roles.length >= 3 ? roles : ROLES.slice(0, 3)) {
       const persona = node("Persona", `${accountId}-${slug(role)}`, `${account} · ${role}`, {

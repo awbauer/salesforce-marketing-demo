@@ -21,6 +21,8 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
   const restaurantPlan = toolPlan?.some((name) => name.endsWith("get_restaurant_profile"));
   const briefPlan = toolPlan?.some((name) => name.endsWith("draft_campaign_brief"));
   const refinePlan = toolPlan?.some((name) => name.endsWith("refine_campaign_preview"));
+  const outreachPlan = toolPlan?.some((name) => name.endsWith("plan_account_outreach"));
+  const impactPlan = toolPlan?.some((name) => name.endsWith("assess_location_impact"));
   const graphPlan = toolPlan?.some((name) => name.startsWith("graph_"));
   const memoryPlan = toolPlan?.some((name) =>
     /_(?:recall_decisions|recall_recent_work)$/.test(name),
@@ -43,6 +45,16 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
     ...(briefPlan
       ? [
           "draft_campaign_brief asks the Northstar Campaign Creation agent (a Marketing Cloud Next Campaign Creation agent) to run its Draft a Campaign Brief action. Send one complete request: for a new brief, 'Draft a campaign brief for …' with the full objective; to revise the brief in focus, 'Revise this campaign brief' followed by its current fields and the requested change. Present the brief the agent returns as labeled lines: **Name:**, **Description:**, **Key Message:**, **Target Audience:**, **Primary Goal:**, **Primary CTAs:**, **Primary KPI:**, **Agent Guardrails:**, **Priority:**; do not invent fields it didn't return. Say that the agent drafted it and nothing is saved yet: saving it to Marketing Cloud goes through a confirmation card, after which the agent drafts the campaign preview. Marketing Cloud previews here plan email and SMS steps; if the user asked for push, say the brief records that and the preview may use email.",
+        ]
+      : []),
+    ...(outreachPlan
+      ? [
+          "For this sales outreach plan, first read the account's contacts from the knowledge graph (who to contact first and why, when they last engaged, and the channels each has marketing consent for, plus the account's country), then get the public holidays for that country code. Present: the contacts in priority order with the evidence for each; the channel for each contact, using only channels they have consented to (say who can't be reached); and a dated outreach schedule for the next few weeks that avoids the public holidays, naming the holidays you avoided. It is a plan: never say anything was sent, scheduled, or logged.",
+        ]
+      : []),
+    ...(impactPlan
+      ? [
+          "For this service disruption, first check active weather alerts for the Coastline Kitchen location, then assess the impact in the knowledge graph. Present: the alerts at that location (or say plainly there are none there right now, and mention any elsewhere in California); the impact from the graph in aggregate only (app users near the location, how many can be notified by push under their consent, and the active campaigns targeting them that should be paused); then draft a short customer push notice (under 120 characters) and a note for the store team. Never name individual customers. It is a draft: never say anything was sent or paused.",
         ]
       : []),
     ...(refinePlan
@@ -136,6 +148,28 @@ const INTENT_RULES: ReadonlyArray<readonly [string, (prompt: string) => boolean]
 
 // Multi-tool plans for requests that need context before drafting. Each step forces one tool.
 const TOOL_PLANS: ReadonlyArray<readonly [readonly string[], (prompt: string) => boolean]> = [
+  // Sales: who to contact at an account and when, around its local public holidays.
+  [
+    ["plan_account_outreach", "get_public_holidays"],
+    (p) =>
+      /\b(?:outreach|reach out|contact plan|sequence|follow[- ]?ups?|meetings?|prospect)\b/i.test(
+        p,
+      ) &&
+      /\b(?:account|buyer group|acme|summit trail|redwood rangers|harbor point|blue ridge|pacific crest|granite peak|riverbend|northwind|cedar hollow|silverline|lakeside paddle)\b/i.test(
+        p,
+      ),
+  ],
+  // Service: a weather disruption near a location, and which customers it affects.
+  [
+    ["get_weather_alerts", "assess_location_impact"],
+    (p) =>
+      /\b(?:weather alerts?|storm|severe weather|flood(?:ing)?|heat wave|wildfire|smoke|evacuat\w*|closure|closed|outage|disruption|advisory|warning)\b/i.test(
+        p,
+      ) &&
+      /\b(?:coastline|location|restaurant|store|customers?|los angeles|san francisco|san diego|sacramento|fresno)\b/i.test(
+        p,
+      ),
+  ],
   [
     [
       "get_restaurant_profile",

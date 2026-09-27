@@ -46,6 +46,11 @@ const cases = {
     { location: "san-diego", daypart: "breakfast", condition: "rain" },
   ],
   trace_content_lineage: ALL_CAMPAIGNS.map((campaign) => ({ campaign: campaign.id })),
+  plan_account_outreach: [ACCOUNTS[0], ACCOUNTS[3], ACCOUNTS[11]].map((account) => ({
+    account,
+    limit: 5,
+  })),
+  assess_location_impact: ["los-angeles", "san-diego", "fresno"].map((location) => ({ location })),
 };
 
 // Averages can differ in the last floating-point digits by summation order.

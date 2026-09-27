@@ -93,9 +93,19 @@ export const routingCases = [
     prompt: "What have we worked on recently?",
     expected: "recall_recent_work",
   },
+  {
+    id: "routing-23",
+    prompt: "Plan outreach to the Harbor Point Sports buyer group over the next month",
+    expected: "plan_account_outreach",
+  },
+  {
+    id: "routing-24",
+    prompt: "Is there severe weather near our Sacramento location that affects customers?",
+    expected: "get_weather_alerts",
+  },
 ] as const;
 
-/** The guided demo scenarios, taken from the Quickstart prompts plus the two policy cases. */
+/** The guided demo scenarios, taken from the use-case library prompts plus the two policy cases. */
 export const demoScenarios = [
   {
     id: "demo-summary",
@@ -142,6 +152,17 @@ export const demoScenarios = [
     id: "demo-graph-consent",
     prompt: "Is the fall campaign audience covered for commercial email consent?",
     expected: "check_consent_coverage",
+  },
+  {
+    id: "demo-sales-outreach",
+    prompt: "Plan outreach to Acme Outfitters' buyer group for the next month",
+    expected: "plan_account_outreach → get_public_holidays",
+  },
+  {
+    id: "demo-service-weather",
+    prompt:
+      "There are weather alerts near our San Diego location. Which customers are affected and what should we tell them?",
+    expected: "get_weather_alerts → assess_location_impact",
   },
   {
     id: "demo-memory-recall",

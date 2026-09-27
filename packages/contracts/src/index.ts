@@ -382,6 +382,12 @@ export const CAMPAIGN_CONTEXT_TOOLS = Object.freeze([
   "get_current_weather",
 ] as const);
 
+/** Read-only tools served by the external-services MCP (Nager.Date holidays, NWS weather alerts). */
+export const EXTERNAL_SERVICE_TOOLS = Object.freeze([
+  "get_public_holidays",
+  "get_weather_alerts",
+] as const);
+
 /** Read-only tools served by the knowledge-graph MCP (Neo4j, or its fictional local copy). */
 export const KNOWLEDGE_GRAPH_TOOLS = Object.freeze([
   "get_graph_overview",
@@ -390,6 +396,8 @@ export const KNOWLEDGE_GRAPH_TOOLS = Object.freeze([
   "check_consent_coverage",
   "find_similar_past_pushes",
   "trace_content_lineage",
+  "plan_account_outreach",
+  "assess_location_impact",
 ] as const);
 
 /** Read-only recall tools over the workspace's long-term memory in the graph. See ADR-007. */
@@ -403,6 +411,7 @@ export const MEMORY_TOOLS = Object.freeze([
 export const ORCHESTRATOR_TOOLS = Object.freeze([
   ...PHASE_2_CURATED_TOOLS,
   ...CAMPAIGN_CONTEXT_TOOLS,
+  ...EXTERNAL_SERVICE_TOOLS,
   ...KNOWLEDGE_GRAPH_TOOLS,
   ...MEMORY_TOOLS,
 ] as const);
@@ -573,6 +582,8 @@ export const CONNECTED_SYSTEMS: Readonly<Record<string, { label: string }>> = Ob
   salesforce: { label: "Salesforce" },
   "restaurant-data": { label: "Restaurant data" },
   "open-meteo": { label: "Open-Meteo" },
+  "nager-date": { label: "Nager.Date" },
+  nws: { label: "National Weather Service" },
   "knowledge-graph": { label: "Knowledge graph" },
   "data-360": { label: "Data 360" },
   "marketing-cloud-next": { label: "Marketing Cloud Next" },

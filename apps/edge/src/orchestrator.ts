@@ -47,6 +47,10 @@ import {
   CAMPAIGN_CONTEXT_TOOL_PREFIX,
   connectCampaignContextTools,
 } from "./campaign-context/server";
+import {
+  connectExternalServiceTools,
+  EXTERNAL_SERVICES_TOOL_PREFIX,
+} from "./external-services/server";
 import { applyFocusUpdate, type FocusInput, focusFromAnswer } from "./focus";
 import { forcedToolCallMiddleware } from "./forced-tool-middleware";
 import {
@@ -656,6 +660,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       : [...controls.disabledTools, ...MEMORY_TOOLS];
     // The campaign-context and knowledge-graph MCPs run in-process; both close when the turn ends.
     const context = await connectCampaignContextTools();
+    const external = await connectExternalServiceTools();
     const graph = await connectKnowledgeGraphTools(
       memory ?? knowledgeGraphBackend(this.env),
       memory ? { workspaceId: this.state.workspaceId, now: () => new Date() } : undefined,
@@ -685,6 +690,14 @@ export class MarketingOrchestrator extends AIChatAgent<
               ),
           ),
         ),
+        ...Object.fromEntries(
+          Object.entries(external.tools).filter(
+            ([key]) =>
+              !(disabledTools as readonly string[]).includes(
+                key.slice(EXTERNAL_SERVICES_TOOL_PREFIX.length),
+              ),
+          ),
+        ),
       },
       (name, input, output) => this.ingestToolResult(name, input, output),
     );
@@ -708,6 +721,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     const missingTool = missingPlannedTool(prompt, Object.keys(tools), planContext);
     if (missingTool) {
       await context.close();
+      await external.close();
       await graph.close();
       return scriptedResponse(
         [
@@ -789,6 +803,7 @@ export class MarketingOrchestrator extends AIChatAgent<
           );
         } finally {
           await context.close();
+          await external.close();
           await graph.close();
         }
       },

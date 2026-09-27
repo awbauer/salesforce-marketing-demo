@@ -756,6 +756,248 @@ const traceContentLineage = define({
   },
 });
 
+// ---------------------------------------------------------------------------------------------
+// Use-case tools: account outreach planning (sales) and location impact (service).
+
+export const OUTREACH_CYPHER = `
+MATCH (a:Account {name: $account, dataset: $dataset})<-[:WORKS_AT]-(p:Persona)
+CALL (p) {
+  OPTIONAL MATCH (p)-[e:ENGAGED_WITH]->(:ContentAsset)
+  RETURN sum(coalesce(e.count, 0)) AS engagements, min(e.lastDaysAgo) AS lastDaysAgo
+}
+CALL (p) {
+  OPTIONAL MATCH (p)-[:HAS_CONSENT]->(s:ConsentScope {purpose: "marketing"})-[:FOR]->(ch:Channel)
+  WITH s, ch ORDER BY ch.channelId
+  RETURN collect(CASE WHEN ch IS NULL THEN NULL ELSE {scopeId: s.id, scope: s.name, channelId: ch.id, channel: ch.name} END) AS channels
+}
+RETURN a.id AS accountId, a.name AS account, a.country AS country, a.countryName AS countryName,
+  p.id AS personaId, p.name AS persona, p.role AS role, p.roleWeight + engagements AS score,
+  engagements, lastDaysAgo, channels
+ORDER BY score DESC, persona
+LIMIT $limit`;
+
+type OutreachRow = {
+  accountId: string;
+  account: string;
+  country: string;
+  countryName: string;
+  personaId: string;
+  persona: string;
+  role: string;
+  score: number;
+  engagements: number;
+  lastDaysAgo: number | null;
+  channels: Array<{ scopeId: string; scope: string; channelId: string; channel: string }>;
+};
+
+const planAccountOutreach = define({
+  name: "plan_account_outreach",
+  title: "Plan account outreach",
+  description:
+    "For an account's buying-role personas: who to contact first (role and engagement), when they last engaged, and which channels each has marketing consent for, plus the account's headquarters country for scheduling around local holidays. Every contact comes with its evidence path. Read-only.",
+  input: z.object({
+    account: z.enum(ACCOUNTS).describe("Fictional account name"),
+    limit: z.number().int().min(1).max(10).default(5).describe("Contacts to return"),
+  }),
+  run: async (backend, { account, limit }) => {
+    const result = (await rows(backend, OUTREACH_CYPHER, { account, limit }, (ix) => {
+      const accountNode = [...ix.byId.values()].find(
+        (node) => node.label === "Account" && node.name === account,
+      );
+      if (!accountNode) return [];
+      return ix
+        .incoming(accountNode.id, "WORKS_AT")
+        .map(({ from }) => ix.node(from))
+        .map((persona) => {
+          const engagements = ix.outgoing(persona.id, "ENGAGED_WITH");
+          const channels = ix
+            .outgoing(persona.id, "HAS_CONSENT")
+            .map(({ to }) => ix.node(to))
+            .filter((scope) => scope.purpose === "marketing")
+            .flatMap((scope) =>
+              ix.outgoing(scope.id, "FOR").map(({ to }) => ({ scope, channel: ix.node(to) })),
+            )
+            .sort((a, b) => byText(String(a.channel.channelId), String(b.channel.channelId)))
+            .map(({ scope, channel }) => ({
+              scopeId: scope.id,
+              scope: scope.name,
+              channelId: channel.id,
+              channel: channel.name,
+            }));
+          const days = engagements.map((edge) => Number(edge.properties?.lastDaysAgo));
+          const total = engagements.reduce(
+            (sum, edge) => sum + Number(edge.properties?.count ?? 0),
+            0,
+          );
+          return {
+            accountId: accountNode.id,
+            account: accountNode.name,
+            country: accountNode.country,
+            countryName: accountNode.countryName,
+            personaId: persona.id,
+            persona: persona.name,
+            role: persona.role,
+            score: Number(persona.roleWeight) + total,
+            engagements: total,
+            lastDaysAgo: days.length ? Math.min(...days) : null,
+            channels,
+          };
+        })
+        .sort((a, b) => b.score - a.score || byText(a.persona, b.persona))
+        .slice(0, limit);
+    })) as OutreachRow[];
+    const first = result[0];
+    const paths: EvidencePath[] = result.flatMap((row) => {
+      const persona = { id: row.personaId, label: "Persona", name: row.persona };
+      const accountNode = { id: row.accountId, label: "Account", name: row.account };
+      return [
+        {
+          nodes: [persona, accountNode],
+          relationships: [{ type: "WORKS_AT", from: persona.id, to: accountNode.id }],
+        },
+        ...row.channels.slice(0, 2).map((channel) => ({
+          nodes: [
+            persona,
+            { id: channel.scopeId, label: "ConsentScope", name: channel.scope },
+            { id: channel.channelId, label: "Channel", name: channel.channel },
+          ],
+          relationships: [
+            { type: "HAS_CONSENT", from: persona.id, to: channel.scopeId },
+            { type: "FOR", from: channel.scopeId, to: channel.channelId },
+          ],
+        })),
+      ];
+    });
+    return {
+      account,
+      country: first?.country ?? null,
+      countryName: first?.countryName ?? null,
+      contacts: result.map((row) => ({
+        persona: row.persona,
+        role: row.role,
+        score: row.score,
+        engagements: row.engagements,
+        lastEngagedDaysAgo: row.lastDaysAgo,
+        reachableBy: row.channels.map((channel) => channel.channel),
+      })),
+      notReachable: result.filter((row) => row.channels.length === 0).map((row) => row.persona),
+      paths: paths.slice(0, MAX_PATHS),
+    };
+  },
+});
+
+export const LOCATION_IMPACT_CYPHER = `
+MATCH (l:Location {dataset: $dataset, weatherLocation: $location})<-[:NEAR]-(s:Segment)
+OPTIONAL MATCH (s)-[c:HAS_CONSENT]->(scope:ConsentScope)
+WITH l, s, head(collect(CASE WHEN scope IS NULL THEN NULL ELSE {scopeId: scope.id, scope: scope.name, optedIn: c.optedIn, coverageRate: c.coverageRate} END)) AS consent
+CALL (s) {
+  OPTIONAL MATCH (camp:Campaign)-[:TARGETS]->(s)
+  WITH camp ORDER BY camp.name
+  RETURN collect(CASE WHEN camp IS NULL THEN NULL ELSE {id: camp.id, name: camp.name, status: camp.status} END) AS campaigns
+}
+CALL (s) {
+  OPTIONAL MATCH (p:PushSend)-[:SENT_TO]->(s)
+  RETURN count(p) AS pastSends
+}
+RETURN l.id AS locationId, l.name AS location, l.city AS city, l.address AS address,
+  s.id AS segmentId, s.name AS segment, s.size AS size, consent, campaigns, pastSends`;
+
+type ImpactRow = {
+  locationId: string;
+  location: string;
+  city: string;
+  address: string;
+  segmentId: string;
+  segment: string;
+  size: number;
+  consent: { scopeId: string; scope: string; optedIn: number; coverageRate: number } | null;
+  campaigns: Array<{ id: string; name: string; status: string }>;
+  pastSends: number;
+};
+
+const assessLocationImpact = define({
+  name: "assess_location_impact",
+  title: "Assess location impact",
+  description:
+    "For a Coastline Kitchen location: the app audience near it (aggregate counts, no individuals), how many can be notified by push under their consent, and the campaigns that target that audience and may need pausing during a disruption, each with its evidence path. Read-only.",
+  input: z.object({
+    location: z.enum(LOCATION_IDS).describe("Coastline Kitchen location (city id)"),
+  }),
+  run: async (backend, { location }) => {
+    const [row] = (await rows(backend, LOCATION_IMPACT_CYPHER, { location }, (ix) => {
+      const locationNode = [...ix.byId.values()].find(
+        (node) => node.label === "Location" && node.weatherLocation === location,
+      );
+      if (!locationNode) return [];
+      return ix.incoming(locationNode.id, "NEAR").map(({ from }) => {
+        const segment = ix.node(from);
+        const consentEdge = ix.outgoing(segment.id, "HAS_CONSENT")[0];
+        const scope = consentEdge ? ix.node(consentEdge.to) : null;
+        return {
+          locationId: locationNode.id,
+          location: locationNode.name,
+          city: locationNode.city,
+          address: locationNode.address,
+          segmentId: segment.id,
+          segment: segment.name,
+          size: segment.size,
+          consent:
+            scope && consentEdge
+              ? {
+                  scopeId: scope.id,
+                  scope: scope.name,
+                  optedIn: consentEdge.properties?.optedIn,
+                  coverageRate: consentEdge.properties?.coverageRate,
+                }
+              : null,
+          campaigns: ix
+            .incoming(segment.id, "TARGETS")
+            .map(({ from }) => ix.node(from))
+            .sort((a, b) => byText(a.name, b.name))
+            .map((campaign) => ({ id: campaign.id, name: campaign.name, status: campaign.status })),
+          pastSends: ix.incoming(segment.id, "SENT_TO").length,
+        };
+      });
+    })) as ImpactRow[];
+    if (!row) return { location, found: false, paths: [] };
+    const segment = { id: row.segmentId, label: "Segment", name: row.segment };
+    const locationNode = { id: row.locationId, label: "Location", name: row.location };
+    const paths: EvidencePath[] = [
+      {
+        nodes: [segment, locationNode],
+        relationships: [{ type: "NEAR", from: segment.id, to: locationNode.id }],
+      },
+      ...(row.consent
+        ? [
+            {
+              nodes: [
+                segment,
+                { id: row.consent.scopeId, label: "ConsentScope", name: row.consent.scope },
+              ],
+              relationships: [{ type: "HAS_CONSENT", from: segment.id, to: row.consent.scopeId }],
+            },
+          ]
+        : []),
+      ...row.campaigns.map((campaign) => ({
+        nodes: [{ id: campaign.id, label: "Campaign", name: campaign.name }, segment],
+        relationships: [{ type: "TARGETS", from: campaign.id, to: segment.id }],
+      })),
+    ];
+    return {
+      location: row.location,
+      city: row.city,
+      address: row.address,
+      found: true,
+      affectedAppUsers: row.size,
+      reachableByPush: row.consent?.optedIn ?? 0,
+      pushCoverageRate: row.consent?.coverageRate ?? 0,
+      campaignsToReview: row.campaigns.filter((campaign) => campaign.status === "Active"),
+      pastPushSends: row.pastSends,
+      paths: paths.slice(0, MAX_PATHS),
+    };
+  },
+});
+
 export const KNOWLEDGE_GRAPH_TOOL_SPECS = [
   getGraphOverview,
   explainBuyerGroup,
@@ -763,6 +1005,8 @@ export const KNOWLEDGE_GRAPH_TOOL_SPECS = [
   checkConsentCoverage,
   findSimilarPastPushes,
   traceContentLineage,
+  planAccountOutreach,
+  assessLocationImpact,
 ] as const;
 
 export { pathNode };
