@@ -4,6 +4,7 @@ import {
   forcedToolCallMiddleware,
   normalizeToolName,
   repairForcedToolStep,
+  repairToolInput,
   salvageToolInput,
 } from "./forced-tool-middleware";
 
@@ -223,5 +224,108 @@ describe("forced tool call middleware", () => {
     expect(parts.find((part) => part.type === "tool-call")).toMatchObject({
       input: '{"message":"Draft content for the audience"}',
     });
+  });
+  it("repairs tool arguments with raw newlines or argument markup, and rejects cut-off JSON", () => {
+    expect(repairToolInput('{"message":"hi"}')).toBe('{"message":"hi"}');
+    expect(JSON.parse(repairToolInput('{"message":"line one\nline two\t\\"ok\\""}') ?? "")).toEqual(
+      {
+        message: 'line one\nline two\t"ok"',
+      },
+    );
+    expect(
+      JSON.parse(
+        repairToolInput(
+          "<tool_call>salesforce_draft<arg_key>message</arg_key><arg_value>Draft a brief.</arg_value></tool_call>",
+        ) ?? "",
+      ),
+    ).toEqual({ message: "Draft a brief." });
+    expect(
+      repairToolInput(
+        '{"message":"Draft a campaign brief for Coastline Kitchen. Objective: Email c',
+      ),
+    ).toBeNull();
+  });
+
+  it("retries a forced call whose arguments were cut off, instead of passing them on", async () => {
+    const cutOff: Part[] = [
+      { type: "tool-input-start", id: "c", toolName: "salesforce_summarize_campaign" },
+      { type: "tool-input-delta", id: "c", delta: '{"message":"Summarize the sam' },
+      { type: "tool-input-end", id: "c" },
+      {
+        type: "tool-call",
+        toolCallId: "c",
+        toolName: "salesforce_summarize_campaign",
+        input: '{"message":"Summarize the sam',
+      },
+      { type: "finish", finishReason: { unified: "length", raw: "length" }, usage },
+    ];
+    const { parts, calls } = await run([cutOff, structured]);
+    expect(calls()).toBe(2);
+    expect(parts).toEqual(structured);
+  });
+
+  it("repairs a forced call's arguments in place when they only need escaping", async () => {
+    const { parts, calls } = await run([
+      [
+        {
+          type: "tool-call",
+          toolCallId: "c",
+          toolName: "salesforce_summarize_campaign",
+          input: '{"message":"one\ntwo"}',
+        },
+        { type: "finish", finishReason: { unified: "tool-calls", raw: "tool_calls" }, usage },
+      ],
+    ]);
+    expect(calls()).toBe(1);
+    expect(parts.find((part) => part.type === "tool-call")).toMatchObject({
+      input: '{"message":"one\\ntwo"}',
+    });
+  });
+  it("keeps tool calls out of an answer step, retrying once when a call was all it produced", async () => {
+    const answerParams = {
+      prompt: [],
+      toolChoice: { type: "none" },
+      tools: [],
+    } as unknown as Params;
+    const strayCall: Part[] = [
+      { type: "stream-start", warnings: [] },
+      { type: "reasoning-start", id: "r" },
+      { type: "reasoning-delta", id: "r", delta: "Call the tool again." },
+      { type: "reasoning-end", id: "r" },
+      { type: "tool-input-start", id: "x", toolName: "draft_campaign_brief<|channel|>analysis" },
+      {
+        type: "tool-call",
+        toolCallId: "x",
+        toolName: "draft_campaign_brief<|channel|>analysis",
+        input: "{}",
+      },
+      { type: "finish", finishReason: { unified: "tool-calls", raw: "tool_calls" }, usage },
+    ];
+    const answer: Part[] = [
+      { type: "stream-start", warnings: [] },
+      { type: "text-start", id: "t" },
+      { type: "text-delta", id: "t", delta: "Here is the brief." },
+      { type: "text-end", id: "t" },
+      { type: "finish", finishReason: { unified: "stop", raw: "stop" }, usage },
+    ];
+    const retried = await run([strayCall, answer], answerParams);
+    expect(retried.calls()).toBe(2);
+    expect(retried.parts.some((part) => part.type === "tool-call")).toBe(false);
+    expect(retried.parts.map((part) => part.type)).toEqual([
+      "stream-start",
+      "reasoning-start",
+      "reasoning-delta",
+      "reasoning-end",
+      "text-start",
+      "text-delta",
+      "text-end",
+      "finish",
+    ]);
+
+    // With an answer, a stray call is dropped and the step simply stops.
+    const withText = await run([[...answer.slice(0, 4), ...strayCall.slice(4)]], answerParams);
+    expect(withText.calls()).toBe(1);
+    expect(withText.parts.some((part) => part.type === "tool-call")).toBe(false);
+    expect(withText.parts.at(-1)).toMatchObject({ finishReason: { unified: "stop" } });
   });
 });
