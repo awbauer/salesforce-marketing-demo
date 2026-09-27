@@ -1,5 +1,6 @@
 import {
   CAMPAIGN_CONTEXT_TOOLS,
+  EXTERNAL_SERVICE_TOOLS,
   type InsightTile,
   KNOWLEDGE_GRAPH_TOOLS,
   MEMORY_TOOLS,
@@ -198,6 +199,81 @@ function weatherCard(data: Record<string, unknown>, tool: string, at: Date): Ing
   };
 }
 
+/** Public holidays (Nager.Date) or weather alerts (National Weather Service) as a context card. */
+function externalCard(data: Record<string, unknown>, tool: string, at: Date): Ingested {
+  if (tool === "get_public_holidays") {
+    const country = str(data.country) ?? "?";
+    const holidays = list(data.holidays).map((item) => item as Record<string, unknown>);
+    return {
+      cards: [
+        {
+          id: `holidays:${country.toLowerCase()}`,
+          kind: "context",
+          eyebrow: "Public holidays",
+          title: `${holidays.length} holiday${holidays.length === 1 ? "" : "s"} in ${country}, next ${num(data.days) ?? 60} days`,
+          summary: holidays.length
+            ? `Next: ${str(holidays[0]?.name)} on ${str(holidays[0]?.date)}.`
+            : "No public holidays in this window.",
+          metric: String(holidays.length),
+          trend: "holidays",
+          state: "ready",
+          source: {
+            system: "nager-date",
+            label: "Nager.Date · live",
+            freshness: "just now",
+            status: "ready",
+          },
+          details: holidays
+            .slice(0, 4)
+            .map(
+              (holiday) =>
+                `${str(holiday.date)} · ${str(holiday.name)}${holiday.scope === "regional" ? " (regional)" : ""}`,
+            ),
+          updatedAt: at.toISOString(),
+          toolName: tool,
+        },
+      ],
+      records: [],
+    };
+  }
+  const city = str(data.city) ?? "California";
+  const alerts = list(data.alerts).map((item) => item as Record<string, unknown>);
+  return {
+    cards: [
+      {
+        id: `alerts:${city.toLowerCase().replace(/\W+/g, "-")}`,
+        kind: "weather",
+        eyebrow: "Weather alerts",
+        title: alerts.length
+          ? `${str(alerts[0]?.event)} near ${city}`
+          : `No active weather alerts near ${city}`,
+        summary: alerts.length
+          ? (str(alerts[0]?.headline) ??
+            `${alerts.length} active alert${alerts.length === 1 ? "" : "s"}.`)
+          : `${list(data.elsewhereInCalifornia).length} other active alert${list(data.elsewhereInCalifornia).length === 1 ? "" : "s"} in California.`,
+        metric: String(alerts.length),
+        trend: "active alerts",
+        state: "ready",
+        source: {
+          system: "nws",
+          label: "National Weather Service · live",
+          freshness: "just now",
+          status: "ready",
+        },
+        details: [
+          ...alerts.slice(0, 3).map((alert) => `${str(alert.event)} · ${str(alert.severity)}`),
+          ...list(data.elsewhereInCalifornia)
+            .slice(0, alerts.length ? 1 : 3)
+            .map((item) => `Elsewhere: ${String(item)}`),
+        ].slice(0, 4),
+        updatedAt: at.toISOString(),
+        toolName: tool,
+      },
+    ],
+    records: [],
+  };
+}
+
 function restaurantCard(data: Record<string, unknown>, tool: string, at: Date): Ingested {
   const name = str(data.name) ?? "Restaurant";
   const id = str(data.id) ?? name.toLowerCase().replace(/\W+/g, "-");
@@ -250,6 +326,8 @@ const GRAPH_TITLES: Record<string, string> = {
   check_consent_coverage: "Consent coverage",
   find_similar_past_pushes: "Similar past pushes",
   trace_content_lineage: "Content lineage",
+  plan_account_outreach: "Outreach plan",
+  assess_location_impact: "Location impact",
   recall_decisions: "Remembered",
   recall_recent_work: "Recent work",
   explain_memory: "Memory provenance",
@@ -278,6 +356,10 @@ function graphSummary(tool: string, data: Record<string, unknown>, count: number
       return `${count} other campaigns share members with this audience.`;
     case "trace_content_lineage":
       return `${count} content assets built from ${str(data.brief) ?? "the brief"}.`;
+    case "plan_account_outreach":
+      return `${list(data.contacts).length} contacts at ${str(data.account) ?? "the account"} (${str(data.countryName) ?? str(data.country) ?? "?"}), with the channels each has consented to.`;
+    case "assess_location_impact":
+      return `${num(data.affectedAppUsers) ?? 0} app users near ${str(data.city) ?? "the location"}; ${num(data.reachableByPush) ?? 0} can be notified by push; ${list(data.campaignsToReview).length} active campaigns target them.`;
     default:
       return str(data.answer) ?? str(data.summary) ?? `${count} results`;
   }
@@ -305,6 +387,8 @@ function graphCard(
     ...list(data.assets),
     ...list(data.uncoveredExamples),
     ...list(data.topItems),
+    ...list(data.contacts),
+    ...list(data.campaignsToReview),
   ]
     .map((item) => {
       if (typeof item === "string") return item;
@@ -473,6 +557,8 @@ export function ingestionFor(event: ToolResultEvent): Ingested {
       ? weatherCard(payload.data, tool, event.at)
       : restaurantCard(payload.data, tool, event.at);
   }
+  if ((EXTERNAL_SERVICE_TOOLS as readonly string[]).includes(tool))
+    return payload.data ? externalCard(payload.data, tool, event.at) : { cards: [], records: [] };
   if ([...KNOWLEDGE_GRAPH_TOOLS, ...MEMORY_TOOLS].includes(tool as never))
     return payload.data
       ? graphCard(payload.data, tool, event.input, event.at)

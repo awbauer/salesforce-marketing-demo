@@ -19,17 +19,21 @@ describe("knowledge-graph MCP", () => {
     ).toBe("neo4j");
   });
 
-  it("serves the six curated read-only tools in-process with evidence paths", async () => {
+  it("serves the eight curated read-only tools in-process with evidence paths", async () => {
     const { tools, close } = await connectKnowledgeGraphTools(knowledgeGraphBackend({}));
     try {
-      expect(Object.keys(tools).sort()).toEqual([
-        "graph_check_consent_coverage",
-        "graph_explain_buyer_group",
-        "graph_find_audience_overlap",
-        "graph_find_similar_past_pushes",
-        "graph_get_graph_overview",
-        "graph_trace_content_lineage",
-      ]);
+      expect(Object.keys(tools).sort()).toEqual(
+        [
+          "graph_check_consent_coverage",
+          "graph_explain_buyer_group",
+          "graph_find_audience_overlap",
+          "graph_find_similar_past_pushes",
+          "graph_get_graph_overview",
+          "graph_plan_account_outreach",
+          "graph_assess_location_impact",
+          "graph_trace_content_lineage",
+        ].sort(),
+      );
       const result = (await tools.graph_explain_buyer_group?.execute?.(
         { account: "Acme Outfitters", limit: 3 },
         callOptions,

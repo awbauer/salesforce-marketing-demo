@@ -90,6 +90,7 @@ export const SECTION_SOURCES: Record<string, readonly string[]> = {
     "salesforce/force-app/main/default/aiAuthoringBundles/Northstar_Campaign_Creation/",
     "salesforce/force-app/main/default/classes/NorthstarGetMarketingRecords.cls",
   ],
+  "use-cases": ["apps/edge/src/external-services/", "apps/web/src/usecases/"],
   "long-term-memory": [
     "packages/knowledge-graph/src/memory.ts",
     "apps/edge/src/memory.ts",

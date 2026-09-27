@@ -304,10 +304,12 @@ function GraphTools() {
     ["find_similar_past_pushes", "What worked in this weather and daypart?"],
     ["trace_content_lineage", "What was built from this brief?"],
     ["get_graph_overview", "What is in the graph?"],
+    ["plan_account_outreach", "Who to contact, on which consented channel?"],
+    ["assess_location_impact", "Who is affected near this location?"],
   ] as const;
   return (
     <Figure
-      label="The six curated graph tools"
+      label="The eight curated graph tools"
       caption="Each tool is a fixed, parameterized Cypher query in read mode that returns an answer plus evidence paths."
     >
       <div className="graph-tools">
@@ -559,6 +561,60 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
       />
     </Figure>
   ),
+  "use-cases": () => (
+    <Figure
+      label="Sales and service use cases"
+      caption="A live public API says what's happening; the knowledge graph says who it affects and how they can be reached."
+    >
+      <Lanes
+        lanes={[
+          {
+            label: "Sales",
+            steps: [
+              { title: "Account + time frame", tone: "person", glyph: "?" },
+              {
+                title: "plan_account_outreach",
+                caption: "contacts · consent · country",
+                tone: "store",
+                glyph: "⋈",
+              },
+              { title: "Nager.Date", caption: "public holidays", tone: "tool", glyph: "↗" },
+              {
+                title: "Dated outreach plan",
+                caption: "consented channels only",
+                tone: "output",
+                glyph: "✎",
+              },
+            ],
+          },
+          {
+            label: "Service",
+            steps: [
+              { title: "Location + concern", tone: "person", glyph: "?" },
+              {
+                title: "National Weather Service",
+                caption: "active alerts",
+                tone: "tool",
+                glyph: "↗",
+              },
+              {
+                title: "assess_location_impact",
+                caption: "audience · push reach · campaigns",
+                tone: "store",
+                glyph: "⋈",
+              },
+              {
+                title: "Impact + drafted notice",
+                caption: "aggregate only",
+                tone: "output",
+                glyph: "✎",
+              },
+            ],
+          },
+        ]}
+      />
+    </Figure>
+  ),
   "long-term-memory": () => (
     <Figure
       label="How long-term memory is written, recalled, and forgotten"
@@ -735,7 +791,7 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
           },
           {
             title: "Knowledge graph",
-            caption: "six curated queries · in-process and HTTP",
+            caption: "eight curated queries · in-process and HTTP",
             tone: "tool",
             glyph: "⋈",
           },
@@ -962,7 +1018,7 @@ const DIAGRAMS: Record<DiagramId, () => ReactNode> = {
         cards={[
           {
             title: "Demo scenarios",
-            caption: "Quickstart prompts, full pipeline",
+            caption: "Use-case prompts, full pipeline",
             tone: "person",
             glyph: "▶",
           },

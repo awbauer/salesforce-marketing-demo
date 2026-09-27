@@ -204,3 +204,44 @@ describe("Neo4j Query API client", () => {
     expect(types).toEqual(expect.arrayContaining(["FEATURED", "USED", "SENT_TO"]));
   });
 });
+
+describe("use-case graph tools", () => {
+  it("plans account outreach with consented channels and the account's country", async () => {
+    const result = (await tool("plan_account_outreach")({
+      account: "Harbor Point Sports",
+      limit: 4,
+    })) as {
+      country: string;
+      contacts: Array<{
+        persona: string;
+        reachableBy: string[];
+        lastEngagedDaysAgo: number | null;
+      }>;
+      paths: Array<{ relationships: Array<{ type: string }> }>;
+    };
+    expect(result.country).toBe("GB");
+    expect(result.contacts.length).toBeGreaterThan(0);
+    for (const contact of result.contacts)
+      expect(contact.persona.startsWith("Harbor Point Sports · ")).toBe(true);
+    expect(
+      result.paths.some((path) => path.relationships.some((rel) => rel.type === "HAS_CONSENT")),
+    ).toBe(true);
+  });
+
+  it("assesses a location's affected audience, push reach, and campaigns to pause", async () => {
+    const result = (await tool("assess_location_impact")({ location: "san-diego" })) as {
+      affectedAppUsers: number;
+      reachableByPush: number;
+      campaignsToReview: Array<{ name: string }>;
+      paths: Array<{ relationships: Array<{ type: string }> }>;
+    };
+    expect(result.affectedAppUsers).toBeGreaterThan(result.reachableByPush);
+    expect(result.reachableByPush).toBeGreaterThan(0);
+    expect(result.campaignsToReview.map((campaign) => campaign.name)).toContain(
+      "Coastline Weather Moments",
+    );
+    expect(result.paths.map((path) => path.relationships[0]?.type)).toEqual(
+      expect.arrayContaining(["NEAR", "HAS_CONSENT", "TARGETS"]),
+    );
+  });
+});

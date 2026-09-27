@@ -17,7 +17,7 @@ export function buildMethodology({ trialsDemo, trialsRouting }) {
         id: "demo-scenarios",
         label: "Demo scenarios",
         description:
-          "The Quickstart prompts (including the weather-aware restaurant push campaign) plus a save request and a publish request, through the full pipeline.",
+          "The use-case library prompts (including the weather-aware restaurant push campaign) plus a save request and a publish request, through the full pipeline.",
         trials: trialsDemo,
       },
       {

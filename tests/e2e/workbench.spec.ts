@@ -169,22 +169,33 @@ test("renders the accessible native fallback when the HXL resource is unavailabl
   });
 });
 
-test("offers a quickstart with supported prompts and honest roadmap boundaries", async ({
+test("offers a use-case library with data flows and coming-soon scenarios", async ({
   page,
 }, testInfo) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Quickstart" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Start with a real workflow" });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("heading", { name: "Try now" })).toBeVisible();
-  await expect(dialog.getByRole("heading", { name: "Coming soon / not yet built" })).toBeVisible();
-  await expect(dialog.getByText(/Publishing, sending, activation/)).toBeVisible();
+  await page.getByRole("button", { name: "Use cases" }).first().click();
+  const library = page.getByRole("region", { name: "Use cases" });
+  await expect(library).toBeVisible();
+  await library
+    .getByRole("group", { name: "Team" })
+    .getByRole("button", { name: /^Service/ })
+    .click();
+  await library.getByRole("button", { name: /Severe-weather customer impact/ }).click();
+  const detail = library.getByRole("article");
+  await expect(detail.getByRole("link", { name: /National Weather Service/ })).toBeVisible();
+  await expect(detail.getByRole("list", { name: "Data flow" })).toContainText(
+    "assess_location_impact",
+  );
+  const comingSoon = library.getByRole("list", { name: "Coming soon use cases" });
+  await expect(comingSoon.locator("[aria-disabled='true']").first()).toBeVisible();
+  await expect(comingSoon.getByRole("button")).toHaveCount(0);
   await page.screenshot({
-    path: `artifacts/evidence/WU-006/quickstart-${testInfo.project.name}.png`,
+    path: `artifacts/evidence/WU-045/use-cases-${testInfo.project.name}.png`,
     fullPage: true,
   });
-  const prompt = "Check the sample campaign readiness and explain every blocker";
-  await dialog.getByRole("button", { name: prompt }).click();
+  const prompt =
+    "There are weather alerts near our San Diego location. Which customers are affected and what should we tell them?";
+  await detail.getByRole("button", { name: new RegExp(prompt.slice(0, 40)) }).click();
   await expect(page.getByLabel("Message the orchestrator")).toHaveValue(prompt);
 });
 

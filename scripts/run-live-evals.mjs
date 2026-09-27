@@ -15,6 +15,10 @@ import {
   CAMPAIGN_CONTEXT_TOOL_PREFIX,
   connectCampaignContextTools,
 } from "../apps/edge/src/campaign-context/server.ts";
+import {
+  connectExternalServiceTools,
+  EXTERNAL_SERVICES_TOOL_PREFIX,
+} from "../apps/edge/src/external-services/server.ts";
 import { forcedToolCallMiddleware } from "../apps/edge/src/forced-tool-middleware.ts";
 import {
   connectKnowledgeGraphTools,
@@ -240,6 +244,8 @@ function shortName(name) {
   if (name.startsWith(TOOL_PREFIX)) return name.slice(TOOL_PREFIX.length);
   if (name.startsWith(CAMPAIGN_CONTEXT_TOOL_PREFIX))
     return name.slice(CAMPAIGN_CONTEXT_TOOL_PREFIX.length);
+  if (name.startsWith(EXTERNAL_SERVICES_TOOL_PREFIX))
+    return name.slice(EXTERNAL_SERVICES_TOOL_PREFIX.length);
   if (name.startsWith(KNOWLEDGE_GRAPH_TOOL_PREFIX))
     return name.slice(KNOWLEDGE_GRAPH_TOOL_PREFIX.length);
   return name;
@@ -520,7 +526,9 @@ const graphBackend = process.argv.includes("--live-graph")
 const memoryContext = { workspaceId: `eval-${Date.now()}`, now: () => new Date() };
 if (graphBackend.kind === "fixture") await seedEvalMemory(graphBackend, memoryContext.workspaceId);
 const graph = await connectKnowledgeGraphTools(graphBackend, memoryContext);
-const tools = { ...fixtureTools(), ...campaignContext.tools, ...graph.tools };
+// Nager.Date holidays and National Weather Service alerts are live public APIs.
+const external = await connectExternalServiceTools();
+const tools = { ...fixtureTools(), ...campaignContext.tools, ...external.tools, ...graph.tools };
 const suites = [
   { id: "demo-scenarios", cases: demoScenarios, trials: trialsDemo },
   { id: "routing-pipeline", cases: routingCases, trials: trialsRouting },
@@ -570,4 +578,5 @@ mkdirSync(dirname(REPORT_PATH), { recursive: true });
 writeFileSync(REPORT_PATH, `${JSON.stringify(report, null, 1)}\n`);
 await campaignContext.close();
 await graph.close();
+await external.close();
 console.log(`Wrote ${REPORT_PATH} (${results.length} turns).`);

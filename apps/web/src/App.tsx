@@ -28,6 +28,7 @@ import { GraphEvidencePanel } from "./GraphEvidence";
 import { GraphView } from "./graph/GraphView";
 import { HistoryView } from "./HistoryView";
 import { LearnView } from "./learn/LearnView";
+import { UseCasesView } from "./usecases/UseCasesView";
 import { Markdown } from "./Markdown";
 import { SalesforceAgentsPanel } from "./SalesforceAgents";
 import { executionTrace } from "./turn-trace";
@@ -153,17 +154,15 @@ export function App() {
   );
   const briefCampaignId = openCampaign?.recordId;
   const [imageBusy, setImageBusy] = useState(false);
-  const [quickstartOpen, setQuickstartOpen] = useState(false);
   const [operations, setOperations] = useState<OperationControls>({
     writesEnabled: true,
     memoryEnabled: true,
     disabledTools: [],
   });
-  const [view, setView] = useState<"overview" | "history" | "evaluations" | "learn" | "graph">(
-    "overview",
-  );
+  const [view, setView] = useState<
+    "overview" | "history" | "evaluations" | "learn" | "graph" | "usecases"
+  >("overview");
   const confirmationRef = useRef<HTMLElement>(null);
-  const quickstartCloseRef = useRef<HTMLButtonElement>(null);
   const connectorStatusLoaded = useRef(false);
   const agent = useAgent<OrchestratorState>({
     agent: "MarketingOrchestrator",
@@ -238,16 +237,6 @@ export function App() {
   useEffect(() => {
     if (pendingConfirmation) confirmationRef.current?.scrollIntoView({ block: "nearest" });
   }, [pendingConfirmation]);
-
-  useEffect(() => {
-    if (!quickstartOpen) return;
-    quickstartCloseRef.current?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setQuickstartOpen(false);
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [quickstartOpen]);
 
   function writeBlock(action: keyof typeof WRITE_TOOL_BY_ACTION) {
     if (!operations.writesEnabled) return "Writes paused by an operator";
@@ -580,8 +569,13 @@ export function App() {
             >
               <span>⋈</span>Graph
             </button>
-            <button type="button" className="nav-item" onClick={() => setQuickstartOpen(true)}>
-              <span>?</span>Quickstart
+            <button
+              type="button"
+              className={`nav-item ${view === "usecases" ? "active" : ""}`}
+              aria-current={view === "usecases" ? "page" : undefined}
+              onClick={() => setView("usecases")}
+            >
+              <span>▤</span>Use cases
             </button>
           </div>
           <div>
@@ -609,6 +603,18 @@ export function App() {
                 className={`dot ${operations.disabledTools.includes("get_current_weather") ? "stale" : "ready"}`}
               />
               Weather · Open-Meteo
+            </div>
+            <div className="source-row">
+              <i
+                className={`dot ${operations.disabledTools.includes("get_public_holidays") ? "stale" : "ready"}`}
+              />
+              Holidays · Nager.Date
+            </div>
+            <div className="source-row">
+              <i
+                className={`dot ${operations.disabledTools.includes("get_weather_alerts") ? "stale" : "ready"}`}
+              />
+              Weather alerts · NWS
             </div>
             <div className="source-row">
               <i
@@ -700,6 +706,15 @@ export function App() {
           />
         )}
         {view === "graph" && <GraphView onClose={() => setView("overview")} />}
+        {view === "usecases" && (
+          <UseCasesView
+            onClose={() => setView("overview")}
+            onTryPrompt={(prompt) => {
+              setInput(prompt);
+              setView("overview");
+            }}
+          />
+        )}
         {view === "history" && (
           <HistoryView
             refreshKey={busy ? -1 : messages.length}
@@ -750,9 +765,9 @@ export function App() {
               <button
                 type="button"
                 className="quickstart-button"
-                onClick={() => setQuickstartOpen(true)}
+                onClick={() => setView("usecases")}
               >
-                Quickstart
+                Use cases
               </button>
               <span className="agent-badge">
                 <i />
@@ -1233,86 +1248,6 @@ export function App() {
           </section>
         </aside>
       </div>
-      {quickstartOpen && (
-        <div className="dialog-backdrop" role="presentation">
-          <section
-            className="quickstart-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="quickstart-title"
-          >
-            <div className="quickstart-heading">
-              <div>
-                <p className="kicker">Guided demo</p>
-                <h2 id="quickstart-title">Start with a real workflow</h2>
-              </div>
-              <button
-                ref={quickstartCloseRef}
-                type="button"
-                className="dialog-close"
-                onClick={() => setQuickstartOpen(false)}
-                aria-label="Close quickstart"
-              >
-                ×
-              </button>
-            </div>
-            <p>
-              Connect Salesforce, then choose a prompt. Each example uses fictional Northstar data
-              and stays inside the demo’s governed tool set.
-            </p>
-            <ol className="quickstart-steps">
-              <li>Confirm the Salesforce connector shows “ready.”</li>
-              <li>Choose a prompt below and send it from the composer.</li>
-              <li>Review the evidence cards; Salesforce records open in a new tab.</li>
-              <li>Expand the technical trace to inspect tool selection and sanitized payloads.</li>
-              <li>Approve a write only when the confirmation card matches your intent.</li>
-            </ol>
-            <h3>Try now</h3>
-            <div className="prompt-list">
-              {[
-                "Summarize the sample campaign and its recent performance",
-                "Draft campaign content for the sample audience",
-                "Check the sample campaign readiness and explain every blocker",
-                "Recommend buyer group members using the available sample signals",
-                "Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
-                "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
-                "Who should be in the buyer group for Acme Outfitters, and why?",
-                "Is the fall campaign audience covered for commercial email consent?",
-                "Which members of the fall loyalty audience overlap with other active campaigns?",
-                "What content was built from the fall brief, and what are its brand rule results?",
-              ].map((prompt) => (
-                <button
-                  type="button"
-                  key={prompt}
-                  onClick={() => {
-                    setInput(prompt);
-                    setQuickstartOpen(false);
-                  }}
-                >
-                  <span>{prompt}</span>
-                  <span aria-hidden="true">→</span>
-                </button>
-              ))}
-            </div>
-            <p>
-              Once a campaign is open in the chat, use <strong>Generate campaign visual</strong> in
-              the Workspace panel to create a governed Workers AI draft, then{" "}
-              <strong>Attach to campaign</strong> and confirm to store it on the Salesforce Campaign
-              as a file.
-            </p>
-            <h3>Coming soon / not yet built</h3>
-            <ul className="coming-soon">
-              <li>Additional HXL cards for standard Salesforce agent results.</li>
-              <li>Representative consent-data evaluation in the supplied sandbox.</li>
-              <li>Expanded account discovery and buyer-group evidence.</li>
-            </ul>
-            <p className="boundary-note">
-              Publishing, sending, activation, deletion, suppression, and arbitrary Salesforce edits
-              are intentionally unavailable in this demo.
-            </p>
-          </section>
-        </div>
-      )}
     </main>
   );
 }
