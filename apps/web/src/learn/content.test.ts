@@ -21,6 +21,7 @@ describe("learn page content", () => {
       "evaluations",
       "images",
       "campaign-context",
+      "long-term-memory",
     ])
       expect(
         sections.some((section) => section.id === id),

@@ -23,7 +23,8 @@ export type DiagramId =
   | "observability"
   | "evaluations"
   | "images"
-  | "push-plan";
+  | "push-plan"
+  | "long-term-memory";
 
 export type TryIt =
   | { kind: "prompt"; label: string; prompt: string }
@@ -131,7 +132,7 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
     diagram: "memory-layers",
     keyIdea:
       "“Session context” is three things: working memory for the model, an audit trail for people, and long-term memory by relationship.",
-    tryIt: [{ kind: "view", label: "Open turn history", view: "history" }],
+    tryIt: [{ kind: "view", label: "Open turn history and memory", view: "history" }],
   },
   "context-risks": {
     diagram: "context-defenses",
@@ -245,6 +246,20 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
     tryIt: [
       { kind: "prompt", label: "Draft the Coastline Kitchen email", prompt: EMAIL_PROMPT },
       { kind: "prompt", label: "Draft the Coastline Kitchen push", prompt: PUSH_PROMPT },
+    ],
+  },
+  "long-term-memory": {
+    diagram: "long-term-memory",
+    keyIdea:
+      "The server remembers what you confirmed; the model only recalls it, dated and sourced, and re-checks Salesforce before reusing it.",
+    tryIt: [
+      { kind: "prompt", label: "Remember the current draft", prompt: "Remember this draft" },
+      {
+        kind: "prompt",
+        label: "Ask what we worked on",
+        prompt: "What have we worked on recently?",
+      },
+      { kind: "view", label: "Open History → Memory", view: "history" },
     ],
   },
 };
