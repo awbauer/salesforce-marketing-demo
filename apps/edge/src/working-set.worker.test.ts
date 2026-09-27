@@ -1,5 +1,5 @@
 import { runInDurableObject, SELF } from "cloudflare:test";
-import { emptyWorkingSet, type WorkingSet } from "@northstar/contracts";
+import { emptyWorkingSet, type WorkingSet, type WriteProgress } from "@northstar/contracts";
 import { describe, expect, it } from "vitest";
 import type { MemoryView } from "../../../packages/knowledge-graph/src/index.ts";
 import { connectCampaignContextTools } from "./campaign-context/server";
@@ -175,6 +175,22 @@ describe("working set", () => {
       ["Task", "created"],
       ["Campaign", "read"],
     ]);
+    // The write's progress was published step by step and kept as a record of what happened.
+    const progress = await runInDurableObject(
+      await agentStubFor(),
+      (instance) =>
+        (instance as unknown as { state: { writeProgress: WriteProgress | null } }).state
+          .writeProgress,
+    );
+    expect(progress).toMatchObject({ action: "create-review-task", outcome: "succeeded" });
+    expect(progress?.steps.map((step) => [step.id, step.status])).toEqual([
+      ["confirm", "done"],
+      ["sign", "skipped"],
+      ["call", "skipped"],
+      ["readback", "done"],
+      ["remember", "done"],
+    ]);
+    expect(progress?.steps[1]?.detail).toMatch(/Local development has no Salesforce/);
   });
 });
 

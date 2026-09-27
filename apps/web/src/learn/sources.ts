@@ -64,6 +64,7 @@ export const SECTION_SOURCES: Record<string, readonly string[]> = {
   ],
   ui: [
     "apps/web/src/App.tsx",
+    "apps/web/src/WriteProgress.tsx",
     "apps/web/src/Markdown.tsx",
     "packages/ui/src/",
     "salesforce/force-app/main/default/lightningTypes/",

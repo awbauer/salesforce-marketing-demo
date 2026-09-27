@@ -100,8 +100,30 @@ test("builds the workspace from the chat and completes a durable turn", async ({
   });
   const completedReviews = page.getByText("Review request created");
   const completedBefore = await completedReviews.count();
+  // Hold the response so the running state stays on screen: the steps show while it works.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/agent/confirmations/execute", async (route) => {
+    const response = await route.fetch();
+    await held;
+    await route.fulfill({ response });
+  });
   await page.getByRole("button", { name: "Confirm create" }).click();
+  const running = page.getByRole("region", { name: "Running the confirmed write" });
+  await expect(running).toBeVisible();
+  await expect(page.getByRole("button", { name: "Working…" })).toBeDisabled();
+  await expect(running).toContainText("NorthstarCreateCampaignReviewRequest");
+  await expect(running).toBeInViewport({ ratio: 0.9 });
+  await page.screenshot({
+    path: `artifacts/evidence/WU-048/write-progress-${testInfo.project.name}.png`,
+  });
+  release();
   await expect.poll(() => completedReviews.count()).toBeGreaterThan(completedBefore);
+  await page.unroute("**/agent/confirmations/execute");
+  const record = page.getByTestId("write-progress");
+  await expect(record).toContainText("Behind the scenes · Review request created · done");
   await expect(page.getByText(/Local fixture read-back/).last()).toBeVisible();
   // The created task joins the workspace as a created record.
   await expect(workspace.getByTestId("workspace-record").first()).toContainText("Created");
