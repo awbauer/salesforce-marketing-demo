@@ -114,6 +114,8 @@ import {
   MAX_TURN_STEPS,
   missingPlannedTool,
   orchestratorSystemPrompt,
+  pinCampaignChannel,
+  requestedChannel,
   selectToolPlan,
   stepToolChoice,
   TURN_TIMEOUT,
@@ -780,7 +782,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     );
     // Refinements of a saved brief always name it, whatever the model wrote.
     const savedBrief = this.state.workingSet.focus?.saved;
-    const pinnedTools = pinBriefToRefinement(
+    const briefTools = pinBriefToRefinement(
       tools,
       savedBrief?.objectType === "Brief" ? savedBrief.recordId : undefined,
     );
@@ -796,6 +798,16 @@ export class MarketingOrchestrator extends AIChatAgent<
     });
     const workspace = workingSetPrompt(this.state.workingSet);
     const prompt = latestUserText(turnMessages);
+    const focus = this.state.workingSet.focus;
+    const pinnedTools = pinCampaignChannel(
+      briefTools,
+      requestedChannel(
+        prompt,
+        focus
+          ? currentFocusVersion(focus).fields.find((field) => /^channel$/i.test(field.label))?.value
+          : undefined,
+      ),
+    );
     const toolPlan = selectToolPlan(prompt, Object.keys(tools), planContext);
     const inventoryPlan = toolPlan?.some((name) => name.endsWith("map_weather_demand"));
     // A drafting or revision turn's answer is saved as the workspace focus when it completes.

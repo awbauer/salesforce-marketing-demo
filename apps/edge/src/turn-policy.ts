@@ -40,7 +40,7 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
     "Format answers in concise Markdown: short paragraphs, bold labels, bullet lists, and small tables when they help. Never use raw HTML.",
     ...(restaurantPlan
       ? [
-          "For this restaurant campaign, read the restaurant profile, then the current weather for its city, then look up similar past pushes in the knowledge graph for that location, daypart, and weather bucket (they show which menu items performed best). Then ask the Marketing Cloud Campaign Creation agent for the campaign brief: its objective must name Coastline Kitchen, the channel requested, the audience and city, the featured menu items, the local time of day, the weather, and what performed best before. Explain briefly how the context shaped the brief and cite past performance.",
+          "For this restaurant campaign, read the restaurant profile, then the current weather for its city, then look up similar past pushes in the knowledge graph for that location, daypart, weather bucket, and the campaign's channel (they show which menu items performed best, and how many of the audience hold marketing consent for that channel). Marketing consent is per channel: for an email campaign cite email opt-ins, for SMS the SMS opt-ins, and push opt-ins only for push; never cite one channel's opt-ins for another. Then ask the Marketing Cloud Campaign Creation agent for the campaign brief: its objective must name Coastline Kitchen, the channel requested, the audience and city with its opt-ins for that channel, the featured menu items, the local time of day, the weather, and what performed best before. Explain briefly how the context shaped the brief and cite past performance.",
         ]
       : []),
     ...(briefPlan
@@ -55,7 +55,7 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
       : []),
     ...(impactPlan
       ? [
-          "For this service disruption, first check active weather alerts for the Coastline Kitchen location, then assess the impact in the knowledge graph. Present: the alerts at that location (or say plainly there are none there right now, and mention any elsewhere in California); the impact from the graph in aggregate only (app users near the location, how many can be notified by push under their consent, and the active campaigns targeting them that should be paused); then draft a short customer push notice (under 120 characters) and a note for the store team. Never name individual customers. It is a draft: never say anything was sent or paused.",
+          "For this service disruption, first check active weather alerts for the Coastline Kitchen location, then assess the impact in the knowledge graph. Present: the alerts at that location (or say plainly there are none there right now, and mention any elsewhere in California); the impact from the graph in aggregate only (app users near the location, how many can be notified by push under their push consent, and the active campaigns targeting them that should be paused); then draft a short customer push notice (under 120 characters) and a note for the store team. Never name individual customers. It is a draft: never say anything was sent or paused.",
         ]
       : []),
     ...(inventoryPlan
@@ -389,4 +389,53 @@ export function stepToolChoice(
   if (steps.length > 0 || stepNumber >= maxSteps - 1)
     return { toolChoice: "none" as const, activeTools: [] as string[] };
   return undefined;
+}
+
+export type CampaignChannel = "push" | "email" | "sms";
+
+const CHANNEL_WORDS: Array<[CampaignChannel, RegExp]> = [
+  ["email", /\b(?:e-?mails?|newsletters?|subject lines?|preheaders?)\b/i],
+  ["sms", /\b(?:sms|texts?|text messages?)\b/i],
+  ["push", /\b(?:push(?:es)?|notifications?)\b/i],
+];
+
+/**
+ * The channel a campaign request names: the earliest channel word in the prompt, or else the
+ * channel of the draft in focus. Null when neither names one.
+ */
+export function requestedChannel(prompt: string, focusChannel?: string): CampaignChannel | null {
+  const found = (text: string) =>
+    CHANNEL_WORDS.flatMap(([channel, pattern]) => {
+      const index = text.search(pattern);
+      return index >= 0 ? [{ channel, index }] : [];
+    }).sort((a, b) => a.index - b.index)[0]?.channel ?? null;
+  return found(prompt) ?? (focusChannel ? found(focusChannel) : null);
+}
+
+type Executable = { execute?: (input: never, options: never) => unknown };
+
+/**
+ * Marketing consent is per channel, so the audience's consent is looked up for the channel the
+ * user asked for, whatever channel the model passed.
+ */
+export function pinCampaignChannel<T extends Record<string, unknown>>(
+  tools: T,
+  channel: CampaignChannel | null,
+): T {
+  if (!channel) return tools;
+  return Object.fromEntries(
+    Object.entries(tools).map(([name, definition]) => {
+      const execute = (definition as Executable).execute;
+      if (!/(?:^|_)find_similar_past_pushes$/.test(name) || typeof execute !== "function")
+        return [name, definition];
+      return [
+        name,
+        {
+          ...(definition as object),
+          execute: (input: Record<string, unknown>, options: unknown) =>
+            execute({ ...input, channel } as never, options as never),
+        },
+      ];
+    }),
+  ) as T;
 }

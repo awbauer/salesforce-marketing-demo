@@ -419,8 +419,14 @@ function graphSummary(tool: string, data: Record<string, unknown>, count: number
       return data.found === false
         ? "No memory with that id in this workspace."
         : "Where a remembered item came from: its record, draft versions, and subjects.";
-    case "find_similar_past_pushes":
-      return `${num(data.totalSends) ?? 0} past sends in ${[data.location, data.daypart, data.condition].filter(Boolean).join(", ")}${str(data.bestAngle) ? `; best angle: ${data.bestAngle}` : ""}.`;
+    case "find_similar_past_pushes": {
+      const audience = (data.audience ?? {}) as Record<string, unknown>;
+      const reach =
+        num(audience.optedIn) !== undefined
+          ? `; ${num(audience.optedIn)?.toLocaleString("en-US")} opted in to ${str(audience.channel) ?? "push"}`
+          : "";
+      return `${num(data.totalSends) ?? 0} past sends in ${[data.location, data.daypart, data.condition].filter(Boolean).join(", ")}${str(data.bestAngle) ? `; best angle: ${data.bestAngle}` : ""}${reach}.`;
+    }
     case "check_consent_coverage":
       return `${num(data.covered) ?? 0} of ${num(data.audience) ?? 0} audience members covered for ${str(data.channel) ?? "the channel"} (${pct(data.coverageRate)}).`;
     case "explain_buyer_group":
@@ -433,8 +439,13 @@ function graphSummary(tool: string, data: Record<string, unknown>, count: number
       return `${list(data.contacts).length} contacts at ${str(data.account) ?? "the account"} (${str(data.countryName) ?? str(data.country) ?? "?"}), with the channels each has consented to.`;
     case "map_weather_demand":
       return `${list(data.menuItems).length} dishes lifted by ${list(data.conditions).join(", ") || "the forecast"} at ${str(data.city) ?? "the location"}, made with ${list(data.inventoryItems).length} inventory items.`;
-    case "assess_location_impact":
-      return `${num(data.affectedAppUsers) ?? 0} app users near ${str(data.city) ?? "the location"}; ${num(data.reachableByPush) ?? 0} can be notified by push; ${list(data.campaignsToReview).length} active campaigns target them.`;
+    case "assess_location_impact": {
+      const reach = list(data.reachableByChannel)
+        .map((entry) => entry as Record<string, unknown>)
+        .map((entry) => `${num(entry.optedIn) ?? 0} by ${str(entry.channel) ?? "?"}`)
+        .join(", ");
+      return `${num(data.affectedAppUsers) ?? 0} app users near ${str(data.city) ?? "the location"}; reachable ${reach || "by no channel"}; ${list(data.campaignsToReview).length} active campaigns target them.`;
+    }
     default:
       return str(data.answer) ?? str(data.summary) ?? `${count} results`;
   }

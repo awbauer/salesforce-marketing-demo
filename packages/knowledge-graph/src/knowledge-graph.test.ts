@@ -190,18 +190,49 @@ describe("Neo4j Query API client", () => {
       condition: "rain",
     })) as {
       topItems: Array<{ content: string | null }>;
-      audience: { segment: string; pushOptIns: number; consentScope: string };
+      audience: { segment: string; optedIn: number; consentScope: string };
       paths: Array<{ relationships: Array<{ type: string }> }>;
     };
     expect(result.topItems.every((item) => item.content?.endsWith("· push"))).toBe(true);
     expect(result.audience).toEqual({
       segment: "Coastline app · Los Angeles",
       appUsers: 18400,
-      pushOptIns: 11900,
+      channel: "push",
+      optedIn: 11900,
       consentScope: "push marketing",
     });
     const types = result.paths.flatMap((path) => path.relationships.map((edge) => edge.type));
     expect(types).toEqual(expect.arrayContaining(["FEATURED", "USED", "SENT_TO"]));
+  });
+
+  it("reports the audience's consent for the campaign's channel, not push", async () => {
+    const result = (await tool("find_similar_past_pushes")({
+      location: "los-angeles",
+      daypart: "lunch",
+      condition: "rain",
+      channel: "email",
+    })) as {
+      audience: { optedIn: number; consentScope: string; channel: string };
+      note: string;
+      paths: Array<{
+        nodes: Array<{ name: string }>;
+        relationships: Array<{ type: string }>;
+      }>;
+    };
+    expect(result.audience).toMatchObject({
+      channel: "email",
+      optedIn: 13100,
+      consentScope: "email marketing",
+    });
+    expect(result.note).toMatch(/email marketing consent, not push/);
+    const scopes = result.paths.flatMap((path) =>
+      path.nodes.filter((node) => node.name.endsWith("marketing")).map((node) => node.name),
+    );
+    expect(scopes).toEqual(["email marketing"]);
+    // The pushes weren't sent to the email audience, so no SENT_TO path joins them.
+    expect(
+      result.paths.flatMap((path) => path.relationships.map((edge) => edge.type)),
+    ).not.toContain("SENT_TO");
   });
 });
 
@@ -231,16 +262,22 @@ describe("use-case graph tools", () => {
   it("assesses a location's affected audience, push reach, and campaigns to pause", async () => {
     const result = (await tool("assess_location_impact")({ location: "san-diego" })) as {
       affectedAppUsers: number;
-      reachableByPush: number;
+      reachableByChannel: Array<{ channel: string; optedIn: number; consentScope: string }>;
       campaignsToReview: Array<{ name: string }>;
       paths: Array<{ relationships: Array<{ type: string }> }>;
     };
-    expect(result.affectedAppUsers).toBeGreaterThan(result.reachableByPush);
-    expect(result.reachableByPush).toBeGreaterThan(0);
+    // Each channel has its own marketing consent, counted separately.
+    expect(result.reachableByChannel).toEqual([
+      { channel: "email", consentScope: "email marketing", optedIn: 7000, coverageRate: 0.714 },
+      { channel: "push", consentScope: "push marketing", optedIn: 6600, coverageRate: 0.673 },
+      { channel: "sms", consentScope: "sms marketing", optedIn: 2600, coverageRate: 0.265 },
+    ]);
+    for (const reach of result.reachableByChannel)
+      expect(result.affectedAppUsers).toBeGreaterThan(reach.optedIn);
     expect(result.campaignsToReview.map((campaign) => campaign.name)).toContain(
       "Coastline Weather Moments",
     );
-    expect(result.paths.map((path) => path.relationships[0]?.type)).toEqual(
+    expect(result.paths.map((path) => path.relationships[0]?.type.split(" ")[0])).toEqual(
       expect.arrayContaining(["NEAR", "HAS_CONSENT", "TARGETS"]),
     );
   });
