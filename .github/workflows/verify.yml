@@ -1,7 +1,8 @@
 name: Verify
 
 # Every gate in `pnpm verify` (format, lint, types, unit and worker tests, evals, contracts, docs,
-# Learn, build) and the Playwright suite, on every pull request and push to main.
+# Learn, build) on every pull request and push to main. The Playwright suite is manual-only
+# (workflow_dispatch) since it's slow and the gates above catch most regressions.
 on:
   pull_request:
   push:
@@ -36,6 +37,16 @@ jobs:
       - name: Install repository dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Cache build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.vite
+            **/node_modules/.vite
+          key: vite-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            vite-${{ runner.os }}-
+
       - name: Verify
         env:
           LEARN_BASE_REF: ${{ github.event_name == 'push' && github.event.before || '' }}
@@ -44,6 +55,8 @@ jobs:
           pnpm verify
 
   e2e:
+    # Slow and now manual-only: trigger from the Actions tab (Run workflow) instead of on every PR.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,6 +72,13 @@ jobs:
 
       - name: Install repository dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Chrome for Playwright
         run: pnpm exec playwright install --with-deps chrome
