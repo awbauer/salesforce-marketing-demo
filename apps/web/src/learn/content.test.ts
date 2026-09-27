@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { GLOSSARY, LEARN_PARTS } from "./content";
 import { DIAGRAM_IDS } from "./diagrams";
 import { PART_LESSONS, SECTION_LESSONS } from "./lessons";
+import { LEARN_REFERENCE } from "./reference";
+import { SECTION_SOURCES } from "./sources";
 
 describe("learn page content", () => {
   const sections = LEARN_PARTS.flatMap((part) => part.sections);
@@ -65,5 +67,11 @@ describe("learn page content", () => {
       expect(lesson?.keyIdea.length).toBeGreaterThan(20);
     }
     expect(Object.keys(SECTION_LESSONS).sort()).toEqual(sections.map((s) => s.id).sort());
+  });
+
+  it("links every reference entry and source mapping to a real section", () => {
+    const ids = new Set(sections.map((section) => section.id));
+    for (const entry of LEARN_REFERENCE) expect(ids.has(entry.section), entry.name).toBe(true);
+    expect(Object.keys(SECTION_SOURCES).sort()).toEqual([...ids].sort());
   });
 });

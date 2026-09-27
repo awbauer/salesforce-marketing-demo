@@ -610,6 +610,49 @@
   color: var(--muted);
 }
 
+.learn-reference {
+  margin-top: 16px;
+}
+.learn-reference-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+}
+.learn-reference-kinds button {
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+.learn-reference-kinds button[aria-pressed="true"] {
+  border-color: var(--forest);
+  background: var(--forest);
+  color: #fff;
+}
+.learn-reference-kinds button[aria-pressed="true"] .learn-muted {
+  color: #d9e6dd;
+}
+.learn-reference-grid code {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.learn-reference-link {
+  padding: 0;
+  text-align: left;
+  border: 0;
+  background: none;
+  color: var(--forest);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* Diagrams */
 .diagram {
   margin: 16px 0 0;

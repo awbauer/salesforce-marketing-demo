@@ -545,12 +545,19 @@ export async function listMemory(
   return rows.map(toView);
 }
 
-/** Case-insensitive match against the memory's title, subjects, records, and draft. */
+const SUBJECT_STOPWORDS = new Set(["the", "and", "for", "our", "with", "about", "that", "this"]);
+
+/**
+ * Whether a memory is about a subject: case-insensitive, against its title, kind, subjects,
+ * records, draft, and fields. A subject matches when a value contains it (or it contains a
+ * value), or when every significant word of it appears somewhere in the memory.
+ */
 export function matchesSubject(view: MemoryView, subject: string) {
   const needle = subject.trim().toLowerCase();
   if (!needle) return true;
   const haystack = [
     view.title,
+    view.kind,
     view.summary,
     view.draft?.title,
     ...view.about.map((node) => node.name),
@@ -559,7 +566,15 @@ export function matchesSubject(view: MemoryView, subject: string) {
   ]
     .filter(Boolean)
     .map((value) => String(value).toLowerCase());
-  return haystack.some((value) => value.includes(needle) || needle.includes(value));
+  if (
+    haystack.some((value) => value.includes(needle) || (value.length > 3 && needle.includes(value)))
+  )
+    return true;
+  const text = haystack.join("\n");
+  const words = needle
+    .split(/[^a-z0-9-]+/)
+    .filter((word) => word.length > 2 && !SUBJECT_STOPWORDS.has(word));
+  return words.length > 0 && words.every((word) => text.includes(word));
 }
 
 const ageDays = (at: string, now: Date) =>
@@ -573,7 +588,7 @@ function present(view: MemoryView, now: Date) {
     type: view.type,
     title: view.title,
     summary: view.summary,
-    when: `${view.at.slice(0, 10)} (${days === 0 ? "today" : days === 1 ? "1 day ago" : `${days} days ago`})`,
+    when: `${view.at.slice(0, 16).replace("T", " ")} UTC (${days === 0 ? "less than a day ago" : days === 1 ? "1 day ago" : `${days} days ago`})`,
     source: view.source,
     author: view.author,
     about: view.about.map((node) => node.name),

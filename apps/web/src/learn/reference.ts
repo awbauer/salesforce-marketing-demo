@@ -66,11 +66,7 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
     "salesforce",
     "Agent-drafted campaign brief; the draft lands in the workspace focus.",
   ),
-  tool(
-    "refine_campaign_preview",
-    "salesforce",
-    "Refines a campaign preview without saving it.",
-  ),
+  tool("refine_campaign_preview", "salesforce", "Refines a campaign preview without saving it."),
   tool(
     "draft_campaign_content",
     "salesforce",
@@ -224,22 +220,37 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   node("Segment", "An audience a campaign targets."),
   node("Account", "A fictional B2B customer account."),
   node("Persona", "A buying role at an account; roles, not real people."),
-  node("Daypart", "A time of day: breakfast, lunch, afternoon, dinner, and so on.", "campaign-context"),
-  node("WeatherCondition", "A weather bucket: clear, cloudy, fog, rain, or heat.", "campaign-context"),
+  node(
+    "Daypart",
+    "A time of day: breakfast, lunch, afternoon, dinner, and so on.",
+    "campaign-context",
+  ),
+  node(
+    "WeatherCondition",
+    "A weather bucket: clear, cloudy, fog, rain, or heat.",
+    "campaign-context",
+  ),
   node("Menu", "Coastline Kitchen's menu.", "campaign-context"),
   node("MenuItem", "A dish on the menu, with its order rate.", "campaign-context"),
   node("Location", "A Coastline Kitchen restaurant in California.", "campaign-context"),
   node("PushSend", "One past push notification send and how it performed."),
   // Graph nodes: long-term memory.
   node("Workspace", "The workspace that owns a memory.", "long-term-memory"),
-  node("MemoryEvent", "The server event that created a memory, with a hashed actor.", "long-term-memory"),
+  node(
+    "MemoryEvent",
+    "The server event that created a memory, with a hashed actor.",
+    "long-term-memory",
+  ),
   node("Draft", "One remembered version of a focus draft.", "long-term-memory"),
   node("Decision", "A confirmed save, review, or image attachment.", "long-term-memory"),
   node("RecordRef", "The Salesforce record a decision was recorded in.", "long-term-memory"),
 
   // Graph relationships: the demo dataset.
   edge("PART_OF", "A sub-brand under its parent brand, or a push send within its campaign."),
-  edge("FOR", "A consent scope for its channel, a brief for its campaign, or a push for a location."),
+  edge(
+    "FOR",
+    "A consent scope for its channel, a brief for its campaign, or a push for a location.",
+  ),
   edge("RULE_OF", "A brand rule belonging to its brand."),
   edge("BELONGS_TO", "A campaign belonging to its brand."),
   edge("ON", "A campaign or push send on its channel."),
@@ -298,15 +309,30 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
     [
       ["NorthstarCheckWriteAccess", "Apex: the read-only permission check run as the user."],
       ["NorthstarConfirmationVerifier", "Apex: verifies the signed confirmation before any write."],
-      ["NorthstarRecordWrites", "Apex: shared, user-mode create and update logic for record saves."],
+      [
+        "NorthstarRecordWrites",
+        "Apex: shared, user-mode create and update logic for record saves.",
+      ],
       ["NorthstarSaveCampaign", "Apex action behind save_campaign."],
       ["NorthstarSaveBrief", "Apex action behind save_brief."],
       ["NorthstarSaveMessage", "Apex action behind save_message."],
       ["NorthstarSaveCampaignBrief", "Apex action behind save_campaign_brief."],
-      ["NorthstarCreateCampaignReviewRequest", "Apex action behind create_campaign_review_request."],
-      ["NorthstarAttachCampaignImage", "Apex action behind attach_campaign_image; checks the hash."],
-      ["NorthstarGetCampaignContext", "Apex action: bounded campaign context for the readiness check."],
-      ["NorthstarGetConsentSummary", "Apex action: aggregate consent evidence, no customer fields."],
+      [
+        "NorthstarCreateCampaignReviewRequest",
+        "Apex action behind create_campaign_review_request.",
+      ],
+      [
+        "NorthstarAttachCampaignImage",
+        "Apex action behind attach_campaign_image; checks the hash.",
+      ],
+      [
+        "NorthstarGetCampaignContext",
+        "Apex action: bounded campaign context for the readiness check.",
+      ],
+      [
+        "NorthstarGetConsentSummary",
+        "Apex action: aggregate consent evidence, no customer fields.",
+      ],
       [
         "NorthstarValidateCampaignContent",
         "Apex action: readiness checks on campaign fields, including instruction-like text.",
@@ -323,9 +349,10 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
       kind: "Salesforce component",
       name,
       summary,
-      section: name.startsWith("Northstar_") || /Verifier|CheckWrite|RecordWrites/.test(name)
-        ? "governance"
-        : "salesforce",
+      section:
+        name.startsWith("Northstar_") || /Verifier|CheckWrite|RecordWrites/.test(name)
+          ? "governance"
+          : "salesforce",
     }),
   ),
 ];

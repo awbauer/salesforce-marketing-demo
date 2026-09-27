@@ -3,6 +3,7 @@
 // fictional tool fixtures, then writes a typed report that the demo UI renders.
 //
 // Usage: pnpm eval:live [--models id,id] [--trials-demo 5] [--trials-routing 2] [--out path] [--live-graph]
+//                       [--cases id,id]   (only these case ids; for cheap targeted re-runs)
 // Cost: a default three-model run is about 550 model calls; check Workers AI usage before adding models.
 // Credentials: CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, or an authenticated wrangler login.
 import { execFileSync } from "node:child_process";
@@ -249,13 +250,15 @@ async function runCase(model, tools, suite, testCase, trial) {
         .flatMap((step) => step.toolCalls)
         .map((call) => shortName(call.toolName));
       toolCalled = called.length ? called.join(" → ") : null;
-      evidence = resultSteps
-        .flatMap((step) => step.toolResults)
-        .filter((result) =>
+      // Grounding applies when a graph or memory tool ran; any tool's result counts as evidence,
+      // since a restaurant menu item can come from the restaurant profile, not the graph.
+      const results = resultSteps.flatMap((step) => step.toolResults);
+      if (
+        results.some((result) =>
           [...KNOWLEDGE_GRAPH_TOOLS, ...MEMORY_TOOLS].includes(shortName(result.toolName)),
         )
-        .map((result) => JSON.stringify(result.output))
-        .join("\n");
+      )
+        evidence = results.map((result) => JSON.stringify(result.output)).join("\n");
       toolErrors = resultSteps
         .flatMap((step) => step.content)
         .filter((part) => part.type === "tool-error").length;
@@ -394,6 +397,10 @@ const suites = [
   { id: "routing-model-only", cases: routingCases, trials: trialsRouting },
 ];
 
+const onlyCases = argument("cases", "").split(",").filter(Boolean);
+if (onlyCases.length)
+  for (const suite of suites)
+    suite.cases = suite.cases.filter((test) => onlyCases.includes(test.id));
 const models = MODELS.filter((model) => selected.includes(model.id));
 const results = (
   await Promise.all(

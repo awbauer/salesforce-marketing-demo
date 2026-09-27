@@ -1985,6 +1985,10 @@ a {
 .history-tabs {
   margin-left: auto;
 }
+.memory-remember:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .memory-notice {
   margin: 0 0 12px;
   padding: 8px 12px;

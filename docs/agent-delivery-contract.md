@@ -67,6 +67,10 @@ An agent may iterate through gates 1–5 without human involvement. Gate 6 may r
 - Evaluation fixtures are append-only during a work unit; lowering a threshold or deleting a failing case requires a decision record.
 - Generated Salesforce and HXL schema snapshots are diffed. Unexplained drift fails the gate.
 - Documentation assertions and implementation constants share generated references where practical.
+- **Learn drift gate:** `pnpm learn:check` runs in `pnpm verify` and in the Learn workflow on every pull request.
+  - It extracts the demo's concepts from code and fails when one lacks a Learn reference entry, or when an entry names something that's gone. The concepts are tools, write actions, graph labels and relationship types, operator controls, and Salesforce components.
+  - It fails when a code file isn't mapped to the Learn section that teaches it, or when a mapped or "Where to see it" path no longer exists.
+  - It fails when a branch changes code a section explains without changing that section. A `Learn-Reviewed: <section ids> (<reason>)` commit trailer records a deliberate "no update needed" instead.
 - A work unit that changes scope or acceptance criteria is invalid unless the user explicitly requested that change.
 
 ## Minimal human touchpoints

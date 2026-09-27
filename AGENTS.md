@@ -18,6 +18,10 @@ Do not reopen a decision recorded in Section 17 unless current evidence proves i
 1. Read the relevant plan sections, contracts, tests, and current work unit before editing.
 2. Inspect the real repository and external sandbox state needed for the task. Never assume a deployment succeeded.
 3. Make the smallest complete vertical change. Update code, tests, fixtures, docs, and generated schemas together.
+   - **Keep Learn current.** The Learn page teaches every concept in the demo, and `pnpm learn:check` (part of `pnpm verify` and CI) enforces it:
+     - A new tool, write action, graph node or relationship type, operator control, or Salesforce component needs an entry in `apps/web/src/learn/reference.ts`, and the section it names must teach it.
+     - A new code file must be mapped in `apps/web/src/learn/sources.ts`.
+     - A change to code a section explains must update that section, in `content.ts`, `lessons.ts`, or its reference entries. When nothing a reader learns has changed, add a commit trailer instead, such as `Learn-Reviewed: routing (renamed a helper)`. Never use the trailer to skip teaching a new behavior.
 4. Run the narrow checks while iterating, then `pnpm verify` before declaring the work unit complete. Phase 1 must create that command before feature work begins. Until then, only planning/governance changes are allowed and they use the explicit documentation checks in their work unit.
 5. Capture commands, results, deployed identifiers, screenshots, and read-back evidence in the work unit. Evidence must point to an artifact or include a concise reproducible result.
 6. Re-read the diff for scope drift, secrets, unsupported claims, placeholder logic, and missing failure states.

@@ -55,7 +55,12 @@ function operatorControls() {
 function salesforceComponents() {
   const classes = lines(git("ls-files", `${SALESFORCE}/classes`))
     .filter((path) => path.endsWith(".cls") && !path.endsWith("Test.cls"))
-    .map((path) => path.split("/").at(-1).replace(/\.cls$/, ""));
+    .map((path) =>
+      path
+        .split("/")
+        .at(-1)
+        .replace(/\.cls$/, ""),
+    );
   const objects = lines(git("ls-files", `${SALESFORCE}/objects`))
     .map((path) => path.split("/")[5])
     .filter((name) => name?.endsWith("__c"));
@@ -83,7 +88,9 @@ for (const entry of LEARN_REFERENCE) {
   if (seen.has(key)) failures.push(`Reference: ${entry.kind} ${entry.name} is listed twice.`);
   seen.add(key);
   if (!sectionIds.has(entry.section))
-    failures.push(`Reference: ${entry.kind} ${entry.name} points to unknown section "${entry.section}".`);
+    failures.push(
+      `Reference: ${entry.kind} ${entry.name} points to unknown section "${entry.section}".`,
+    );
   if (entry.summary.trim().length < 20)
     failures.push(`Reference: ${entry.kind} ${entry.name} needs a one-sentence summary.`);
 }
@@ -104,7 +111,8 @@ for (const kind of REFERENCE_KINDS) {
 
 // 2. Source map ----------------------------------------------------------------------------------
 
-const matches = (path, prefix) => (prefix.endsWith("/") ? path.startsWith(prefix) : path === prefix);
+const matches = (path, prefix) =>
+  prefix.endsWith("/") ? path.startsWith(prefix) : path === prefix;
 const untracked = lines(git("ls-files", "--others", "--exclude-standard"));
 const files = [...new Set([...lines(git("ls-files")), ...untracked])].filter((path) =>
   existsSync(path),
@@ -183,7 +191,10 @@ async function baseLearn(mergeBase) {
 }
 
 function reviewed(mergeBase) {
-  const messages = [git("log", "--format=%B", `${mergeBase}..HEAD`), process.env.LEARN_REVIEWED ?? ""]
+  const messages = [
+    git("log", "--format=%B", `${mergeBase}..HEAD`),
+    process.env.LEARN_REVIEWED ?? "",
+  ]
     .join("\n")
     .split("\n");
   const ids = new Set();
@@ -250,7 +261,9 @@ await report("learn", {
   status: failures.length ? "failed" : "passed",
   baseRef,
   mergeBase,
-  inventory: Object.fromEntries(Object.entries(inventory).map(([kind, names]) => [kind, names.length])),
+  inventory: Object.fromEntries(
+    Object.entries(inventory).map(([kind, names]) => [kind, names.length]),
+  ),
   drift,
   notices,
   failures,

@@ -62,7 +62,7 @@ export function buildMethodology({ trialsDemo, trialsRouting }) {
         id: "graphGrounded",
         label: "Graph-grounded",
         definition:
-          "When a knowledge-graph or memory tool was called, every fictional graph entity the answer names (accounts, people, campaigns, segments, menu items, content) appears in what the tools returned. Turns without a graph tool pass. Runs recorded before this check show no rate.",
+          "When a knowledge-graph or memory tool was called, every fictional graph entity the answer names (accounts, people, campaigns, segments, menu items, content) appears in what the turn's tools returned. Turns without a graph tool pass. Runs recorded before this check show no rate.",
       },
     ],
     limitations: [

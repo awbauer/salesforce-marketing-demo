@@ -136,7 +136,7 @@ describe("long-term memory", () => {
     );
     expect(recalled.items).toHaveLength(1);
     expect(recalled.items[0]).toMatchObject({
-      when: "2026-09-26 (today)",
+      when: "2026-09-26 17:50 UTC (less than a day ago)",
       source: "Confirmed Salesforce write, read back",
       records: ["Message Rainy-day comfort (a0C000000000001)"],
     });

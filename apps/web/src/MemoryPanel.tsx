@@ -125,7 +125,7 @@ export function MemoryPanel({
             {state.enabled && (
               <button
                 type="button"
-                className="secondary-button"
+                className="quickstart-button memory-remember"
                 disabled={!focusTitle || pending !== null}
                 title={focusTitle ? undefined : "Draft something in the workspace first"}
                 onClick={remember}

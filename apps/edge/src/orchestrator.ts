@@ -1805,10 +1805,8 @@ export class MarketingOrchestrator extends AIChatAgent<
       ...stamp,
       source: "remembered",
       draft,
-      subjects: memorySubjects({
-        focus,
-        campaignIds: [openCampaign(this.state.workingSet)?.recordId],
-      }),
+      // Only what the draft itself names: the campaign open in the chat may be unrelated.
+      subjects: memorySubjects({ focus }),
     });
     if (result.created) this.auditMemory("remember", result.id, `${draft.title} v${draft.version}`);
     return { ok: true, ...result, title: draft.title, version: draft.version };
