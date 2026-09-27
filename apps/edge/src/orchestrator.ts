@@ -1459,8 +1459,17 @@ export class MarketingOrchestrator extends AIChatAgent<
   private async executeMarketingWrite(current: Confirmation) {
     const write = current.write as MarketingWrite;
     this.setState({ ...this.state, pendingConfirmation: null });
-    const existing = await this.existingMarketingRecords(write);
-    if (existing) return this.completeMarketingWrite(current, null, existing, "reused");
+    // Only a save this chat already sent (and never saw confirmed) can be linked to what's there;
+    // a brief with the same name from another chat is someone else's work.
+    const attempt = await this.marketingAttemptKey(write);
+    const existing =
+      write.kind === "campaign" || this.sentBefore(attempt)
+        ? await this.existingMarketingRecords(write)
+        : null;
+    if (existing) {
+      this.forgetAttempt(attempt);
+      return this.completeMarketingWrite(current, null, existing, "reused");
+    }
     let tool: ReturnType<MarketingOrchestrator["salesforceTool"]> = null;
     if ((this.env.ENVIRONMENT as string) !== "local") {
       await this.mcp.waitForConnections({ timeout: 5_000 });
@@ -1479,12 +1488,16 @@ export class MarketingOrchestrator extends AIChatAgent<
     }
     // "confirmed" in the audit: sent to the agent, not yet verified in Salesforce.
     await this.recordConfirmationAudit(current, "confirmed");
+    this.rememberAttempt(attempt);
     let reply: unknown;
     try {
       reply = await this.callMarketingAgent(current, write, tool);
     } catch (error) {
       const saved = await this.existingMarketingRecords(write);
-      if (saved) return this.completeMarketingWrite(current, null, saved, "recovered");
+      if (saved) {
+        this.forgetAttempt(attempt);
+        return this.completeMarketingWrite(current, null, saved, "recovered");
+      }
       return json(
         {
           error: {
@@ -1495,7 +1508,43 @@ export class MarketingOrchestrator extends AIChatAgent<
         { status: 502 },
       );
     }
-    return this.completeMarketingWrite(current, reply);
+    const done = await this.completeMarketingWrite(current, reply);
+    if (done.ok) this.forgetAttempt(attempt);
+    return done;
+  }
+
+  /** A stable key for one Marketing Cloud write: its action and exact content. */
+  private async marketingAttemptKey(write: MarketingWrite) {
+    return sha256(JSON.stringify(write));
+  }
+
+  private ensureAttempts() {
+    this.sql`CREATE TABLE IF NOT EXISTS northstar_marketing_attempts (
+      key TEXT PRIMARY KEY,
+      at INTEGER NOT NULL
+    )`;
+  }
+
+  /** Notes that this exact write was sent to the agent, until Salesforce confirms it. */
+  private rememberAttempt(key: string) {
+    this.ensureAttempts();
+    const now = Date.now();
+    this.sql`INSERT OR REPLACE INTO northstar_marketing_attempts (key, at) VALUES (${key}, ${now})`;
+    this.sql`DELETE FROM northstar_marketing_attempts WHERE at < ${now - AUDIT_RETENTION_MS}`;
+  }
+
+  /** Whether this exact write was sent to the agent before without being confirmed. */
+  private sentBefore(key: string) {
+    this.ensureAttempts();
+    return (
+      this.sql<{ key: string }>`SELECT key FROM northstar_marketing_attempts WHERE key = ${key}`
+        .length > 0
+    );
+  }
+
+  private forgetAttempt(key: string) {
+    this.ensureAttempts();
+    this.sql`DELETE FROM northstar_marketing_attempts WHERE key = ${key}`;
   }
 
   /** Asks the Campaign Creation agent to do a confirmed write; local development uses a stand-in. */
