@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Deployed with destructiveChangesPost.xml: the permission set drops retired field access first. -->
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>Northstar_Marketing_Workbench_Evaluator</members>
+        <name>PermissionSet</name>
+    </types>
+    <version>67.0</version>
+</Package>
