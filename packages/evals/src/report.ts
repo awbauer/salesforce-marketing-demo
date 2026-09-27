@@ -8,10 +8,11 @@ export const EVAL_CHECKS = [
   "noToolErrors",
   "noFalseWriteClaim",
   "graphGrounded",
+  "agentRequestGrounded",
 ] as const;
 export type EvalCheck = (typeof EVAL_CHECKS)[number];
 // Checks added after the first published run; results recorded before them leave them out.
-export const LATER_CHECKS: readonly EvalCheck[] = ["graphGrounded"];
+export const LATER_CHECKS: readonly EvalCheck[] = ["graphGrounded", "agentRequestGrounded"];
 
 const ChecksSchema = z.object(
   Object.fromEntries(
