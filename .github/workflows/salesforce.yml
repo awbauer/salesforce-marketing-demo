@@ -82,7 +82,7 @@ jobs:
           --source-dir salesforce/force-app/main/default/mcpServerDefinitions
           --test-level RunSpecifiedTests
           --tests NorthstarCampaignActionsTest
-          --tests NorthstarRecordActionsTest
+          --tests NorthstarMarketingAgentTest
           --target-org "$SF_TARGET_ORG"
           --wait 30
 
@@ -96,7 +96,7 @@ jobs:
           --source-dir salesforce/force-app/main/default/mcpServerDefinitions
           --test-level RunSpecifiedTests
           --tests NorthstarCampaignActionsTest
-          --tests NorthstarRecordActionsTest
+          --tests NorthstarMarketingAgentTest
           --target-org "$SF_TARGET_ORG"
           --wait 30
 

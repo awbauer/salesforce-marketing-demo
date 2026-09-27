@@ -21,7 +21,7 @@ test("builds the workspace from the chat and completes a durable turn", async ({
   await expect(page.getByRole("heading", { name: "Campaign intelligence" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Workspace" })).toBeVisible();
   await expect(page.locator(".image-workflow-summary")).toBeVisible();
-  await expect(page.getByText("18 configured tools")).toBeVisible();
+  await expect(page.getByText("17 configured tools")).toBeVisible();
   // A new chat starts with an empty workspace and nothing to write to.
   await page.getByRole("button", { name: "New chat" }).click();
   await expect(page.locator(".messages .message.user")).toHaveCount(0);
@@ -671,7 +671,7 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
   await page.screenshot({ path: `artifacts/evidence/WU-033/graph-${testInfo.project.name}.png` });
 });
 
-test("builds a versioned focus draft that follow-ups and confirmed saves act on", async ({
+test("has the Marketing Cloud agent save the brief, then create the campaign and its flow", async ({
   page,
 }, testInfo) => {
   await page.goto("/");
@@ -680,10 +680,14 @@ test("builds a versioned focus draft that follow-ups and confirmed saves act on"
   const composer = page.getByLabel("Message the orchestrator");
   const focus = page.getByTestId("workspace-focus");
 
+  // The Campaign Creation agent drafts the brief; it becomes the focus.
   await composer.fill("Draft a push notification for Coastline Kitchen's lunch crowd");
   await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.locator(".message.assistant").last()).toContainText(
+    "Northstar Campaign Creation",
+  );
   await expect(focus).toContainText("Rainy-day comfort: Spicy Tortilla Soup");
-  await expect(focus).toContainText("Push message");
+  await expect(focus).toContainText("Brief");
   await expect(focus).toContainText("Rain outside? Soup's on.");
   await expect(focus).toContainText("Version 1 · current");
 
@@ -693,53 +697,66 @@ test("builds a versioned focus draft that follow-ups and confirmed saves act on"
   await expect(focus).toContainText("Version 2 · current · Make it warmer");
   await focus.getByRole("button", { name: "v1" }).click();
   await expect(focus).toContainText("Rain outside? Soup's on.");
-  await expect(focus.getByRole("button", { name: "Save to Salesforce as brief" })).toHaveCount(0);
   await focus.getByRole("button", { name: /v2/ }).click();
 
-  // Asking to create it prepares the Salesforce save from the draft, with a permission check.
+  // Asking to create it prepares the agent's save, with a permission check and agent details.
   await composer.fill("Looks good, create it");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(page.locator(".message.assistant").last()).toContainText("Ready to confirm");
   const card = page.locator(".confirmation-card");
-  await expect(card.getByRole("heading", { name: "Save message to Salesforce?" })).toBeVisible();
-  await expect(card).toContainText("Create message “Rainy-day comfort: Spicy Tortilla Soup”");
-  await expect(card).toContainText("new campaign “Coastline Weather Moments” (Coastline Kitchen)");
+  await expect(card.getByRole("heading", { name: "Save brief in Marketing Cloud?" })).toBeVisible();
+  await expect(card).toContainText(
+    "Save the brief “Rainy-day comfort: Spicy Tortilla Soup” in Marketing Cloud",
+  );
   await expect(card).toContainText("Rain outside? Warm soup is waiting.");
+  await expect(card).toContainText("Marketing Cloud Next Campaign Creation agent");
+  await expect(card).toContainText("MktCloud__CampaignCreationAgent");
+  await expect(card).toContainText("Marketing Cloud: Save Campaign Brief");
+  await expect(card).toContainText("Marketing Cloud: Draft a Campaign Preview");
   const permissions = card.getByRole("region", { name: "Salesforce permission check" });
-  await expect(permissions).toContainText("Create Northstar Message");
-  await expect(permissions).toContainText("Create Campaign");
+  await expect(permissions).toContainText("Create Brief");
   await permissions.getByText("Who checks what").click();
-  await expect(permissions).toContainText("Owns authorization");
+  await expect(permissions).toContainText("never creates briefs or campaigns itself");
   await card.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: `artifacts/evidence/WU-037/confirm-${testInfo.project.name}.png` });
+  await page.screenshot({
+    path: `artifacts/evidence/WU-040/confirm-brief-${testInfo.project.name}.png`,
+  });
   await card.getByRole("button", { name: "Confirm save" }).click();
-  await expect(
-    page.locator(".success-banner").getByText("Message saved to Salesforce"),
-  ).toBeVisible();
+  const banner = page.locator(".success-banner");
+  await expect(banner.getByText("Brief saved in Marketing Cloud")).toBeVisible();
+  await expect(banner).toContainText("By the Northstar Campaign Creation agent");
 
-  // The workspace shows what was created, and the draft is linked to its record.
+  // The workspace shows the brief and its preview as Salesforce read them back.
   const records = page.getByTestId("workspace-record");
-  await expect(records.filter({ hasText: "Coastline Weather Moments" })).toContainText("Created");
   await expect(records.filter({ hasText: "Rainy-day comfort" })).toContainText("Created");
-  await expect(focus).toContainText("Saved in Salesforce");
-  await expect(focus).not.toContainText("Draft in progress");
-  await expect(focus).toContainText("Saved to Salesforce as version 2");
-  await expect(focus.getByRole("link", { name: /Open Message in Salesforce/ })).toHaveAttribute(
+  await expect(focus).toContainText("Brief saved in Marketing Cloud");
+  await expect(focus).toContainText("Campaign preview · 2 steps");
+  await expect(focus.getByRole("link", { name: /Open Brief in Salesforce/ })).toHaveAttribute(
     "href",
-    /Northstar_Message__c\/a0C000000000001\/view$/,
+    /\/lightning\/r\/Brief\/21y000000000\d{3}\/view$/,
   );
 
-  // A new version updates the same record instead of creating another.
+  // Then the agent creates the campaign and its flow from the saved brief.
+  await page.getByTestId("action-card").getByRole("button", { name: "Review campaign" }).click();
+  await expect(
+    card.getByRole("heading", { name: "Create the campaign in Marketing Cloud?" }),
+  ).toBeVisible();
+  await expect(card).toContainText("Marketing Cloud: Create Campaign");
+  await expect(card).toContainText("Marketing Cloud: Save Campaign");
+  await card.getByRole("button", { name: "Confirm create" }).click();
+  await expect(banner.getByText("Campaign and flow created in Marketing Cloud")).toBeVisible();
+  await expect(focus).toContainText("Campaign created in Marketing Cloud");
+  await expect(focus).toContainText("Campaign Flow");
+  await expect(records.filter({ hasText: "Campaign Flow" })).toContainText("Created");
+
+  // A change now refines the saved campaign preview through the agent.
   await composer.fill("Make it warmer");
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(focus).toContainText("Version 3 · current");
-  await expect(focus).toContainText("Unsaved changes");
-  await page.getByTestId("action-card").getByRole("button", { name: "Review update" }).click();
-  await expect(card).toContainText("Update message “Rainy-day comfort: Spicy Tortilla Soup”");
-  await card.getByRole("button", { name: "Confirm save" }).click();
-  await expect(records.filter({ hasText: "Rainy-day comfort" })).toContainText("Updated");
+  await expect(page.locator(".message.assistant").last()).toContainText(
+    "refined the campaign preview",
+  );
   await page.getByRole("complementary", { name: "Workspace" }).screenshot({
-    path: `artifacts/evidence/WU-037/saved-${testInfo.project.name}.png`,
+    path: `artifacts/evidence/WU-040/campaign-created-${testInfo.project.name}.png`,
   });
 });
 

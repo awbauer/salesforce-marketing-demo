@@ -124,14 +124,14 @@ export const demoScenarios = [
     prompt:
       "Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
     expected:
-      "get_restaurant_profile → get_current_weather → find_similar_past_pushes → draft_campaign_content",
+      "get_restaurant_profile → get_current_weather → find_similar_past_pushes → draft_campaign_brief",
   },
   {
     id: "demo-restaurant-push",
     prompt:
       "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
     expected:
-      "get_restaurant_profile → get_current_weather → find_similar_past_pushes → draft_campaign_content",
+      "get_restaurant_profile → get_current_weather → find_similar_past_pushes → draft_campaign_brief",
   },
   {
     id: "demo-graph-buyer-group",

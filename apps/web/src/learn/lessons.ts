@@ -24,7 +24,8 @@ export type DiagramId =
   | "evaluations"
   | "images"
   | "push-plan"
-  | "long-term-memory";
+  | "long-term-memory"
+  | "marketing-cloud";
 
 export type TryIt =
   | { kind: "prompt"; label: string; prompt: string }
@@ -238,6 +239,19 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
     diagram: "images",
     keyIdea:
       "Generated images stay private drafts until a person confirms, and Salesforce verifies the file's hash.",
+  },
+  "marketing-cloud": {
+    diagram: "marketing-cloud",
+    keyIdea:
+      "Salesforce's Campaign Creation agent creates the brief, the campaign, and its flow; the workbench asks it to, after you confirm, and reads the result back.",
+    tryIt: [
+      { kind: "prompt", label: "Draft the Coastline Kitchen email", prompt: EMAIL_PROMPT },
+      {
+        kind: "prompt",
+        label: "Create a campaign in Marketing Cloud",
+        prompt: "Create a campaign in Marketing Cloud for Coastline Kitchen's late-night tacos",
+      },
+    ],
   },
   "campaign-context": {
     diagram: "push-plan",

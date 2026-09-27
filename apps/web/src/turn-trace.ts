@@ -1,5 +1,7 @@
 import {
   ORCHESTRATOR_TOOLS,
+  SALESFORCE_AGENTS,
+  SALESFORCE_TOOL_DETAILS,
   TURN_TRACE_PART_TYPE,
   type TurnTrace,
   TurnTraceSchema,
@@ -66,6 +68,19 @@ export function readableToolName(name: string) {
   const known = ORCHESTRATOR_TOOLS.find((tool) => name === tool || name.endsWith(`_${tool}`));
   if (!known) return "Unrecognized tool request";
   return known.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+/** "Salesforce agent: X (kind) · subagent · actions" for a tool backed by a Salesforce agent. */
+export function salesforceAgentLine(name: string) {
+  const tool = Object.keys(SALESFORCE_TOOL_DETAILS).find(
+    (candidate) => name === candidate || name.endsWith(`_${candidate}`),
+  );
+  const detail = tool ? SALESFORCE_TOOL_DETAILS[tool] : undefined;
+  if (!detail) return null;
+  const actions = detail.actions.map((action) => action.label).join(" → ");
+  if (!detail.agent) return `Salesforce Apex action: ${actions}`;
+  const agent = SALESFORCE_AGENTS[detail.agent];
+  return `Salesforce agent: ${agent.label} (${agent.kind})${detail.subagent ? ` · ${detail.subagent}` : ""} · ${actions}`;
 }
 
 function semanticToolFailure(value: unknown): boolean {
@@ -304,7 +319,7 @@ function rowsFromTrace(message: UIMessage, trace: TurnTrace): TraceRow[] {
             kind: "tool",
             label: `Tool call started · ${readableToolName(event.toolName)}`,
             detail: isKnownTool(event.toolName)
-              ? "The model selected a governed Salesforce tool"
+              ? (salesforceAgentLine(event.toolName) ?? "The model selected a governed tool")
               : "The model requested a tool outside the governed catalog",
             state: isKnownTool(event.toolName) ? "complete" : "error",
             elapsed,

@@ -1,7 +1,7 @@
 ---
 id: WU-039
 title: Long-term graph memory, knowledge-graph acceptance leftovers, and the Learn drift gate
-status: active
+status: complete
 plan_sections: [9, 15, 17]
 owners: [agent]
 issue: 41

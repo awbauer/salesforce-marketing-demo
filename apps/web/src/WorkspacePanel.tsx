@@ -2,6 +2,7 @@ import {
   FOCUS_KIND_LABELS,
   type FocusItem,
   type InsightTile,
+  type MarketingPreviewStep,
   type WorkingRecord,
   type WorkingSet,
 } from "@northstar/contracts";
@@ -31,10 +32,9 @@ export type FocusAction = {
   onClick: () => void;
 };
 
-/** Readable names for object types that are API names, such as Northstar_Message__c. */
+/** Readable names for object types, such as Flow for a Marketing Cloud campaign flow. */
 const OBJECT_LABELS: Record<string, string> = {
-  Northstar_Message__c: "Message",
-  Northstar_Brief__c: "Brief",
+  Flow: "Campaign flow",
   ContentDocument: "File",
 };
 export const objectLabel = (objectType: string) =>
@@ -43,8 +43,16 @@ export const objectLabel = (objectType: string) =>
 /** The authoritative lifecycle of the current focus version. */
 export function focusLifecycle(focus: FocusItem) {
   if (!focus.saved) return "Draft in progress";
-  return focus.saved.version === focus.current ? "Saved in Salesforce" : "Unsaved changes";
+  if (focus.saved.version !== focus.current) return "Unsaved changes";
+  return focus.saved.campaign
+    ? "Campaign created in Marketing Cloud"
+    : "Brief saved in Marketing Cloud";
 }
+
+const waitLabel = (step: MarketingPreviewStep) =>
+  !step.waitNumber
+    ? "right away"
+    : `after ${step.waitNumber} ${String(step.waitUnit ?? "").toLowerCase()}`;
 
 const RELATION_LABELS: Record<WorkingRecord["relation"], string> = {
   read: "Opened",
@@ -133,25 +141,82 @@ export function FocusCard({
         </p>
       )}
       {focus.saved && (
-        <p className="focus-saved">
-          {focus.saved.version === focus.current
-            ? `Saved to Salesforce as version ${focus.saved.version}`
-            : `Salesforce has version ${focus.saved.version}; this version isn't saved yet`}
-          {savedRecordLink && (
-            <>
-              {" · "}
+        <div className="focus-saved">
+          <p className="focus-saved-line">
+            {focus.saved.version === focus.current
+              ? `Saved in Marketing Cloud as version ${focus.saved.version}`
+              : `Marketing Cloud has version ${focus.saved.version}; this version isn't saved yet`}
+            {savedRecordLink && (
+              <>
+                {" · "}
+                <a
+                  className="focus-saved-link"
+                  href={savedRecordLink}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open {objectLabel(focus.saved.objectType)} in Salesforce
+                  <span aria-hidden="true"> ↗</span>
+                </a>
+              </>
+            )}
+          </p>
+          {focus.saved.preview && focus.saved.preview.length > 0 && (
+            <details className="focus-preview" open={!focus.saved.campaign}>
+              <summary className="focus-preview-summary on-dark">
+                Campaign preview · {focus.saved.preview.length} step
+                {focus.saved.preview.length === 1 ? "" : "s"} from the Campaign Creation agent
+              </summary>
+              <ol>
+                {focus.saved.preview.map((step) => (
+                  <li key={step.stepNumber}>
+                    <strong>
+                      {step.channel ?? step.stepType} {step.stepNumber}
+                    </strong>{" "}
+                    <span className="focus-preview-wait focus-preview-light">
+                      · {waitLabel(step)}
+                    </span>
+                    {step.subject && <p className="focus-preview-subject">{step.subject}</p>}
+                    {step.preheader && (
+                      <p className="focus-preview-meta focus-preview-light">{step.preheader}</p>
+                    )}
+                    {step.body && (
+                      <p className="focus-preview-body focus-preview-light">{step.body}</p>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </details>
+          )}
+          {focus.saved.campaign && (
+            <p className="focus-campaign">
+              Campaign{" "}
               <a
-                className="focus-saved-link"
-                href={savedRecordLink}
+                className="focus-campaign-link"
+                href={recordUrl({
+                  system: "salesforce",
+                  objectType: "Campaign",
+                  recordId: focus.saved.campaign.id,
+                })}
                 target="_blank"
                 rel="noreferrer"
               >
-                Open {objectLabel(focus.saved.objectType)} in Salesforce
-                <span aria-hidden="true"> ↗</span>
+                {focus.saved.campaign.name} <span aria-hidden="true">↗</span>
               </a>
-            </>
+              {focus.saved.campaign.stage ? ` · ${focus.saved.campaign.stage}` : ""}
+              {focus.saved.campaign.flow && (
+                <>
+                  {" · "}
+                  {focus.saved.campaign.flow.label} (
+                  {focus.saved.campaign.flow.active
+                    ? "active"
+                    : "draft; set its audience and activate it in Marketing Cloud"}
+                  )
+                </>
+              )}
+            </p>
           )}
-        </p>
+        </div>
       )}
       {action && isCurrent && (
         <div className="focus-action">

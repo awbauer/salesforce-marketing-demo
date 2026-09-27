@@ -6,6 +6,7 @@ import {
   MEMORY_RETENTION_MS,
 } from "../../../packages/contracts/src/index.ts";
 import {
+  buildDataset,
   type GraphBackend,
   MEMORY_TOOL_SPECS,
   type MemorySubjects,
@@ -65,6 +66,15 @@ export function focusMemoryDraft(
 
 const SALESFORCE_ID = /^[a-zA-Z0-9]{15,18}$/;
 
+let graphNames: string[] | undefined;
+/** Campaign and brand names in the demo graph, which a draft can mention in any field. */
+function knownSubjectNames() {
+  graphNames ??= buildDataset()
+    .nodes.filter((node) => node.label === "Brand" || node.label === "Campaign")
+    .map((node) => node.name);
+  return graphNames;
+}
+
 /**
  * The graph entities a memory is about: Salesforce campaigns by id, and campaigns or brands the
  * draft or write names. Matching to graph nodes happens in the fixed memory statements.
@@ -82,11 +92,10 @@ export function memorySubjects(input: {
   for (const id of input.campaignIds ?? []) addId(id);
   const confirmation = input.confirmation;
   if (confirmation) {
-    if (confirmation.write?.objectType !== "Campaign") addId(confirmation.recordId);
-    addId(confirmation.write?.campaignId);
-    if (confirmation.write?.newCampaignName) names.add(confirmation.write.newCampaignName);
-    if (confirmation.write?.brand) names.add(confirmation.write.brand);
-    if (confirmation.write?.objectType === "Campaign") names.add(confirmation.write.title);
+    // Review tasks and images act on an open campaign; a brief names itself.
+    if (!confirmation.write) addId(confirmation.recordId);
+    if (confirmation.write?.kind === "brief") names.add(confirmation.write.brief.name);
+    if (confirmation.write?.kind === "campaign") names.add(confirmation.write.briefName);
   }
   const focus = input.focus;
   if (focus) {
@@ -94,6 +103,11 @@ export function memorySubjects(input: {
     if (focus.kind === "campaign") names.add(version.title);
     for (const field of version.fields)
       if (/^(?:campaign(?: name)?|brand)$/i.test(field.label)) names.add(field.value);
+    // A Marketing Cloud brief names its brand and campaign in prose, not in labeled fields.
+    const text = [version.title, version.summary, ...version.fields.map((field) => field.value)]
+      .join("\n")
+      .toLowerCase();
+    for (const name of knownSubjectNames()) if (text.includes(name.toLowerCase())) names.add(name);
     if (focus.saved?.objectType === "Campaign") addId(focus.saved.recordId);
     addId(focus.saved?.campaignId);
   }

@@ -66,7 +66,7 @@ describe("action cards in the chat", () => {
     const [save] = await suggestions();
     expect(save).toMatchObject({
       action: "save-focus",
-      title: "Save “Rainy lunch” in Salesforce?",
+      title: "Save “Rainy lunch” as a Marketing Cloud brief?",
     });
     const dismissed = await SELF.fetch(
       `https://example.test/agent/suggestions/${save?.id}/dismiss`,

@@ -425,11 +425,10 @@ const SOURCES: Record<string, string> = {
 const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 const OBJECT_LABELS: Record<string, string> = {
-  Northstar_Brief__c: "Brief",
-  Northstar_Message__c: "Message",
+  Flow: "Campaign flow",
   ContentDocument: "File",
 };
-/** A readable name for a record's object type, such as Message for Northstar_Message__c. */
+/** A readable name for a record's object type, such as File for ContentDocument. */
 export const memoryObjectLabel = (objectType: string) => OBJECT_LABELS[objectType] ?? objectType;
 
 function toView(row: Row): MemoryView {

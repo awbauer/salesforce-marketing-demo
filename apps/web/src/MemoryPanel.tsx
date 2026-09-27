@@ -25,8 +25,7 @@ type LoadState =
   | { status: "ready"; enabled: boolean; retentionDays: number; items: MemoryItem[] };
 
 const OBJECT_LABELS: Record<string, string> = {
-  Northstar_Brief__c: "Brief",
-  Northstar_Message__c: "Message",
+  Flow: "Campaign flow",
   ContentDocument: "File",
 };
 

@@ -1,13 +1,14 @@
 /**
  * Reports, as the signed-in user, whether Salesforce would allow one of the workbench's writes:
  * the Marketing User feature, the workbench permission set, object create or edit access,
- * field edit access, and edit access to the specific record for updates. Read-only; the write
- * actions enforce the same rules again in user mode when they run.
+ * field edit access, and edit access to the specific record for updates. Read-only. Briefs and
+ * campaigns are created by the Marketing Cloud Next Campaign Creation agent, which runs as the
+ * same user, so Salesforce enforces these rules again when the agent's actions run.
  */
 global with sharing class NorthstarCheckWriteAccess {
     global class Input {
-        @InvocableVariable(required=true label='Action' description='save-campaign, save-brief, save-message, create-review-task, save-draft-campaign, or attach-generated-image.') global String action;
-        @InvocableVariable(label='Record ID' description='Record to be updated, if the write updates one.') global Id recordId;
+        @InvocableVariable(required=true label='Action' description='save-marketing-brief, create-marketing-campaign, create-review-task, or attach-generated-image.') global String action;
+        @InvocableVariable(label='Record ID' description='The Brief a campaign is created from, or the record a write updates.') global Id recordId;
         @InvocableVariable(label='Creates Campaign' description='True when the write also creates a new campaign.') global Boolean createsCampaign;
     }
     global class Output {
@@ -28,20 +29,16 @@ global with sharing class NorthstarCheckWriteAccess {
     }
 
     private static final Map<String, List<String>> CREATES = new Map<String, List<String>>{
-        'save-campaign' => new List<String>{ 'Campaign' },
-        'save-brief' => new List<String>{ 'Northstar_Brief__c' },
-        'save-message' => new List<String>{ 'Northstar_Message__c' },
+        'save-marketing-brief' => new List<String>{ 'Brief', 'BriefPlanStep' },
+        'create-marketing-campaign' => new List<String>{ 'Campaign' },
         'create-review-task' => new List<String>{ 'Task' },
-        'attach-generated-image' => new List<String>{ 'ContentVersion' },
-        'save-draft-campaign' => new List<String>()
+        'attach-generated-image' => new List<String>{ 'ContentVersion' }
     };
     private static final Map<String, List<String>> FIELDS = new Map<String, List<String>>{
-        'save-campaign' => new List<String>{ 'Campaign.Description', 'Campaign.Northstar_Brand__c' },
-        'save-brief' => new List<String>{ 'Northstar_Brief__c.Body__c', 'Northstar_Brief__c.Campaign__c' },
-        'save-message' => new List<String>{ 'Northstar_Message__c.Body__c', 'Northstar_Message__c.Campaign__c' },
+        'save-marketing-brief' => new List<String>{ 'Brief.KeyMessage', 'Brief.TargetAudience', 'BriefPlanStep.Content' },
+        'create-marketing-campaign' => new List<String>{ 'Campaign.BriefId', 'Campaign.Stage' },
         'create-review-task' => new List<String>{ 'Task.Description' },
-        'attach-generated-image' => new List<String>{ 'ContentVersion.Title' },
-        'save-draft-campaign' => new List<String>{ 'Campaign.Description' }
+        'attach-generated-image' => new List<String>{ 'ContentVersion.Title' }
     };
 
     @InvocableMethod(label='Check Write Access' description='Reports whether the signed-in user may perform one workbench write. Read-only.')
@@ -63,20 +60,17 @@ global with sharing class NorthstarCheckWriteAccess {
                     hasPermissionSet ? 'Northstar Marketing Workbench Evaluator is assigned.' : 'The workbench permission set is not assigned.'));
                 List<String> objects = new List<String>(CREATES.get(action));
                 if (item.createsCampaign == true && !objects.contains('Campaign')) objects.add('Campaign');
-                if (objects.contains('Campaign') || action == 'save-draft-campaign') {
+                if (objects.contains('Campaign')) {
                     checks.add(new Check('Marketing User', user.UserPermissionsMarketingUser,
                         user.UserPermissionsMarketingUser ? 'Can create and edit campaigns.' : 'Campaign writes need the Marketing User feature.'));
                 }
                 for (String name : objects) {
                     Schema.DescribeSObjectResult type = Schema.getGlobalDescribe().get(name).getDescribe();
-                    Boolean creating = item.recordId == null || name != String.valueOf(item.recordId.getSObjectType());
+                    Boolean creating = item.recordId == null || name != String.valueOf(item.recordId.getSObjectType())
+                        || action == 'create-marketing-campaign';
                     Boolean ok = creating ? type.isCreateable() : type.isUpdateable();
                     checks.add(new Check((creating ? 'Create ' : 'Edit ') + type.getLabel(), ok,
                         ok ? 'Allowed by your profile and permission sets.' : 'Not allowed for your user.'));
-                }
-                if (action == 'save-draft-campaign') {
-                    Boolean ok = Schema.sObjectType.Campaign.isUpdateable();
-                    checks.add(new Check('Edit Campaign', ok, ok ? 'Allowed by your profile and permission sets.' : 'Not allowed for your user.'));
                 }
                 for (String field : FIELDS.get(action)) {
                     List<String> parts = field.split('\\.');
@@ -92,7 +86,8 @@ global with sharing class NorthstarCheckWriteAccess {
                         WHERE UserId = :UserInfo.getUserId() AND RecordId = :item.recordId
                     ];
                     Boolean ok = !access.isEmpty() && access[0].HasEditAccess;
-                    checks.add(new Check('Edit this record', ok,
+                    Boolean brief = String.valueOf(item.recordId.getSObjectType()) == 'Brief';
+                    checks.add(new Check(brief ? 'Edit this brief' : 'Edit this record', ok,
                         ok ? 'Sharing gives you edit access to the record.' : 'Sharing does not give you edit access.'));
                 }
             }

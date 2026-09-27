@@ -74,20 +74,11 @@ export function focusPrompt(focus: FocusItem | null) {
   if (!focus) return "";
   const current = currentFocusVersion(focus);
   const fields = current.fields.map((field) => `${field.label}: ${field.value}`).join(" | ");
-  return `Current focus (the draft the user is working on; revisions, references to the draft, and saves apply to it): ${FOCUS_KIND_LABELS[focus.kind]} "${current.title}" (version ${current.version}). ${current.summary} Fields: ${fields}.`;
-}
-
-/** The focus as brief text for a confirmed save, within the 500-character confirmation limit. */
-export function focusBriefText(focus: FocusItem) {
-  const current = currentFocusVersion(focus);
-  const text = [
-    `${FOCUS_KIND_LABELS[focus.kind]}: ${current.title} (v${current.version})`,
-    current.summary,
-    ...current.fields.map((field) => `${field.label}: ${field.value}`),
-  ]
-    .filter(Boolean)
-    .join("\n");
-  return text.length > 500 ? `${text.slice(0, 499).trimEnd()}…` : text;
+  const saved = focus.saved?.objectType === "Brief" ? focus.saved : undefined;
+  const marketing = saved
+    ? ` Saved in Marketing Cloud as Brief ${saved.recordId} (version ${saved.version}) with a ${saved.preview?.length ?? 0}-step campaign preview${saved.campaign ? `; campaign ${saved.campaign.id} "${saved.campaign.name}" and its flow were created` : "; the campaign isn't created yet"}.`
+    : "";
+  return `Current focus (the draft the user is working on; revisions, references to the draft, and saves apply to it): ${FOCUS_KIND_LABELS[focus.kind]} "${current.title}" (version ${current.version}). ${current.summary} Fields: ${fields}.${marketing}`;
 }
 
 const LABEL_LINE =

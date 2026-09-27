@@ -43,16 +43,19 @@ describe("proof contracts", () => {
   });
   it("keeps every Salesforce write outside autonomous model execution", () => {
     const writes = catalog.tools.filter((tool) => tool.riskClass === "write");
-    expect(writes).toHaveLength(6);
+    expect(writes).toHaveLength(4);
     expect(writes.every((tool) => tool.autonomous === false)).toBe(true);
     expect(writes.map((tool) => tool.allowedWrite)).toEqual([
-      "save-draft-campaign",
+      "save-marketing-brief",
+      "create-marketing-campaign",
       "create-review-task",
       "attach-generated-image",
-      "save-campaign",
-      "save-brief",
-      "save-message",
     ]);
+    // Briefs and campaigns are created by the Marketing Cloud Campaign Creation agent.
+    for (const name of ["save_marketing_brief", "create_marketing_campaign"])
+      expect(catalog.tools.find((tool) => tool.name === name)?.source).toBe(
+        "salesforce-agentforce",
+      );
     // The permission check is read-only and host-only: the model never calls it.
     expect(catalog.tools.find((tool) => tool.name === "check_write_access")).toMatchObject({
       riskClass: "read",

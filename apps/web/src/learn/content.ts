@@ -178,6 +178,21 @@ const R = {
     url: "https://trailhead.salesforce.com/content/learn/modules/introduction-to-agentforce",
     kind: "Course",
   },
+  mcnAgentforce: {
+    label: "Agentforce in Marketing Cloud Next (Salesforce Help)",
+    url: "https://help.salesforce.com/s/articleView?id=mktg.mktg_einstein_copilot_in_mc.htm&language=en_US&type=5",
+    kind: "Docs",
+  },
+  mcnCampaignTrailhead: {
+    label: "Create and customize a marketing campaign with Agentforce (Trailhead)",
+    url: "https://trailhead.salesforce.com/content/learn/modules/ai-in-marketing-cloud-next/create-and-customize-a-marketing-campaign-with-agentforce",
+    kind: "Course",
+  },
+  hostedMcpAgents: {
+    label: "Expose Agentforce agents as Hosted MCP tools (Salesforce Developers)",
+    url: "https://developer.salesforce.com/docs/platform/hosted-mcp-servers/guide/agentforce.html",
+    kind: "Docs",
+  },
   agentforce: {
     label: "Salesforce Agentforce",
     url: "https://www.salesforce.com/agentforce/",
@@ -365,7 +380,7 @@ GraphRAG's advantages are **multi-hop reasoning** and **explainability**. Every 
 
 A turn runs a **tool loop** of up to 6 steps. On each step the model either calls a tool or writes the answer. The orchestrator decides which tools are available on each step (see *Routing*) and records a **turn trace** of every event.
 
-Around the loop, the orchestrator also handles the events the model must not: it prepares and runs confirmed writes, and it writes **long-term memory** when a write is read back or you ask it to remember a draft. The Worker's hourly job prunes the 24-hour audit and deletes memory past its 14 days.`,
+Around the loop, the orchestrator also handles the events the model must not: it prepares confirmed writes and, once you confirm, asks Marketing Cloud's Campaign Creation agent to save the brief or create the campaign, then reads the records back. It writes **long-term memory** when a write is read back or you ask it to remember a draft. The Worker's hourly job prunes the 24-hour audit and deletes memory past its 14 days.`,
         inDemo: [
           "apps/edge/src/orchestrator.ts",
           "“Behind the scenes · technical trace” under each answer",
@@ -379,7 +394,7 @@ Around the loop, the orchestrator also handles the events the model must not: it
           "A per-chat, structured model of the work, built from tool results rather than model text.",
         body: `Each chat has a **working set**, shown in the Workspace panel and summarized in every prompt. It starts empty with **New chat** and has three parts:
 
-- **Focus:** the draft being built (a campaign, brief, or message) as structured data: a title, labeled fields, a change note, and the context it was built from. When a turn drafts or revises something, the orchestrator saves the finished draft from the model's answer, reading its labeled lines (Headline, Body, Send time, and so on) into fields. Each revision becomes a new version, and earlier versions stay viewable. Saving this way never depends on a small model producing a large structured tool call.
+- **Focus:** the draft being built as structured data: a title, labeled fields, a change note, and the context it was built from. A campaign's focus is the **brief** Marketing Cloud's Campaign Creation agent drafted, read field for field from the agent's reply (Key Message, Target Audience, Primary Goal, and so on). Other drafts, such as copy from the Content Builder agent, are read from the answer's labeled lines. Each revision becomes a new version, and earlier versions stay viewable. Once saved, the focus shows the brief's campaign preview and then the campaign and flow Salesforce read back.
 - **Context:** cards for what tools returned, such as weather, the restaurant profile, graph evidence, remembered work recalled from memory, and Salesforce summaries, each with its source and fetch time.
 - **Records:** records the chat opened, created, or updated, in any connected system. Salesforce is one system and restaurant data is another; any system can join through the same reference: system, object type, and id.
 
@@ -387,8 +402,8 @@ Four properties make it trustworthy:
 
 1. **Deterministic ingestion.** Cards and records come from tool results through code, never from model-written text, so nothing in the workspace is invented.
 2. **Open versus available.** Records the connected systems make available are listed separately as a catalog, so the model never acts on a record the chat hasn't opened.
-3. **Approvals come to you.** When something needs your approval (saving the draft to Salesforce, or requesting a review after a readiness check), an **action card** appears in the chat. Accepting it prepares the confirmation card, with Salesforce's permission check.
-4. **Writes act on what you see.** Saving writes exactly the focus version on screen to Salesforce: a new campaign, brief, or message, or an update to the record it was saved as before. The confirmation records that version in its request hash, and the saved records appear in Records as created or updated.`,
+3. **Approvals come to you.** When something needs your approval, an **action card** appears in the chat: saving the brief in Marketing Cloud, then creating its campaign, or requesting a review after a readiness check. Accepting it prepares the confirmation card, with Salesforce's permission check.
+4. **Writes act on what you see.** Saving asks the Campaign Creation agent to save exactly the focus version on screen. The confirmation records that version in its request hash, and the Brief, Campaign, and flow appear in Records as Salesforce read them back.`,
         inDemo: [
           "Workspace panel: Focus, Records, and Context",
           "apps/edge/src/working-set.ts, apps/edge/src/focus.ts",
@@ -441,21 +456,62 @@ The two local servers are called **in-process** through an in-memory MCP transpo
           "Salesforce is the system of record, and every Salesforce fact comes from its tools.",
         body: `Salesforce is **authoritative** for campaign data. The orchestrator never invents Salesforce facts. It calls tools on a **Salesforce Hosted MCP server**:
 
-- **Agent-backed tools:** summarize a campaign, check readiness, draft content, and account discovery. These call **Agentforce** agents defined as Agent Script bundles.
-- **Record writes:** save a campaign, save a brief (\`Northstar_Brief__c\`), and save an email, push, or SMS message (\`Northstar_Message__c\`). Each creates the record, or updates it when the draft was saved before, and a brief or message can create its campaign in the same confirmed write. Messages are drafts: nothing is sent or scheduled.
-- **Other writes:** save a campaign description, create a review task, and attach an image.
+- **Agent-backed tools.** Each calls an **Agentforce** agent defined as an Agent Script bundle. Under every answer, **Salesforce agents** shows which agent handled each call, its type and template, its subagent, and the actions it ran.
+  - **Northstar Campaign Creation** (a Marketing Cloud Next Campaign Creation agent) drafts, saves, and refines briefs and creates campaigns and their flows. See *Marketing Cloud Next*.
+  - **Northstar Content Builder** (a Marketing Cloud Next Content Builder agent) drafts copy and content sections with the standard Draft Content and Create Section actions.
+  - **Northstar Account Discovery** uses Marketing's account discovery and scoring APIs for signals, engagement, and buyer groups.
+  - **Campaign Readiness and Governance** is a custom agent whose Apex actions summarize a campaign and check readiness, consent, and brand rules.
+- **Briefs and campaigns** are created only by the Campaign Creation agent's standard actions, as Marketing Cloud's own **Brief**, **BriefPlanStep**, **Campaign**, and campaign **flow** records. The workbench has no custom objects or Apex for them.
+- **Other writes:** a review task and an image attachment are global **Apex invocable actions** that verify a signed confirmation.
 - **Permission check:** \`check_write_access\` is a read-only Apex action the workbench calls before preparing any write. It runs as the signed-in user and reports each permission it checked.
 
-Every write tool is a global **Apex invocable action**, never available to the model; only the confirmation flow can run them, and each writes in user mode.
+The model never holds a write tool: only the confirmation flow can call the write tools, and every write runs as you.
 
 Metadata (Apex, fields, the permission set, and the MCP definition) deploys through a gated CI pipeline to one approved proof org.`,
         inDemo: [
           "Quickstart prompts 1–3",
-          "Saved campaigns, briefs, and messages in the Workspace's Records",
-          "salesforce/force-app (NorthstarSave*, NorthstarCheckWriteAccess)",
+          "“Salesforce agents” under each answer",
+          "salesforce/force-app/main/default/aiAuthoringBundles, salesforce/force-app/main/default/classes",
           "docs/salesforce-deployment-pipeline.md",
         ],
         resources: [R.hostedMcp, R.agentforceTrailhead, R.agentforce],
+      },
+      {
+        id: "marketing-cloud",
+        title: "Marketing Cloud Next: agent-built briefs, campaigns, and flows",
+        summary:
+          "The workbench asks Salesforce's Campaign Creation agent to create briefs and campaigns, the way the Marketing app does.",
+        body: `In **Marketing Cloud Next**, a campaign starts as a **brief** and becomes a **campaign with a flow**. Salesforce's **Campaign Creation agent** does that work with standard actions, and the workbench asks it to rather than writing records itself.
+
+**The agent.** \`Northstar_Campaign_Creation\` is an Agent Script agent built from Salesforce's \`MktCloud__CampaignCreationAgent\` template and published as a Campaign Creation agent. Only Agent Script agents can be exposed as Hosted MCP tools, so the workbench reaches it through the \`NorthstarMarketingWorkbench\` MCP server. Its **Marketing Campaigns** subagent runs the standard actions in Salesforce's required order:
+
+| Step | Standard action | What it does |
+|---|---|---|
+| 1 | Draft a Campaign Brief (\`MktCloud__GenerateBrief\`) | Drafts name, description, key message, audience, goal, CTAs, KPI, guardrails, and priority. Saves nothing. |
+| 2 | Save Campaign Brief (\`saveBrief\`) | Creates the **Brief** record. |
+| 3 | Draft a Campaign Preview (\`MktCloud__GenerateCampaignFromBrief\`) | Plans the messages as **BriefPlanStep** records on the brief: channel, wait, subject, preheader, and body. |
+| 4 | Create Campaign (\`createCampaign\`) | Creates the **Campaign**, linked to the brief. |
+| 5 | Save Campaign (\`MktCloud__SaveCampaign\`) | Builds the campaign's **flow** from the preview, as a draft. |
+
+Its **Campaign Refinement** subagent runs **Refine Campaign Preview** to change a saved preview ("make the second email shorter").
+
+**How the workbench uses it.**
+1. A campaign request (the Coastline plan, or "create a campaign in Marketing Cloud") ends with \`draft_campaign_brief\`. The agent's brief becomes the workspace focus, field for field.
+2. **Save brief** (an action card, then a confirmation card): \`save_marketing_brief\` asks the agent to run steps 2 and 3.
+3. **Create the campaign** (a second card): \`create_marketing_campaign\` asks it to run steps 4 and 5.
+4. After each write, \`get_marketing_records\` (read-only Apex) reads the Brief, its steps, the Campaign, and the flow back from Salesforce. The workspace shows only what Salesforce returned, never the agent's say-so.
+
+**What stays in Marketing Cloud.** The flow is created as a draft. Choosing its audience and sender, and activating it, happen in Marketing Cloud; the workbench never sends or activates anything. Previews in this org plan email (and SMS) steps: a push request is recorded in the brief's guardrails.
+
+**Each call is one request.** Hosted MCP agent tools take a single message, so each call carries everything the agent needs: the confirmed brief fields, or the Brief ID whose preview was confirmed. The agent is asked to include the record ids in its reply, and the read-back verifies them.`,
+        inDemo: [
+          "Quickstart: a Coastline Kitchen email campaign → Save brief → Create campaign",
+          "“Salesforce agents” under each answer, and the confirmation card's agent details",
+          "Workspace focus: Brief saved, campaign preview, Campaign and flow links",
+          "salesforce/force-app/main/default/aiAuthoringBundles/Northstar_Campaign_Creation",
+          "apps/edge/src/marketing-writes.ts",
+        ],
+        resources: [R.mcnAgentforce, R.mcnCampaignTrailhead, R.hostedMcpAgents],
       },
       {
         id: "routing",
@@ -468,9 +524,10 @@ Metadata (Apex, fields, the permission set, and the MCP definition) deploys thro
    - "Check readiness" → \`check_campaign_readiness\`
    - "Why is X in the buyer group?" → \`explain_buyer_group\`
    - "What did we decide about…?" or "last time…" → \`recall_decisions\`; "what have we worked on recently?" → \`recall_recent_work\`
-   - A Coastline Kitchen email or push campaign → profile → weather → past pushes → content draft; the finished draft is saved to the focus
-   - A revision of the focus ("make it warmer") → no tools; the model rewrites the draft, which is saved as the next version
-   - "…as a new campaign in Salesforce" → the model drafts the campaign; once it's saved to the focus, the Salesforce save is prepared for confirmation
+   - A Coastline Kitchen email or push campaign → profile → weather → past pushes → the Campaign Creation agent's brief, which becomes the focus
+   - "Create a campaign … in Salesforce" or "in Marketing Cloud" → the Campaign Creation agent's brief, then the save is prepared for confirmation
+   - A change to a brief ("make it warmer") → back to the agent: a re-drafted brief before it's saved, or **Refine Campaign Preview** after
+   - A change to other drafts → no tools; the model rewrites the draft, which is saved as the next version
    - The rules need specific signals and **defer to the model** when unsure, because a wrongly forced tool can't be undone within the turn.
 
 After a plan finishes, the model gets **no tools** and must write the answer.`,
@@ -504,22 +561,25 @@ At the turn level:
         title: "Governance: permissions, confirmations, and kill switches",
         summary:
           "Salesforce decides who may write, a person approves every write, and operators can turn things off.",
-        body: `The workbench can create and update campaigns, briefs, and email, push, or SMS messages, and it can save a brief to a campaign, create a review task, or attach an image. Every write follows the same flow:
+        body: `The workbench can have Marketing Cloud's Campaign Creation agent save a brief and create its campaign and flow, and it can create a review task or attach an image. Every write follows the same flow:
 
-1. **Plan:** the server builds the write from the draft in the workspace, so the values are exactly what you reviewed.
+1. **Plan:** the server builds the request from the draft in the workspace, so the values are exactly what you reviewed.
 2. **Permission check:** before anything is prepared, the workbench asks Salesforce, **as you**, whether you may make this write: the workbench permission set, the Marketing User feature for campaigns, create or edit access on each object, field-level security, and edit access to the record for updates. The confirmation card lists every check. If one fails, nothing is prepared and the card says why.
-3. **Confirmation:** the card shows the record to be created or updated, its values, and the draft version, bound by a SHA-256 request hash, an idempotency key, and a 5-minute expiry.
-4. **Execute:** the Worker signs the confirmation with HMAC. Apex verifies the signature, the expiry, the same user, and the hash, then writes in **user mode**, so Salesforce enforces your permissions again at write time.
-5. **Read-back:** Salesforce returns the authoritative record, and the workspace shows it as created or updated. A draft that was saved updates the same record next time instead of creating another.
+3. **Confirmation:** the card shows what will be created, its values, the draft version, and, for briefs and campaigns, the Marketing Cloud agent and the standard actions it will run. It's bound by a SHA-256 request hash and a 5-minute expiry, and it can be used once.
+4. **Execute:**
+   - For a **brief or campaign**, the workbench asks the Campaign Creation agent, through its Hosted MCP tool, to run its standard actions. The agent runs as you, so Salesforce enforces your permissions as each action runs.
+   - For a **review task or image**, the Worker signs the confirmation with HMAC. Apex verifies the signature, the expiry, the same user, and the hash, then writes in **user mode**.
+5. **Read-back:** the workbench reads the records back from Salesforce (\`get_marketing_records\` for Marketing Cloud) and shows only what Salesforce returned. If the agent says it saved something that Salesforce doesn't show, nothing is shown as saved.
 
 **Who checks what.** Each layer does one job:
 
 | Layer | Responsible for | Not responsible for |
 |---|---|---|
 | **The model** | Drafting and proposing saves | Writing anything: it has no write tools |
-| **The workbench** | Planning the write from your draft, asking Salesforce for a permission check, hashing, signing | Deciding who may write |
+| **The workbench** | Planning the request from your draft, asking Salesforce for a permission check, hashing, reading back | Deciding who may write, or creating briefs and campaigns itself |
+| **The Marketing Cloud agent** | Running Marketing Cloud's standard actions for briefs, previews, campaigns, and flows | Deciding what to save: it saves what you confirmed |
 | **You** | Reviewing exact values and confirming | — |
-| **Salesforce** | Authorization (profile, permission sets, field-level security, sharing), signature checks, the write, and read-back | — |
+| **Salesforce** | Authorization (profile, permission sets, field-level security, sharing), signature checks for Apex writes, the records, and read-back | — |
 
 **Kill switches** (\`WRITES_ENABLED\`, \`DISABLED_TOOLS\`, \`MEMORY_ENABLED\`) are Worker secrets that operators can flip without a deploy. Graph tools read in read-only mode; only the server's fixed memory statements write, and only to the memory dataset. No customer PII enters prompts, logs, or the graph.`,
         inDemo: [
@@ -536,6 +596,7 @@ At the turn level:
         summary: "Answers render as rich text, and records render as governed cards.",
         body: `- **Markdown answers.** The model may use concise Markdown. The UI renders it with \`react-markdown\`, which never renders raw HTML, so model output can't inject markup.
 - **HXL cards.** Salesforce's HXL widgets (MCP Apps) let an agent action return a typed, interactive card, such as campaign readiness. When a host can't render HXL, the workbench shows an equivalent accessible **native fallback** built from the same contract.
+- **Salesforce agents panel.** Under each answer that called Salesforce, a panel lists each call's agent, its type and template, the subagent, and the actions (with their flow or Apex targets) behind it. The confirmation card shows the same for the write it prepares.
 - **Graph evidence panel.** Knowledge-graph paths render as directional chains, each with a text alternative for screen readers.
 - **Accessibility.** The UI targets WCAG 2.2 AA and is tested in Chrome and Edge.`,
         inDemo: [
@@ -552,7 +613,7 @@ At the turn level:
   - turn start, step start and finish (finish reason, token counts)
   - reasoning start and end, with the model's reasoning, redacted
   - text start and end
-  - tool input and output, errors, recovery messages, and the outcome
+  - tool input and output, with the Salesforce agent, subagent, and actions behind each Salesforce tool; errors; recovery messages; and the outcome
 - **Turn history** (History → Turns): each utterance with the orchestrator's interpretation, the tool calls with inputs and results, and the outcome. Filterable, and kept 24 hours per user.
 - **Memory** (History → Memory): what the workspace remembers across chats, with provenance and a Forget button. See *Long-term memory*.
 - **Audit export:** a JSON download of the user's confirmed writes, memory remembers and forgets, and turn summaries.`,

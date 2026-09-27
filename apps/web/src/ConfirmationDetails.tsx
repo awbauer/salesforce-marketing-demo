@@ -1,62 +1,56 @@
-import type { Confirmation } from "@northstar/contracts";
+import {
+  type Confirmation,
+  MARKETING_BRIEF_FIELDS,
+  SALESFORCE_TOOL_DETAILS,
+  WRITE_TOOL_BY_ACTION,
+} from "@northstar/contracts";
 import { relativeTime, salesforceRecordUrl } from "@northstar/ui";
+import { AgentDetail } from "./SalesforceAgents";
 
-/** What a confirmed record write will create or update, as the server authored it. */
-export function RecordWriteDetails({ confirmation }: { confirmation: Confirmation }) {
+/**
+ * What a confirmed Marketing Cloud write asks the Campaign Creation agent to do, as the server
+ * authored it, and which agent actions will run.
+ */
+export function MarketingWriteDetails({ confirmation }: { confirmation: Confirmation }) {
   const write = confirmation.write;
   if (!write) return null;
-  const rows: Array<[string, string | undefined]> = [
-    ["Channel", write.channel],
-    ["Subject or headline", write.subject],
-    ["Preheader", write.preheader],
-    ["Objective", write.objective],
-    ["Audience", write.audience],
-    ["Send time", write.sendTime],
-  ];
+  const detail = SALESFORCE_TOOL_DETAILS[WRITE_TOOL_BY_ACTION[confirmation.action]];
   return (
     <div className="write-plan">
-      <p className="write-plan-target">
-        <strong>
-          {write.recordId ? "Update" : "Create"} {write.objectLabel.toLowerCase()} “{write.title}”
-        </strong>
-        {write.objectType !== "Campaign" && (
-          <span>
-            {write.newCampaignName ? (
-              <>
-                {" "}
-                on a <strong>new campaign</strong> “{write.newCampaignName}”
-                {write.brand ? ` (${write.brand})` : ""}
-              </>
-            ) : write.campaignId ? (
-              <>
-                {" "}
-                on{" "}
-                <a
-                  href={salesforceRecordUrl("Campaign", write.campaignId)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  campaign {write.campaignId} <span aria-hidden="true">↗</span>
-                </a>
-              </>
-            ) : null}
-          </span>
-        )}
-      </p>
-      <dl className="write-plan-fields">
-        {rows
-          .filter((row): row is [string, string] => Boolean(row[1]))
-          .map(([label, value]) => (
-            <div key={label}>
-              <dt>{label}</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        <div className="write-plan-body">
-          <dt>{write.objectType === "Campaign" ? "Description" : "Body"}</dt>
-          <dd>{write.body}</dd>
-        </div>
-      </dl>
+      {write.kind === "brief" ? (
+        <>
+          <p className="write-plan-target">
+            <strong>Save the brief “{write.brief.name}” in Marketing Cloud</strong>, then draft its
+            campaign preview
+          </p>
+          <dl className="write-plan-fields">
+            {MARKETING_BRIEF_FIELDS.filter(([key]) => key !== "name" && write.brief[key]).map(
+              ([key, label]) => (
+                <div key={key}>
+                  <dt>{label}</dt>
+                  <dd>{write.brief[key]}</dd>
+                </div>
+              ),
+            )}
+          </dl>
+        </>
+      ) : (
+        <p className="write-plan-target">
+          <strong>Create the campaign and its flow</strong> from the brief{" "}
+          <a href={salesforceRecordUrl("Brief", write.briefId)} target="_blank" rel="noreferrer">
+            “{write.briefName}” <span aria-hidden="true">↗</span>
+          </a>{" "}
+          and its confirmed preview
+        </p>
+      )}
+      {detail && (
+        <details className="write-plan-agent" open>
+          <summary className="write-plan-agent-summary">
+            Marketing Cloud agent that does the work
+          </summary>
+          <AgentDetail detail={detail} />
+        </details>
+      )}
     </div>
   );
 }
@@ -102,8 +96,16 @@ export function PermissionDetails({ confirmation }: { confirmation: Confirmation
           <div>
             <dt>The workbench</dt>
             <dd>
-              Builds the write from your draft, asks Salesforce whether you may make it, binds the
-              exact values into a hash, and signs your confirmation. It never decides who may write.
+              Builds the request from your draft, asks Salesforce whether you may make it, and binds
+              the exact values into a hash. It never decides who may write, and it never creates
+              briefs or campaigns itself.
+            </dd>
+          </div>
+          <div>
+            <dt>The Marketing Cloud agent</dt>
+            <dd>
+              For briefs and campaigns, the Campaign Creation agent runs Marketing Cloud’s standard
+              actions as you after you confirm; the workbench then reads the records back.
             </dd>
           </div>
           <div>
@@ -114,8 +116,9 @@ export function PermissionDetails({ confirmation }: { confirmation: Confirmation
             <dt>Salesforce</dt>
             <dd>
               Owns authorization: your profile, permission sets, field-level security, and sharing.
-              It checks them before the card appears and again during the write (user mode),
-              verifies the signature and hash, then writes and reads the record back.
+              It checks them before the card appears and again when the agent’s actions or the Apex
+              action run as you. For review tasks and images, Apex also verifies the signed
+              confirmation and hash before writing.
             </dd>
           </div>
         </dl>

@@ -10,18 +10,13 @@ const requiredFiles = [
   "classes/NorthstarGetConsentSummary.cls",
   "classes/NorthstarValidateCampaignContent.cls",
   "classes/NorthstarCreateCampaignReviewRequest.cls",
-  "classes/NorthstarSaveCampaignBrief.cls",
   "classes/NorthstarAttachCampaignImage.cls",
   "classes/NorthstarConfirmationVerifier.cls",
   "classes/NorthstarCampaignActionsTest.cls",
-  "classes/NorthstarSaveCampaign.cls",
-  "classes/NorthstarSaveBrief.cls",
-  "classes/NorthstarSaveMessage.cls",
-  "classes/NorthstarRecordWrites.cls",
   "classes/NorthstarCheckWriteAccess.cls",
-  "classes/NorthstarRecordActionsTest.cls",
-  "objects/Northstar_Brief__c/Northstar_Brief__c.object-meta.xml",
-  "objects/Northstar_Message__c/Northstar_Message__c.object-meta.xml",
+  "classes/NorthstarGetMarketingRecords.cls",
+  "classes/NorthstarMarketingAgentTest.cls",
+  "aiAuthoringBundles/Northstar_Campaign_Creation/Northstar_Campaign_Creation.agent",
   "objects/Activity/fields/Northstar_Idempotency_Key__c.field-meta.xml",
   "objects/Campaign/fields/Northstar_Idempotency_Key__c.field-meta.xml",
   "objects/ContentVersion/fields/Northstar_Idempotency_Key__c.field-meta.xml",
@@ -91,13 +86,43 @@ if (!summaryToolBlock?.includes("<apiIdentifier>ag:Campaign_Readiness_Governance
   );
 if (!summaryToolBlock?.includes("<readOnly>true</readOnly>"))
   failures.push("summarize_campaign must be declared read-only.");
+// Briefs and campaigns are created by the Marketing Cloud Next Campaign Creation agent, never by
+// custom Apex: those write tools must be bound to that agent, whose script runs the standard
+// Marketing Cloud actions.
+const campaignAgent = await readFile(
+  `${root}/aiAuthoringBundles/Northstar_Campaign_Creation/Northstar_Campaign_Creation.agent`,
+  "utf8",
+);
+if (!campaignAgent.includes('agent_template: "MktCloud__CampaignCreationAgent"'))
+  failures.push("Northstar_Campaign_Creation must be a Marketing Cloud Campaign Creation agent.");
+for (const target of [
+  "flow://MktCloud__GenerateBrief",
+  "standardInvocableAction://saveBrief",
+  "flow://MktCloud__GenerateCampaignFromBrief",
+  "standardInvocableAction://createCampaign",
+  "flow://MktCloud__SaveCampaign",
+  "flow://MktCloud__RefineCampaignPreview",
+])
+  if (!campaignAgent.includes(target))
+    failures.push(`Campaign Creation agent missing standard Marketing Cloud action: ${target}`);
+for (const toolName of [
+  "draft_campaign_brief",
+  "refine_campaign_preview",
+  "save_marketing_brief",
+  "create_marketing_campaign",
+]) {
+  const toolBlock = mcpServer
+    .split("<tools>")
+    .find((block) => block.includes(`<toolName>${toolName}</toolName>`));
+  if (!toolBlock?.includes("<apiIdentifier>ag:Northstar_Campaign_Creation</apiIdentifier>"))
+    failures.push(`${toolName} must call the Marketing Cloud Campaign Creation agent.`);
+}
+for (const retired of ["Northstar_Brief__c", "Northstar_Message__c", "NorthstarSaveMessage"])
+  if (mcpServer.includes(retired))
+    failures.push(`Hosted MCP server still references the retired custom write ${retired}.`);
 for (const [toolName, apexClass] of [
-  ["save_campaign_brief", "NorthstarSaveCampaignBrief"],
   ["create_campaign_review_request", "NorthstarCreateCampaignReviewRequest"],
   ["attach_campaign_image", "NorthstarAttachCampaignImage"],
-  ["save_campaign", "NorthstarSaveCampaign"],
-  ["save_brief", "NorthstarSaveBrief"],
-  ["save_message", "NorthstarSaveMessage"],
 ]) {
   const toolBlock = mcpServer
     .split("<tools>")
