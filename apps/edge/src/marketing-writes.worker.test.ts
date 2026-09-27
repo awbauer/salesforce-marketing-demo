@@ -12,6 +12,7 @@ import {
   type MarketingReadBack,
   parseMarketingReadBack,
   parsePermissionReport,
+  pinBriefToRefinement,
   planMarketingWrite,
   sameBrief,
 } from "./marketing-writes";
@@ -409,5 +410,29 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
     const body = (await failed.json()) as { error: { message: string } };
     expect(body.error.message).toContain("may still be saving");
     expect(body.error.message).toContain("links what it finds instead of saving twice");
+  });
+
+  it("names the saved brief in every refinement request, whatever the model wrote", async () => {
+    const seen: unknown[] = [];
+    const record = { execute: async (input: unknown) => seen.push(input) };
+    const tools = pinBriefToRefinement(
+      { tool_salesforce_ns_refine_campaign_preview: record, graph_get_graph_overview: record },
+      "21yjV0000002NIHQA2",
+    );
+    const refine = tools.tool_salesforce_ns_refine_campaign_preview as typeof record;
+    await refine.execute({ message: "Make the second email shorter" });
+    await refine.execute({ message: "On brief 21yjV0000002NIHQA2, shorten email 2" });
+    await (tools.graph_get_graph_overview as typeof record).execute({});
+    expect(seen).toEqual([
+      {
+        message:
+          "Refine the campaign preview on brief 21yjV0000002NIHQA2: Make the second email shorter",
+      },
+      { message: "On brief 21yjV0000002NIHQA2, shorten email 2" },
+      {},
+    ]);
+    // Without a saved brief there is nothing to pin.
+    const unpinned = { tool_salesforce_ns_refine_campaign_preview: record };
+    expect(pinBriefToRefinement(unpinned, undefined)).toBe(unpinned);
   });
 });

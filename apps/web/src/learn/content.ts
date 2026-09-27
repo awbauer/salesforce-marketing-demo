@@ -380,7 +380,7 @@ GraphRAG's advantages are **multi-hop reasoning** and **explainability**. Every 
 
 A turn runs a **tool loop** of up to 6 steps. On each step the model either calls a tool or writes the answer. The orchestrator decides which tools are available on each step (see *Routing*) and records a **turn trace** of every event.
 
-Around the loop, the orchestrator also handles the events the model must not: it prepares confirmed writes and, once you confirm, asks Marketing Cloud's Campaign Creation agent to save the brief or create the campaign, then reads the records back. It checks Salesforce before and after the agent call, so a retry links what an earlier attempt saved instead of saving it twice. It writes **long-term memory** when a write is read back or you ask it to remember a draft. The Worker's hourly job prunes the 24-hour audit and deletes memory past its 14 days.`,
+Around the loop, the orchestrator also handles the events the model must not: it prepares confirmed writes and, once you confirm, asks Marketing Cloud's Campaign Creation agent to save the brief or create the campaign, then reads the records back. It checks Salesforce before and after the agent call, so a retry links what an earlier attempt saved instead of saving it twice. When the model refines a saved brief's preview, the orchestrator adds the Brief ID to the request if the model left it out. It writes **long-term memory** when a write is read back or you ask it to remember a draft. The Worker's hourly job prunes the 24-hour audit and deletes memory past its 14 days.`,
         inDemo: [
           "apps/edge/src/orchestrator.ts",
           "“Behind the scenes · technical trace” under each answer",
@@ -504,6 +504,8 @@ Its **Campaign Refinement** subagent runs **Refine Campaign Preview** to change 
 **What stays in Marketing Cloud.** The flow is created as a draft. Choosing its audience and sender, and activating it, happen in Marketing Cloud; the workbench never sends or activates anything. Previews in this org plan email (and SMS) steps: a push request is recorded in the brief's guardrails.
 
 **Safe to retry.** Marketing Cloud's save actions aren't idempotent, so the workbench checks Salesforce before asking the agent. If this exact save was sent before and never confirmed (say, it timed out after the agent saved), and Salesforce now shows that brief, the workbench links it instead of saving again; a brief with the same name from another chat is left alone. A brief that already has its campaign never gets a second one. If the agent call fails, it checks once more, since the agent may have saved before the timeout. Only when nothing is there does it ask you to try again.
+
+**The server fills in what the agent needs.** When you change a saved brief, the workbench adds the Brief ID to the Refine Campaign Preview request if the model left it out. The model forgot it in half of the live evaluation runs, and the agent would otherwise have to guess which brief you meant.
 
 **Each call is one request.** Hosted MCP agent tools take a single message, so each call carries everything the agent needs: the confirmed brief fields, or the Brief ID whose preview was confirmed. The agent is asked to include the record ids in its reply, and the read-back verifies them.`,
         inDemo: [
@@ -642,6 +644,7 @@ Each turn is scored on:
 - **no tool errors**
 - **no false write claims**
 - **graph-grounded:** a graph or memory answer names only accounts, people, campaigns, and menu items that its tools returned
+- **agent request grounded:** a request to the Marketing Cloud Campaign Creation agent carries what the turn gathered. A brief request names the brand, a menu item, and the city or weather; a preview refinement names the saved Brief ID. It's scored on the request the agent actually receives.
 
 Latency and tokens are recorded too. Runs recorded before the grounding check show no rate for it.
 
