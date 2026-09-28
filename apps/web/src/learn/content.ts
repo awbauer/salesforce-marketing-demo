@@ -369,7 +369,8 @@ GraphRAG's advantages are **multi-hop reasoning** and **explainability**. Every 
 - **The tools:** \`explain_buyer_group\`, \`find_audience_overlap\`, \`check_consent_coverage\`, \`find_similar_past_pushes\`, \`trace_content_lineage\`, \`get_graph_overview\`, and three that power the sales and service use cases: \`plan_account_outreach\`, \`assess_location_impact\`, and \`map_weather_demand\`. Each returns an answer plus up to 25 **evidence paths**.
 - **Parity:** every tool also has an in-memory implementation over the same dataset. \`pnpm kg:parity\` proves both return identical results, so local development and evals match production. It also reports tool latency; the median stays under 500 ms.
 - **Grounding:** evaluations check that a graph answer names only accounts, people, campaigns, and menu items that appear in what the tools returned.
-- **In a flow:** the restaurant push campaign calls \`find_similar_past_pushes\` to learn what worked before in the same weather and daypart, then passes that to the Salesforce content tool.`,
+- **In a flow:** the restaurant push campaign calls \`find_similar_past_pushes\` to learn what worked before in the same weather and daypart, then passes that to the Salesforce content tool.
+- **Graph explorer:** the Graph page's brand filter narrows the canvas to one brand's own nodes: a node counts as a brand's own when it's at least as close to that brand as to any other, walking loaded relationships without crossing through another brand. That's how Coastline Kitchen keeps its campaigns, locations, and shared channels and consent, without pulling in Northstar's B2B accounts through the parent brand.`,
         inDemo: [
           "Use cases: Buyer-group recommendation, and Buyer-group outreach around local holidays",
           "Graph evidence panel under answers; “Knowledge graph · Neo4j” in Sources",

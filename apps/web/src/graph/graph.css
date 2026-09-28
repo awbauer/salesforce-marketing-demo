@@ -619,3 +619,28 @@
     transition: none;
   }
 }
+.graph-brands h3 {
+  margin: 0 0 6px;
+}
+.graph-brand-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.graph-brand {
+  border: 1px solid #cfdbcf;
+  border-radius: 999px;
+  background: transparent;
+  padding: 4px 10px;
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+.graph-brand[aria-pressed="true"] {
+  background: #173d31;
+  border-color: #173d31;
+  color: #fff;
+}
