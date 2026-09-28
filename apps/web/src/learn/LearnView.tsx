@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Markdown } from "../Markdown";
-import { GLOSSARY, LEARN_PARTS, type LearnPart, type LearnSection } from "./content";
+import {
+  GLOSSARY,
+  LEARN_LEDE,
+  LEARN_PARTS,
+  LEARN_TITLE,
+  type LearnPart,
+  type LearnSection,
+} from "./content";
 import { Diagram } from "./diagrams";
 import { PART_LESSONS, type PartLesson, SECTION_LESSONS, type TryIt } from "./lessons";
 import { LEARN_REFERENCE, REFERENCE_KINDS, type ReferenceKind } from "./reference";
@@ -73,7 +80,7 @@ export function LearnView({
       <div className="section-header">
         <div>
           <p className="kicker">Guide</p>
-          <h2 id="learn-title">Learn: context, GraphRAG, and how this demo works</h2>
+          <h2 id="learn-title">{LEARN_TITLE}</h2>
         </div>
         <button type="button" className="text-button evaluations-back" onClick={onClose}>
           Back to workspace
@@ -82,11 +89,7 @@ export function LearnView({
 
       <div className="learn-hero">
         <div className="learn-hero-text">
-          <p className="learn-hero-lede">
-            A hands-on course in how an agent uses context, how GraphRAG grounds answers in
-            connected facts, and how every piece of this workbench fits together. Each lesson has a
-            diagram, one key idea, a way to try it here, and links to go deeper.
-          </p>
+          <p className="learn-hero-lede">{LEARN_LEDE}</p>
           <div
             className="learn-progress"
             role="progressbar"

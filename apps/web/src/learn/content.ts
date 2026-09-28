@@ -21,6 +21,10 @@ export type LearnSection = {
 
 export type LearnPart = { id: string; title: string; intro: string; sections: LearnSection[] };
 
+export const LEARN_TITLE = "Learn: context, GraphRAG, and how this demo works";
+export const LEARN_LEDE =
+  "A hands-on course in how an agent uses context, how GraphRAG grounds answers in connected facts, and how every piece of this workbench fits together. Each lesson has a diagram, one key idea, a way to try it here, and links to go deeper.";
+
 const R = {
   contextEngineering: {
     label: "Effective context engineering for AI agents (Anthropic)",
