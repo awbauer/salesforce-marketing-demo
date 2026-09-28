@@ -59,7 +59,7 @@ export const DOMAINS: Domain[] = [
     id: "restaurant",
     title: "Coastline Kitchen restaurants",
     blurb:
-      "Locations and their managers, the menu and what it's made with, and past mobile app pushes with their context.",
+      "Locations and their managers, the menu and what it's made with, and past pushes and emails with their context.",
     labels: [
       "Location",
       "StoreManager",
@@ -69,6 +69,7 @@ export const DOMAINS: Domain[] = [
       "Daypart",
       "WeatherCondition",
       "PushSend",
+      "EmailSend",
     ],
   },
 ];
@@ -90,6 +91,7 @@ export const LABEL_COLORS: Record<string, string> = {
   Daypart: "#5b6fb3",
   WeatherCondition: "#3fa3a0",
   PushSend: "#9fb0bd",
+  EmailSend: "#b3a3c7",
   InventoryItem: "#b0763f",
   StoreManager: "#4f6f8f",
 };
@@ -101,6 +103,7 @@ export const LABEL_NAMES: Record<string, string> = {
   MenuItem: "Menu item",
   WeatherCondition: "Weather",
   PushSend: "Push send",
+  EmailSend: "Email send",
   InventoryItem: "Inventory item",
   StoreManager: "Store manager",
 };
@@ -195,7 +198,9 @@ export function mergeGraph(
 }
 
 export const nodeRadius = (node: Pick<SimNode, "degree" | "label">) =>
-  node.label === "PushSend" ? 3.5 : Math.min(18, 5 + Math.sqrt(node.degree) * 1.6);
+  node.label === "PushSend" || node.label === "EmailSend"
+    ? 3.5
+    : Math.min(18, 5 + Math.sqrt(node.degree) * 1.6);
 
 export type ConnectionGroup = {
   key: string;

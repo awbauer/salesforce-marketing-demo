@@ -44,6 +44,8 @@ const cases = {
     { location: "san-francisco", daypart: "late-night", condition: "fog" },
     { location: "fresno", daypart: "afternoon", condition: "heat" },
     { location: "san-diego", daypart: "breakfast", condition: "rain" },
+    { location: "los-angeles", daypart: "lunch", condition: "clear", channel: "email" },
+    { location: "sacramento", daypart: "dinner", condition: "heat", channel: "sms" },
   ],
   trace_content_lineage: ALL_CAMPAIGNS.map((campaign) => ({ campaign: campaign.id })),
   plan_account_outreach: [ACCOUNTS[0], ACCOUNTS[3], ACCOUNTS[11]].map((account) => ({

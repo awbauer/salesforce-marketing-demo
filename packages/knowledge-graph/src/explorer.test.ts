@@ -6,12 +6,15 @@ import type { GraphBackend, Row } from "./tools";
 const fixture: GraphBackend = { kind: "fixture", dataset: buildDataset() };
 
 describe("graph explorer", () => {
-  it("returns every node except push sends, with counts for the whole graph", async () => {
+  it("returns every node except push and email sends, with counts for the whole graph", async () => {
     const overview = await graphOverview(fixture);
-    expect(overview.nodes).toHaveLength(177);
-    expect(overview.relationships).toHaveLength(743);
+    expect(overview.nodes).toHaveLength(186);
+    expect(overview.relationships).toHaveLength(786);
     expect(overview.labelCounts.PushSend).toBe(1500);
-    expect(overview.nodes.every((node) => node.label !== "PushSend")).toBe(true);
+    expect(overview.labelCounts.EmailSend).toBe(600);
+    expect(
+      overview.nodes.every((node) => node.label !== "PushSend" && node.label !== "EmailSend"),
+    ).toBe(true);
     // The seed's dataset stamp and identity fields never appear as properties.
     expect(overview.nodes.every((node) => !("dataset" in node.properties))).toBe(true);
     expect(overview.nodes.every((node) => !("id" in node.properties))).toBe(true);

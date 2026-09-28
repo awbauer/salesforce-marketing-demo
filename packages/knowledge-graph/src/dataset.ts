@@ -177,6 +177,37 @@ export const COASTLINE_CAMPAIGNS = [
   },
 ] as const;
 
+/** Coastline's email campaign: its own content per angle, sent under email marketing consent. */
+export const COASTLINE_EMAIL_CAMPAIGN = {
+  id: "camp-coastline-lunch-letter",
+  name: "Coastline Lunch Letter",
+  status: "Active",
+} as const;
+
+/** How much a dish's orders rise or fall with the daypart and weather it's sent in. */
+function demandLift(
+  item: (typeof COASTLINE_MENU)[number],
+  daypart: (typeof DAYPARTS)[number],
+  condition: (typeof CONDITIONS)[number],
+) {
+  let lift = item.dayparts.includes(daypart) ? 0.02 : -0.01;
+  if (condition === "heat")
+    lift += item.serves === "cold" ? 0.03 : item.serves === "hot" ? -0.015 : 0;
+  if (condition === "rain" || condition === "fog")
+    lift += item.serves === "hot" ? 0.025 : item.serves === "cold" ? -0.015 : 0;
+  return lift;
+}
+
+const angleFor = (
+  daypart: (typeof DAYPARTS)[number],
+  condition: (typeof CONDITIONS)[number],
+): AngleKey =>
+  daypart === "late-night"
+    ? "late"
+    : daypart === "early-morning" || daypart === "breakfast"
+      ? "morning"
+      : condition;
+
 export const ALL_CAMPAIGNS = [
   ...CAMPAIGNS.map((campaign) => ({
     id: campaign.id,
@@ -188,6 +219,7 @@ export const ALL_CAMPAIGNS = [
     name: campaign.name,
     status: campaign.status,
   })),
+  { ...COASTLINE_EMAIL_CAMPAIGN },
 ];
 
 export const coastlineSegmentId = (location: string) => `segment-coastline-${location}`;
@@ -421,19 +453,10 @@ export function buildDataset(seed = 20260926): Dataset {
     const condition = pick(CONDITIONS);
     const itemIndex = Math.floor(rand() * COASTLINE_MENU.length);
     const item = COASTLINE_MENU[itemIndex] as (typeof COASTLINE_MENU)[number];
-    let lift = item.dayparts.includes(daypart) ? 0.02 : -0.01;
-    if (condition === "heat")
-      lift += item.serves === "cold" ? 0.03 : item.serves === "hot" ? -0.015 : 0;
-    if (condition === "rain" || condition === "fog")
-      lift += item.serves === "hot" ? 0.025 : item.serves === "cold" ? -0.015 : 0;
+    const lift = demandLift(item, daypart, condition);
     const orderRate = Math.max(0.005, 0.03 + lift + (rand() - 0.5) * 0.02);
     const openRate = Math.max(0.02, 0.07 + lift * 0.8 + (rand() - 0.5) * 0.03);
-    const angleKey: AngleKey =
-      daypart === "late-night"
-        ? "late"
-        : daypart === "early-morning" || daypart === "breakfast"
-          ? "morning"
-          : condition;
+    const angleKey = angleFor(daypart, condition);
     const angle = ANGLES[angleKey];
     const push = node(
       "PushSend",
@@ -473,5 +496,65 @@ export function buildDataset(seed = 20260926): Dataset {
           sends: under.length,
         });
     }
+
+  // Fictional email history: Coastline's email campaign, email content per angle, and sends
+  // under email marketing consent. Its own seed leaves the push history and lifts above as they were.
+  const emailRand = random(seed + 1);
+  const emailPick = <T>(items: readonly T[]) => items[Math.floor(emailRand() * items.length)] as T;
+  const email = COASTLINE_EMAIL_CAMPAIGN;
+  node("Campaign", email.id, email.name, { status: email.status });
+  rel("BELONGS_TO", email.id, COASTLINE.id);
+  rel("ON", email.id, "channel-email");
+  const emailBrief = node("Brief", `brief-${email.id}`, `${email.name} brief`);
+  rel("FOR", emailBrief, email.id);
+  for (const location of COASTLINE_LOCATIONS)
+    rel("TARGETS", email.id, coastlineSegmentId(location.id));
+  const emailAssets = new Map<AngleKey, string>();
+  for (const angleKey of Object.keys(ANGLES) as AngleKey[]) {
+    const asset = node(
+      "ContentAsset",
+      `asset-${email.id}-${slug(ANGLES[angleKey])}`,
+      `${ANGLES[angleKey]} · email`,
+      { kind: "Email", angle: ANGLES[angleKey] },
+    );
+    rel("USES", email.id, asset);
+    rel("BUILT_FROM", asset, emailBrief);
+    for (const ruleId of coastlineRuleIds)
+      rel(emailRand() < 0.1 ? "FAILED" : "PASSED", asset, ruleId);
+    emailAssets.set(angleKey, asset);
+  }
+  for (let index = 0; index < 600; index += 1) {
+    const location = emailPick(COASTLINE_LOCATIONS).id;
+    const daypart = emailPick(DAYPARTS);
+    const condition = emailPick(CONDITIONS);
+    const itemIndex = Math.floor(emailRand() * COASTLINE_MENU.length);
+    const item = COASTLINE_MENU[itemIndex] as (typeof COASTLINE_MENU)[number];
+    const lift = demandLift(item, daypart, condition);
+    // Email opens far more often than push, and converts less often per send.
+    const orderRate = Math.max(0.003, 0.018 + lift * 0.7 + (emailRand() - 0.5) * 0.012);
+    const openRate = Math.max(0.08, 0.26 + lift * 1.2 + (emailRand() - 0.5) * 0.06);
+    const clickRate = Math.max(0.01, 0.045 + lift * 0.8 + (emailRand() - 0.5) * 0.02);
+    const angleKey = angleFor(daypart, condition);
+    const send = node(
+      "EmailSend",
+      `email-${String(index + 1).padStart(4, "0")}`,
+      `${ANGLES[angleKey]}: ${item.name}`,
+      {
+        angle: ANGLES[angleKey],
+        orderRate: Math.round(orderRate * 10000) / 10000,
+        openRate: Math.round(openRate * 10000) / 10000,
+        clickRate: Math.round(clickRate * 10000) / 10000,
+      },
+    );
+    rel("PART_OF", send, email.id);
+    rel("USED", send, emailAssets.get(angleKey) as string);
+    rel("SENT_TO", send, coastlineSegmentId(location));
+    rel("ON", send, "channel-email");
+    rel("SENT_UNDER", send, CONSENT_IDS.email);
+    rel("FEATURED", send, menuIds[itemIndex] as string);
+    rel("FOR", send, locationNodeId(location));
+    rel("SENT_DURING", send, `daypart-${daypart}`);
+    rel("UNDER", send, `weather-${condition}`);
+  }
   return { nodes, relationships };
 }
