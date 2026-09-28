@@ -3,6 +3,7 @@ import { emptyWorkingSet, type WorkingSet, type WriteProgress } from "@northstar
 import { describe, expect, it } from "vitest";
 import type { MemoryView } from "../../../packages/knowledge-graph/src/index.ts";
 import { connectCampaignContextTools } from "./campaign-context/server";
+import { connectExternalServiceTools } from "./external-services/server";
 import { connectKnowledgeGraphTools, knowledgeGraphBackend } from "./knowledge-graph/server";
 import { agentStubFor, CATALOG_CAMPAIGN_ID, openCatalogCampaign } from "./worker.test-helpers";
 import {
@@ -85,6 +86,59 @@ describe("working set", () => {
         relation: "read",
       }),
     ]);
+  });
+
+  it("turns Federal Reserve news and the financial services graph tools into cards", async () => {
+    const external = await connectExternalServiceTools({
+      now: () => new Date("2026-09-17T12:00:00Z"),
+      fetch: async (input) =>
+        String(input).endsWith(".xml")
+          ? new Response(
+              "<rss><item><title>Federal Reserve issues FOMC statement</title><link><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm]]></link><pubDate>Wed, 16 Sep 2026 18:00:00 GMT</pubDate></item></rss>",
+            )
+          : new Response(
+              "<p>The Committee decided to raise the target range for the federal funds rate by 1/4 percentage point to 3-3/4 to 4 percent.</p>",
+            ),
+    });
+    const graph = await connectKnowledgeGraphTools(knowledgeGraphBackend({}));
+    const call = async (tools: Record<string, unknown>, key: string, input: unknown) =>
+      (tools[key] as { execute: (input: unknown, options: unknown) => Promise<unknown> }).execute(
+        input,
+        { toolCallId: "t", messages: [] },
+      );
+    let set: WorkingSet = emptyWorkingSet();
+    const steps: Array<[Record<string, unknown>, string, unknown]> = [
+      [external.tools, "ext_get_fed_announcements", {}],
+      [graph.tools, "graph_match_news_to_approved_content", { event: "rate-increase" }],
+      [
+        graph.tools,
+        "graph_build_aum_account_plan",
+        { client: "Cedar Valley Community Foundation" },
+      ],
+    ];
+    for (const [tools, key, input] of steps)
+      set = ingestToolResult(set, {
+        toolName: key,
+        input,
+        output: await call(tools, key, input),
+        at,
+      });
+    await external.close();
+    await graph.close();
+
+    const fed = set.cards.find((card) => card.source.system === "federal-reserve");
+    expect(fed).toMatchObject({
+      title: "Fed raised rates to 3-3/4 to 4 percent",
+      metric: "1/4 percentage point",
+    });
+    expect(fed?.summary).toMatch(/18 hours ago\. Event: rate-increase/);
+    const content = set.cards.find((card) => card.toolName === "match_news_to_approved_content");
+    expect(content?.title).toBe("Approved content: Fed raises rates");
+    expect(content?.details).toContain("Rates rose: what it means for your cash · COMP-2026-0412");
+    const plan = set.cards.find((card) => card.toolName === "build_aum_account_plan");
+    expect(plan?.title).toBe("Account plan: Cedar Valley Community Foundation");
+    expect(plan?.summary).toMatch(/^4 plays worth about \$32\.6M on \$42M/);
+    expect(plan?.details?.[0]).toBe("Outsourced CIO · ~$16.3M");
   });
 
   it("opens Salesforce records named by id or catalog name, and skips failed results", () => {

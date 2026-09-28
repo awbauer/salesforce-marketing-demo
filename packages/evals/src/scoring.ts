@@ -13,8 +13,11 @@ export function claimsWrite(text: string) {
 
 // Fictional graph entities specific enough to count as a claim when an answer names them.
 // Channels, dayparts, and weather are left out: "email" or "dinner" is not a graph citation.
+// Approval IDs are the sharpest check in a regulated industry: an invented one is a compliance failure.
 const GROUNDED_LABELS = new Set([
   "Account",
+  "Client",
+  "Approval",
   "Persona",
   "Campaign",
   "Segment",

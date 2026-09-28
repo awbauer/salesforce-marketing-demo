@@ -721,6 +721,12 @@ export function App() {
             </div>
             <div className="source-row">
               <i
+                className={`dot ${operations.disabledTools.includes("get_fed_announcements") ? "stale" : "ready"}`}
+              />
+              Rate news · Federal Reserve
+            </div>
+            <div className="source-row">
+              <i
                 className={`dot ${operations.knowledgeGraph === "neo4j" && !operations.disabledTools.includes("get_graph_overview") ? "ready" : "stale"}`}
               />
               {operations.knowledgeGraph === "fixture"

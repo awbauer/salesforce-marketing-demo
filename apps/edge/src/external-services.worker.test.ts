@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseRateDecision } from "./external-services/fed-news";
 import { connectExternalServiceTools } from "./external-services/server";
 
 const now = () => new Date("2026-11-01T12:00:00Z");
@@ -122,6 +123,83 @@ describe("external services MCP", () => {
       const output = (await (
         tools.ext_get_public_holidays as unknown as { execute: (input: unknown) => Promise<Output> }
       ).execute({ country: "US", days: 30 })) as Output;
+      expect(output.isError).toBe(true);
+    } finally {
+      await close();
+    }
+  });
+
+  it("reads the latest FOMC rate decision from the Federal Reserve feed", async () => {
+    const feed = `<?xml version="1.0"?><rss><channel>
+      <item><title>Minutes of the Federal Open Market Committee</title>
+        <link><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20261021a.htm]]></link>
+        <pubDate><![CDATA[Wed, 21 Oct 2026 18:00:00 GMT]]></pubDate></item>
+      <item><title>Federal Reserve issues FOMC statement</title>
+        <link><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20261028a.htm]]></link>
+        <pubDate><![CDATA[Wed, 28 Oct 2026 18:00:00 GMT]]></pubDate></item>
+      <item><title>Elsewhere</title><link><![CDATA[https://example.com/x]]></link>
+        <pubDate><![CDATA[Wed, 28 Oct 2026 18:00:00 GMT]]></pubDate></item>
+    </channel></rss>`;
+    const page = `<html><body><nav>Share</nav><p>Recent indicators suggest growth.</p>
+      <p>In support of its goals, the Committee decided to maintain the target range for the federal
+      funds rate at 3-3/4 to 4&nbsp;percent. The Committee will continue to monitor.</p></body></html>`;
+    const calls: string[] = [];
+    const fetchText = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push(`${url} ${new Headers(init?.headers).get("user-agent") ?? ""}`);
+      if (url.endsWith("press_monetary.xml")) return new Response(feed, { status: 200 });
+      if (url.endsWith("monetary20261028a.htm")) return new Response(page, { status: 200 });
+      return new Response("not found", { status: 404 });
+    }) as typeof fetch;
+    const { tools, close } = await connectExternalServiceTools({ now, fetch: fetchText });
+    try {
+      const output = (await (
+        tools.ext_get_fed_announcements as unknown as {
+          execute: (input: unknown) => Promise<Output>;
+        }
+      ).execute({})) as Output;
+      const data = output.structuredContent as Record<string, unknown>;
+      expect(data.event).toBe("rate-hold");
+      expect(data.latestDecision).toMatchObject({
+        action: "maintain",
+        change: null,
+        targetRange: "3-3/4 to 4 percent",
+        publishedAt: "2026-10-28T18:00:00.000Z",
+        hoursAgo: 90,
+      });
+      expect(String((data.latestDecision as { statement: string }).statement)).toMatch(
+        /^The Committee decided to maintain/,
+      );
+      // Links outside the Federal Reserve's site are never followed or returned.
+      expect((data.recentReleases as unknown[]).length).toBe(2);
+      expect(calls.every((call) => call.includes("northstar-marketing-workbench"))).toBe(true);
+    } finally {
+      await close();
+    }
+  });
+
+  it("parses a rate increase and its size", () => {
+    expect(
+      parseRateDecision(
+        "<p>The Committee decided to raise the target range for the federal funds rate by 1/4 percentage point to 3-3/4 to 4 percent, in support of its goals.</p>",
+      ),
+    ).toMatchObject({
+      action: "raise",
+      event: "rate-increase",
+      change: "1/4 percentage point",
+      targetRange: "3-3/4 to 4 percent",
+    });
+    expect(parseRateDecision("<p>No decision here.</p>")).toBeNull();
+  });
+
+  it("reports an unreachable Federal Reserve feed as a tool error", async () => {
+    const { tools, close } = await connectExternalServiceTools({ now, fetch: fakeFetch({}) });
+    try {
+      const output = (await (
+        tools.ext_get_fed_announcements as unknown as {
+          execute: (input: unknown) => Promise<Output>;
+        }
+      ).execute({})) as Output;
       expect(output.isError).toBe(true);
     } finally {
       await close();

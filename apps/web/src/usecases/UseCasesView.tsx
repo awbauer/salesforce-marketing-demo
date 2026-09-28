@@ -1,5 +1,12 @@
 import { useMemo, useState } from "react";
-import { type SystemKind, TEAMS, type Team, USE_CASES, type UseCase } from "./catalog";
+import {
+  type Industry,
+  type SystemKind,
+  TEAMS,
+  type Team,
+  USE_CASES,
+  type UseCase,
+} from "./catalog";
 import "./usecases.css";
 
 const KIND_GLYPHS: Record<SystemKind, string> = {
@@ -11,6 +18,11 @@ const KIND_GLYPHS: Record<SystemKind, string> = {
   "Workers AI": "✦",
   Workbench: "▣",
 };
+
+type Filter = Team | Industry | "All";
+const FILTERS: Filter[] = ["All", ...TEAMS, "Financial services"];
+const matches = (useCase: UseCase, filter: Filter) =>
+  filter === "All" || useCase.team === filter || useCase.industry === filter;
 
 /**
  * The use-case library: every scenario the demo supports, with the utterances that drive it, the
@@ -24,12 +36,9 @@ export function UseCasesView({
   onClose: () => void;
   onTryPrompt: (prompt: string) => void;
 }) {
-  const [team, setTeam] = useState<Team | "All">("All");
+  const [team, setTeam] = useState<Filter>("All");
   const [selectedId, setSelectedId] = useState(USE_CASES[0]?.id ?? "");
-  const shown = useMemo(
-    () => USE_CASES.filter((useCase) => team === "All" || useCase.team === team),
-    [team],
-  );
+  const shown = useMemo(() => USE_CASES.filter((useCase) => matches(useCase, team)), [team]);
   const available = shown.filter((useCase) => useCase.status === "available");
   const comingSoon = shown.filter((useCase) => useCase.status === "coming-soon");
   const selected = available.find((useCase) => useCase.id === selectedId) ?? available[0] ?? null;
@@ -54,7 +63,7 @@ export function UseCasesView({
         </p>
         <fieldset className="usecases-teams">
           <legend className="sr-only">Team</legend>
-          {(["All", ...TEAMS] as const).map((option) => (
+          {FILTERS.map((option) => (
             <button
               type="button"
               key={option}
@@ -65,9 +74,7 @@ export function UseCasesView({
               <span className="usecases-count">
                 {
                   USE_CASES.filter(
-                    (useCase) =>
-                      useCase.status === "available" &&
-                      (option === "All" || useCase.team === option),
+                    (useCase) => useCase.status === "available" && matches(useCase, option),
                   ).length
                 }
               </span>
@@ -122,6 +129,9 @@ function UseCaseCardBody({ useCase }: { useCase: UseCase }) {
           <span className="usecase-badge is-soon">Coming soon</span>
         ) : (
           <>
+            {useCase.industry && (
+              <span className="usecase-badge is-industry">{useCase.industry}</span>
+            )}
             {useCase.newService && <span className="usecase-badge is-new">New service</span>}
             {useCase.graphRole && <span className="usecase-badge">Graph</span>}
           </>
@@ -150,7 +160,10 @@ function UseCaseDetail({
 }) {
   return (
     <article className="usecase-detail" aria-labelledby="usecase-detail-title">
-      <p className="kicker">{useCase.team}</p>
+      <p className="kicker">
+        {useCase.team}
+        {useCase.industry ? ` · ${useCase.industry}` : ""}
+      </p>
       <h3 id="usecase-detail-title">{useCase.title}</h3>
       <p className="usecase-scenario">{useCase.scenario}</p>
 

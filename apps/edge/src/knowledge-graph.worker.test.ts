@@ -19,7 +19,7 @@ describe("knowledge-graph MCP", () => {
     ).toBe("neo4j");
   });
 
-  it("serves the nine curated read-only tools in-process with evidence paths", async () => {
+  it("serves the twelve curated read-only tools in-process with evidence paths", async () => {
     const { tools, close } = await connectKnowledgeGraphTools(knowledgeGraphBackend({}));
     try {
       expect(Object.keys(tools).sort()).toEqual(
@@ -33,6 +33,9 @@ describe("knowledge-graph MCP", () => {
           "graph_assess_location_impact",
           "graph_map_weather_demand",
           "graph_trace_content_lineage",
+          "graph_match_news_to_approved_content",
+          "graph_prepare_deal_release",
+          "graph_build_aum_account_plan",
         ].sort(),
       );
       const result = (await tools.graph_explain_buyer_group?.execute?.(

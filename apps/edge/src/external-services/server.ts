@@ -3,6 +3,7 @@ import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
 import { jsonSchema, type ToolSet, tool } from "ai";
 import { z } from "zod";
 import { LOCATION_IDS, LOCATIONS } from "../campaign-context/open-meteo.ts";
+import { fetchFedAnnouncements } from "./fed-news.ts";
 import { fetchUpcomingHolidays, HOLIDAY_COUNTRIES } from "./nager-date.ts";
 import { fetchLocationAlerts } from "./nws-alerts.ts";
 
@@ -23,9 +24,10 @@ function success(output: Record<string, unknown>) {
 }
 
 /**
- * Builds the external-services MCP server: two free, keyless public APIs the use cases rely on.
- * Nager.Date public holidays (sales outreach timing) and National Weather Service alerts
- * (service disruption response). Both are read-only.
+ * Builds the external-services MCP server: free, keyless public sources the use cases rely on.
+ * Nager.Date public holidays (sales outreach timing), National Weather Service alerts (service
+ * disruption response), and Federal Reserve press releases (financial services news). All are
+ * read-only.
  */
 export function createExternalServicesMcpServer(dependencies: ExternalServicesDependencies = {}) {
   const server = new McpServer({ name: EXTERNAL_SERVICES_MCP_NAME, version: "1.0.0" });
@@ -74,6 +76,40 @@ export function createExternalServicesMcpServer(dependencies: ExternalServicesDe
         ...result,
         checkedAt: now().toISOString(),
         attribution: "Alerts from the National Weather Service (api.weather.gov)",
+      });
+    },
+  );
+  server.registerTool(
+    "get_fed_announcements",
+    {
+      title: "Get Federal Reserve announcements",
+      description:
+        "The Federal Reserve's latest monetary policy news from its public press release feed (free, no key): the rate decision in the most recent FOMC statement (raise, lower, or maintain; the size of the change; the new target range; the statement's own sentence; when it was published) and the market event it maps to (rate-increase, rate-cut, or rate-hold) for looking up pre-approved content, plus the latest monetary policy releases.",
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async () => {
+      const result = await fetchFedAnnouncements(dependencies.fetch);
+      if ("error" in result)
+        return failure(`Federal Reserve news could not be retrieved: ${result.error}.`);
+      const checkedAt = now();
+      return success({
+        latestDecision: result.decision
+          ? {
+              ...result.decision,
+              hoursAgo: Math.max(
+                0,
+                Math.round(
+                  (checkedAt.getTime() - new Date(result.decision.publishedAt).getTime()) /
+                    3_600_000,
+                ),
+              ),
+            }
+          : null,
+        event: result.decision?.event ?? null,
+        recentReleases: result.releases.slice(0, 5),
+        checkedAt: checkedAt.toISOString(),
+        attribution: "Press releases from the Federal Reserve Board (federalreserve.gov)",
       });
     },
   );

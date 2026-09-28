@@ -70,6 +70,24 @@ export const TOURS: Tour[] = [
     expand: true,
   },
   {
+    id: "wealth-news",
+    title: "Approved content for market news",
+    question: "What can Harborstone send when the Fed raises rates?",
+    explain:
+      "Harborstone Wealth is a brand under Northstar. Content about a market event is approved ahead of time: each asset links to its approval record (approved, expired, or pending) and the disclosures it must carry, so the graph can say what's ready to send and why the rest is blocked.",
+    target: () => "event-rate-increase",
+    expand: true,
+  },
+  {
+    id: "wealth-client",
+    title: "An account plan from the graph",
+    question: "How could Harborstone grow Cedar Valley Community Foundation?",
+    explain:
+      "A client's signals suggest products it doesn't hold yet, peers of the same type show what's typical, and each product links to approved content. Its contacts carry consent by channel, so the plan names who to reach, how, and with what.",
+    target: () => "client-cedar-valley-community-foundation",
+    expand: true,
+  },
+  {
     id: "brand",
     title: "A failed brand check",
     question: "Which content failed a brand rule?",
@@ -240,8 +258,9 @@ export function GraphView({ onClose }: { onClose: () => void }) {
           <p className="kicker">Knowledge graph</p>
           <h2 id="graph-title">Graph explorer</h2>
           <p className="graph-lede">
-            The fictional Northstar and Coastline Kitchen graph that the orchestrator's graph tools
-            read. Pick a tour, search, or click any node to see how it connects.
+            The fictional Northstar, Coastline Kitchen, and Harborstone Wealth graph that the
+            orchestrator's graph tools read. Pick a tour, search, or click any node to see how it
+            connects.
           </p>
         </div>
         <button type="button" className="text-button" onClick={onClose}>

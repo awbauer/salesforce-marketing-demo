@@ -187,6 +187,16 @@ const R = {
     url: "https://date.nager.at/Api",
     kind: "Docs",
   },
+  fedFeed: {
+    label: "Federal Reserve press release feeds",
+    url: "https://www.federalreserve.gov/feeds/feeds.htm",
+    kind: "Docs",
+  },
+  finra2210: {
+    label: "FINRA Rule 2210: communications with the public",
+    url: "https://www.finra.org/rules-guidance/rulebooks/finra-rules/2210",
+    kind: "Docs",
+  },
   nwsApi: {
     label: "National Weather Service API (api.weather.gov)",
     url: "https://www.weather.gov/documentation/services-web-api",
@@ -363,10 +373,10 @@ GraphRAG's advantages are **multi-hop reasoning** and **explainability**. Every 
       {
         id: "graphrag-here",
         title: "How this demo does GraphRAG",
-        summary: "Nine read-only, curated graph tools over Neo4j, each returning evidence paths.",
-        body: `- **The graph:** a deterministic, fictional dataset of about 2,300 nodes and 19,700 relationships. **Northstar** is the parent brand, with B2B accounts (each with a headquarters country), buying-role personas, campaigns, segments, content, brand rules, and consent scopes. **Coastline Kitchen** is a restaurant brand under Northstar: its locations, menu, and dayparts come from the restaurant system with the same ids. Its campaigns run on the **mobile app** and **email** channels. Each of its 1,500 past push sends and 600 past email sends links to its campaign, its content (push or email), app segment, consent for that channel, location, daypart, weather, and featured menu item, so an email campaign learns from past emails and a push from past pushes. Each location's app segment holds **marketing consent per channel**: separate push, email, and SMS opt-in counts, because consent to one channel isn't consent to another.
+        summary: "Twelve read-only, curated graph tools over Neo4j, each returning evidence paths.",
+        body: `- **The graph:** a deterministic, fictional dataset of about 2,400 nodes and 20,300 relationships. **Northstar** is the parent brand, with B2B accounts (each with a headquarters country), buying-role personas, campaigns, segments, content, brand rules, and consent scopes. **Coastline Kitchen** is a restaurant brand under Northstar: its locations, menu, and dayparts come from the restaurant system with the same ids. Its campaigns run on the **mobile app** and **email** channels. Each of its 1,500 past push sends and 600 past email sends links to its campaign, its content (push or email), app segment, consent for that channel, location, daypart, weather, and featured menu item, so an email campaign learns from past emails and a push from past pushes. Each location's app segment holds **marketing consent per channel**: separate push, email, and SMS opt-in counts, because consent to one channel isn't consent to another. **Harborstone Wealth** is a wealth-management brand under Northstar: regulated content with its approval records and required disclosures, an embargoed acquisition with its release package, and institutional clients with their holdings, signals, advisors, and contacts.
 - **The store:** Neo4j AuraDB, reached over the HTTPS **Query API**, because Workers can't open Bolt connections. Every tool query runs in **read access mode**, so the database itself rejects writes. The only writes are the server's fixed long-term memory statements, which keep to their own dataset.
-- **The tools:** \`explain_buyer_group\`, \`find_audience_overlap\`, \`check_consent_coverage\`, \`find_similar_past_pushes\`, \`trace_content_lineage\`, \`get_graph_overview\`, and three that power the sales and service use cases: \`plan_account_outreach\`, \`assess_location_impact\`, and \`map_weather_demand\`. Each returns an answer plus up to 25 **evidence paths**.
+- **The tools:** \`explain_buyer_group\`, \`find_audience_overlap\`, \`check_consent_coverage\`, \`find_similar_past_pushes\`, \`trace_content_lineage\`, \`get_graph_overview\`, three that power the sales and service use cases (\`plan_account_outreach\`, \`assess_location_impact\`, and \`map_weather_demand\`), and three for financial services (\`match_news_to_approved_content\`, \`prepare_deal_release\`, and \`build_aum_account_plan\`). Each returns an answer plus up to 25 **evidence paths**.
 - **Parity:** every tool also has an in-memory implementation over the same dataset. \`pnpm kg:parity\` proves both return identical results, so local development and evals match production. It also reports tool latency; the median stays under 500 ms.
 - **Grounding:** evaluations check that a graph answer names only accounts, people, campaigns, and menu items that appear in what the tools returned.
 - **In a flow:** the restaurant push campaign calls \`find_similar_past_pushes\` to learn what worked before in the same weather and daypart, then passes that to the Salesforce content tool.
@@ -410,7 +420,7 @@ Around the loop, the orchestrator also handles the events the model must not: it
         body: `Each chat has a **working set**, shown in the Workspace panel and summarized in every prompt. It starts empty with **New chat** and has three parts:
 
 - **Focus:** the draft being built as structured data: a title, labeled fields, a change note, and the context it was built from. A campaign's focus is the **brief** Marketing Cloud's Campaign Creation agent drafted, read field for field from the agent's reply (Key Message, Target Audience, Primary Goal, and so on). Other drafts, such as copy from the Content Builder agent, are read from the answer's labeled lines. Each revision becomes a new version, and earlier versions stay viewable. Once saved, the focus shows the brief's campaign preview and then the campaign and flow Salesforce read back.
-- **Context:** cards for what tools returned, such as weather, forecasts, weather alerts, public holidays, store inventory, the inventory risk the workbench computed, the restaurant profile, graph evidence, remembered work recalled from memory, and Salesforce summaries, each with its source and fetch time.
+- **Context:** cards for what tools returned, such as weather, forecasts, weather alerts, public holidays, the Federal Reserve's latest rate decision, store inventory, the inventory risk the workbench computed, the restaurant profile, graph evidence, remembered work recalled from memory, and Salesforce summaries, each with its source and fetch time.
 - **Records:** records the chat opened, created, or updated, in any connected system, plus any reopened from memory, which are marked *Remembered* until the chat reads them again. Salesforce is one system and restaurant data is another; any system can join through the same reference: system, object type, and id.
 
 Four properties make it trustworthy:
@@ -539,7 +549,7 @@ Its **Campaign Refinement** subagent runs **Refine Campaign Preview** to change 
         summary: "Deterministic decisions before and around the model.",
         body: `Not every decision should be left to the model. Each turn passes through two deterministic routers:
 
-1. **Policy router.** "Remember this draft" is handled by the server, which stores the focus in long-term memory. A save or create request with a draft in the workspace prepares that write: the server plans it from the draft, Salesforce checks your permissions, and a confirmation card appears. Other save, create, or change requests get a fixed reply pointing to the confirmation flow. Publish, send, delete, and similar requests are refused. None of these calls the model, so it can never claim a write happened.
+1. **Policy router.** "Remember this draft" is handled by the server, which stores the focus in long-term memory. A save or create request with a draft in the workspace prepares that write: the server plans it from the draft, Salesforce checks your permissions, and a confirmation card appears. Other save, create, or change requests get a fixed reply pointing to the confirmation flow. Publish, send, delete, and similar requests are refused. A question about what to send ("What can we send clients?") asks for guidance, not an action, and reaches the model; each sentence that names an action is judged on its own, so context before the question ("The Fed moved rates.") doesn't turn it into a request. None of these calls the model, so it can never claim a write happened.
 2. **Intent router.** Clear intents force a **tool plan**: an ordered list of tools, one forced per step.
    - "Check readiness" → \`check_campaign_readiness\`
    - "Why is X in the buyer group?" → \`explain_buyer_group\`
@@ -547,6 +557,9 @@ Its **Campaign Refinement** subagent runs **Refine Campaign Preview** to change 
    - Outreach to an account's buyer group → \`plan_account_outreach\` → \`get_public_holidays\` for the account's country
    - Weather alerts or storms near a location → \`get_weather_alerts\` → \`assess_location_impact\`
    - Inventory, stock, or ingredients at a location → \`get_weather_forecast\` → \`map_weather_demand\` → \`get_location_inventory\`
+   - Fed or interest-rate news and approved content → \`get_fed_announcements\` → \`match_news_to_approved_content\` for the event it maps to; market volatility → \`match_news_to_approved_content\` alone
+   - An acquisition announcement → \`prepare_deal_release\`
+   - An account plan, AUM, or a Harborstone client's plays → \`build_aum_account_plan\`
    - A Coastline Kitchen email or push campaign → profile → weather → past sends on that channel → the Campaign Creation agent's brief, which becomes the focus
    - "Create a campaign … in Salesforce" or "in Marketing Cloud" → the Campaign Creation agent's brief, then the save is prepared for confirmation
    - A change to a brief ("make it warmer") → back to the agent: a re-drafted brief before it's saved, or **Refine Campaign Preview** after
@@ -608,7 +621,7 @@ You watch both halves step by step. While a confirmation is prepared, the steps 
 | **You** | Reviewing exact values and confirming | — |
 | **Salesforce** | Authorization (profile, permission sets, field-level security, sharing), signature checks for Apex writes, the records, and read-back | — |
 
-**Kill switches** (\`WRITES_ENABLED\`, \`DISABLED_TOOLS\`, \`MEMORY_ENABLED\`) are Worker secrets that operators can flip without a deploy. Graph tools read in read-only mode; only the server's fixed memory statements write, and only to the memory dataset. The external-services tools only read public data (holidays and weather alerts) and send nothing about customers. No customer PII enters prompts, logs, or the graph.`,
+**Kill switches** (\`WRITES_ENABLED\`, \`DISABLED_TOOLS\`, \`MEMORY_ENABLED\`) are Worker secrets that operators can flip without a deploy. Graph tools read in read-only mode; only the server's fixed memory statements write, and only to the memory dataset. The external-services tools only read public data (holidays, weather alerts, and Federal Reserve press releases) and send nothing about customers. No customer PII enters prompts, logs, or the graph.`,
         inDemo: [
           "Draft something → the Save to Salesforce action card in the chat → confirmation card with the permission check",
           "Check readiness → the Request a review action card → confirmation card",
@@ -662,7 +675,7 @@ You watch both halves step by step. While a confirmation is prepared, the steps 
         body: `\`pnpm eval:live\` runs the **production pipeline**: policy router, intent router, prompt, guards, and step settings, against live Workers AI models. Three suites:
 
 - **Demo scenarios:** the use-case library's prompts, through the full pipeline.
-- **Routing through the pipeline:** 22 prompts, including memory recall, as evaluators experience them.
+- **Routing through the pipeline:** 28 prompts, including memory recall and the financial services use cases, as evaluators experience them.
 - **Routing by the model alone:** the same prompts with no routers, isolating model quality.
 
 Each turn is scored on:
@@ -670,7 +683,7 @@ Each turn is scored on:
 - **answered**
 - **no tool errors**
 - **no false write claims**
-- **graph-grounded:** a graph or memory answer names only accounts, people, campaigns, and menu items that its tools returned
+- **graph-grounded:** a graph or memory answer names only accounts, clients, people, campaigns, content, menu items, and compliance approval IDs that its tools returned
 - **agent request grounded:** a request to the Marketing Cloud Campaign Creation agent carries what the turn gathered. A brief request names the brand, a menu item, and the city or weather; a preview refinement names the saved Brief ID. It's scored on the request the agent actually receives.
 
 Latency and tokens are recorded too. Runs recorded before the grounding check show no rate for it.
@@ -710,9 +723,9 @@ The Coastline campaign plan (email or push) chains these with the knowledge grap
       },
       {
         id: "use-cases",
-        title: "The use-case library: marketing, sales, and service",
+        title: "The use-case library: marketing, sales, service, and financial services",
         summary:
-          "Every scenario the demo runs, how data flows through it, and three that reach beyond marketing.",
+          "Every scenario the demo runs, how data flows through it, the ones that reach beyond marketing, and three for a regulated industry.",
         body: `**Use cases** (in the left rail) lists every scenario the demo can run end to end. Each has the situation it's for, the prompts that drive it (with a **Try it** button), the systems involved, a step-by-step data flow, what the knowledge graph contributes, what it writes, and what to watch for. Drafted scenarios that aren't built yet are shown greyed out as *Coming soon*.
 
 Two use cases take the same pattern beyond marketing. Each pairs a new free public API with the knowledge graph, and **the graph supplies the key element**.
@@ -736,14 +749,22 @@ Both APIs are free and keyless, called live from the Worker through a new in-pro
 4. **Code, not the model, decides what's low.** For each weather-lifted item, the forecast need is typical daily use on each day, raised by the lift on the days whose weather lifts a dish made with it. An item is low when what's on hand won't cover that. The result becomes an **Inventory risk** card and an **action card**, and the answer step is told exactly this list.
 5. Accepting the card prepares a **Salesforce case** for the store manager. The case contents are hashed, the hash becomes the confirmation's request hash, and after you confirm, the \`create_inventory_case\` Apex action re-hashes what it received and refuses anything that doesn't match. It then finds the manager's Contact by title and restaurant, creates the Case as you, and reads it back.
 
-The graph and prompts carry the manager's name only, never contact details. Nothing is ordered.`,
+The graph and prompts carry the manager's name only, never contact details. Nothing is ordered.
+
+**Financial services: Harborstone Wealth.** Three use cases (filter **Financial services**) show the graph in a regulated industry, where only content a registered principal approved can go out, exactly as approved, with its required disclosures. Harborstone is a fictional wealth-management brand under Northstar.
+- **Market news to pre-approved content.** "The Fed just announced its rate decision. What pre-approved content can we send clients today?"
+  1. \`get_fed_announcements\` reads the Federal Reserve's public press feed, finds the latest FOMC statement, and reads its rate decision: raise, lower, or maintain, the size, and the new target range. It maps the decision to a market event.
+  2. \`match_news_to_approved_content\` walks MarketEvent ← **RESPONDS_TO** ← ContentAsset → **APPROVED_UNDER** → Approval and → **REQUIRES** → Disclosure. It returns what's ready to send, with approval IDs, expiry, and disclosures; what's blocked and exactly why (an expired approval, one still pending, or a **FAILED** compliance rule); reach per channel under marketing consent; and past responses, which show that sending within hours of the news opened far better than the next day.
+  3. The answer never writes new regulated copy. Asking for a Marketing Cloud campaign hands the approved asset, its approval ID, and disclosures to the Campaign Creation agent's brief.
+- **Acquisition announcement, released on time.** \`prepare_deal_release\` orders the embargoed package through **RELEASED_WITH** → Deal and checks each piece's audience through **ADDRESSED_TO** → Segment → **HAS_CONSENT**. Advisors get their FAQ first, then the press release, then client letters. The acquired firm's clients get service notices under their client agreement, never marketing, until they opt in, so an SMS that also failed its disclosure check is blocked for both reasons.
+- **Account plan to grow assets under management.** \`build_aum_account_plan\` walks Client → **HAS_SIGNAL** → Signal → **SUGGESTS** → Product for products the client doesn't hold, sizes each play from the estimated assets held elsewhere, counts how many clients of the same type hold it, and finds its approved content through Product ← **EXPLAINS** ← ContentAsset. Each contact comes with the channel that has approved content they consented to, so the 30/60/90-day sequence never sends content on a channel it isn't approved for. "Activate the plan" drafts a Marketing Cloud brief from it.`,
         inDemo: [
           "Use cases in the left rail",
-          "Sources: Holidays · Nager.Date, Weather alerts · NWS",
+          "Sources: Holidays · Nager.Date, Weather alerts · NWS, Rate news · Federal Reserve",
           "Workspace: Forecast, Store inventory, and Inventory risk cards, then the case action card",
           "apps/edge/src/external-services, apps/edge/src/inventory-risk.ts, apps/web/src/usecases",
         ],
-        resources: [R.nagerDate, R.nwsApi, R.openMeteo, R.mcpIntro],
+        resources: [R.nagerDate, R.nwsApi, R.openMeteo, R.fedFeed, R.finra2210, R.mcpIntro],
       },
       {
         id: "long-term-memory",

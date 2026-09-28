@@ -24,6 +24,10 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
   const outreachPlan = toolPlan?.some((name) => name.endsWith("plan_account_outreach"));
   const impactPlan = toolPlan?.some((name) => name.endsWith("assess_location_impact"));
   const inventoryPlan = toolPlan?.some((name) => name.endsWith("map_weather_demand"));
+  const newsPlan = toolPlan?.some((name) => name.endsWith("match_news_to_approved_content"));
+  const fedPlan = toolPlan?.some((name) => name.endsWith("get_fed_announcements"));
+  const dealPlan = toolPlan?.some((name) => name.endsWith("prepare_deal_release"));
+  const accountPlan = toolPlan?.some((name) => name.endsWith("build_aum_account_plan"));
   const graphPlan = toolPlan?.some((name) => name.startsWith("graph_"));
   const memoryPlan = toolPlan?.some((name) =>
     /_(?:recall_decisions|recall_recent_work)$/.test(name),
@@ -45,7 +49,7 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
       : []),
     ...(briefPlan
       ? [
-          "draft_campaign_brief asks the Northstar Campaign Creation agent (a Marketing Cloud Next Campaign Creation agent) to run its Draft a Campaign Brief action. Send one complete request: for a new brief, 'Draft a campaign brief for …' with the full objective; to revise the brief in focus, 'Revise this campaign brief' followed by its current fields and the requested change. Present the brief the agent returns as labeled lines: **Name:**, **Description:**, **Key Message:**, **Target Audience:**, **Primary Goal:**, **Primary CTAs:**, **Primary KPI:**, **Agent Guardrails:**, **Priority:**; do not invent fields it didn't return. Say that the agent drafted it and nothing is saved yet: saving it to Marketing Cloud goes through a confirmation card, after which the agent drafts the campaign preview. Marketing Cloud previews here plan email and SMS steps; if the user asked for push, say the brief records that and the preview may use email.",
+          "draft_campaign_brief asks the Northstar Campaign Creation agent (a Marketing Cloud Next Campaign Creation agent) to run its Draft a Campaign Brief action. Send one complete request: for a new brief, 'Draft a campaign brief for …' with the full objective; to revise the brief in focus, 'Revise this campaign brief' followed by its current fields and the requested change. Present the brief the agent returns as labeled lines: **Name:**, **Description:**, **Key Message:**, **Target Audience:**, **Primary Goal:**, **Primary CTAs:**, **Primary KPI:**, **Agent Guardrails:**, **Priority:**; do not invent fields it didn't return. Say that the agent drafted it and nothing is saved yet: saving it to Marketing Cloud goes through a confirmation card, after which the agent drafts the campaign preview. Marketing Cloud previews here plan email and SMS steps; if the user asked for push, say the brief records that and the preview may use email. When earlier messages hold Harborstone Wealth's pre-approved content or account plan, build the objective from it: name the approved assets with their approval IDs, their required disclosures, and the audience with the consent it relies on, and say approved copy is used as approved with no new claims.",
         ]
       : []),
     ...(outreachPlan
@@ -61,6 +65,26 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
     ...(inventoryPlan
       ? [
           "For this inventory check, first get the weather forecast for the Coastline Kitchen location, then map the forecast's demand-planning conditions (pass its demandConditions) to menu demand and inventory in the knowledge graph, then read the location's stock counts. The workbench then computes which items are low (on hand below the forecast need: typical daily use, raised by the graph's demand lift on the days whose weather lifts a dish made with the item). Present: the forecast by day; the dishes the weather lifts, with the lift from past results; the low items exactly as the workbench's inventory check lists them, each with its on-hand amount, the amount needed, and the dishes it goes into; and the store manager. Say that an action card can open a Salesforce case for the store manager, and that nothing is ordered or created until the user confirms it. Stock counts come from a randomized mock of the store inventory system.",
+        ]
+      : []),
+    ...(newsPlan || dealPlan || accountPlan
+      ? [
+          "Harborstone Wealth is a fictional wealth-management brand under Northstar. Its client communications are regulated: only content a registered principal has approved, and whose approval is current, can be sent, exactly as approved with its required disclosures. Never write new claims, rewrite approved copy, predict markets, or promise returns; say what is blocked and why instead of working around it. Quote approval IDs exactly as the tools return them. Clients are institutions and family offices; never name individual people other than the advisor the tools return.",
+        ]
+      : []),
+    ...(newsPlan
+      ? [
+          `For this market-news response, ${fedPlan ? "first read the Federal Reserve's latest announcement, then look up Harborstone's pre-approved content for the market event it maps to (pass the news tool's event unless the user asked about a different event)" : "look up Harborstone's pre-approved content for the market event the user describes"}. Present: ${fedPlan ? "the news in one or two sentences with its date and source; " : ""}the approved assets ready to send now, each with its channel, approval ID and expiry, required disclosures, and how many clients and subscribers can be reached under that channel's marketing consent; the blocked assets and exactly why (expired, pending, or failed a compliance check); and what past responses show about speed (open rates when sent within a few hours of the news against later). Then offer to set up the send as a Marketing Cloud campaign built from the approved asset. Never say anything was sent or scheduled.`,
+        ]
+      : []),
+    ...(dealPlan
+      ? [
+          "For this acquisition announcement, read the release package from the knowledge graph and present a numbered release plan in order: timing, asset, audience and how many can be reached, what the send relies on (a service notice under the client agreement, marketing consent, an internal audience, or the public release), and its approval ID and required disclosures; then the blocked items and why. The package is embargoed until the announcement and the deal is confidential: never suggest releasing anything early. Say plainly that the acquired firm's clients receive service notices only and can't be marketed to until they opt in. Offer to set up the announcement sends as a Marketing Cloud campaign timed to the announcement. Never say anything was released, sent, or scheduled.",
+        ]
+      : []),
+    ...(accountPlan
+      ? [
+          "For this account plan, read the client's plan from the knowledge graph. Present: a one-line relationship snapshot (AUM with Harborstone, estimated assets held elsewhere, wallet share, advisor); the signals, newest first; the plays ranked by estimated AUM opportunity, each with why, peer adoption, and the approved content to use with its approval ID (and any blocked content and why); the contacts in priority order with the channel to use for each (their channelForPlayContent), naming anyone with no consented channel or no approved content for their channels, whom the advisor contacts directly instead; and a 30/60/90-day activation sequence in which every touch sends an approved asset on a channel it is approved for and the contact consented to. Amounts are fictional estimates in $ millions, never promises. Offer to activate the plan as a Marketing Cloud campaign. Never say anything was sent, logged, or changed.",
         ]
       : []),
     ...(refinePlan
@@ -165,7 +189,48 @@ export function isInventoryCheck(prompt: string) {
   );
 }
 
+/** Harborstone Wealth's fictional clients, for routing account-plan requests. */
+const HARBORSTONE_CLIENTS =
+  /\b(?:cedar valley|bayshore arts|redwood coast|mission hills|pacific dental|summit ridge|coastal freight|golden state veterinary|marin family|sierra crest|lakehouse capital|point reyes)\b/i;
+
 const TOOL_PLANS: ReadonlyArray<readonly [readonly string[], (prompt: string) => boolean]> = [
+  // Financial services: an account plan to grow a Harborstone client's assets under management.
+  [
+    ["build_aum_account_plan"],
+    (p) =>
+      /\b(?:account plan|aum|assets under management|wallet share|share of wallet|grow (?:the |our |this )?relationship)\b/i.test(
+        p,
+      ) ||
+      (HARBORSTONE_CLIENTS.test(p) && /\b(?:plan|grow|opportunit\w*|next best|plays?)\b/i.test(p)),
+  ],
+  // Financial services: the embargoed acquisition announcement and its pre-approved package.
+  [
+    ["prepare_deal_release"],
+    (p) =>
+      /\b(?:acquisitions?|acquir\w*|mergers?|m&a|bayview)\b/i.test(p) &&
+      /\b(?:content|release|announce\w*|approved|send|communications?|embargo\w*|package|clients?)\b/i.test(
+        p,
+      ),
+  ],
+  // Financial services: live Federal Reserve news, then the content pre-approved for it.
+  [
+    ["get_fed_announcements", "match_news_to_approved_content"],
+    (p) =>
+      /\b(?:fed|federal reserve|fomc|rate (?:decision|cut|hike|increase|move|announcement)s?|interest rates?)\b/i.test(
+        p,
+      ) &&
+      /\b(?:content|approved|pre-?approved|send|respond|response|clients?|campaign|emails?|messages?|compliance|news)\b/i.test(
+        p,
+      ),
+  ],
+  // Financial services: a market swing, answered from content approved for it.
+  [
+    ["match_news_to_approved_content"],
+    (p) =>
+      /\b(?:volatil\w*|markets? (?:are |is )?(?:swing\w*|sell\w*|drop\w*|fall\w*|tumbl\w*|turmoil|downturn)|sell-?offs?)\b/i.test(
+        p,
+      ) && /\b(?:content|approved|pre-?approved|send|clients?|compliance)\b/i.test(p),
+  ],
   // Service: stock at a location against the dishes its forecast weather will lift.
   [["get_weather_forecast", "map_weather_demand", "get_location_inventory"], isInventoryCheck],
   // Sales: who to contact at an account and when, around its local public holidays.

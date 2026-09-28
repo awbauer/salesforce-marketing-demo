@@ -168,6 +168,11 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
     "use-cases",
     "Active National Weather Service alerts at a Coastline Kitchen location, most severe first.",
   ),
+  tool(
+    "get_fed_announcements",
+    "use-cases",
+    "The latest FOMC rate decision from the Federal Reserve's public press feed, and the market event it maps to.",
+  ),
   // Knowledge-graph MCP tools.
   tool(
     "get_graph_overview",
@@ -208,6 +213,21 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
     "assess_location_impact",
     "use-cases",
     "The app audience near a location, how many can be reached on each channel, and campaigns to pause.",
+  ),
+  tool(
+    "match_news_to_approved_content",
+    "use-cases",
+    "Harborstone's pre-approved content for a market event: what's ready to send, what's blocked and why, reach by consent, and past response speed.",
+  ),
+  tool(
+    "prepare_deal_release",
+    "use-cases",
+    "The embargoed acquisition package in release order, with each piece's audience, consent basis, approval, and blockers.",
+  ),
+  tool(
+    "build_aum_account_plan",
+    "use-cases",
+    "A Harborstone client's signals, ranked plays with peer adoption and approved content, and contacts with consented channels.",
   ),
   tool(
     "trace_content_lineage",
@@ -262,7 +282,10 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   ),
 
   // Graph nodes: the demo dataset.
-  node("Brand", "Northstar and its restaurant brand, Coastline Kitchen."),
+  node(
+    "Brand",
+    "Northstar and its brands: Coastline Kitchen (restaurants) and Harborstone Wealth (wealth management).",
+  ),
   node("Channel", "Email, SMS, and the mobile app."),
   node("ConsentScope", "A consent a person or segment holds for a channel."),
   node("BrandRule", "A brand rule that content passes or fails."),
@@ -289,6 +312,24 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   node("StoreManager", "A restaurant's store manager, by name only.", "use-cases"),
   node("PushSend", "One past push notification send and how it performed."),
   node("EmailSend", "One past Coastline email send: its opens, clicks, and orders."),
+  node(
+    "Approval",
+    "A compliance approval record: approved, expired, or pending, with its dates and any embargo.",
+    "use-cases",
+  ),
+  node("Disclosure", "Required disclosure text a regulated asset must carry.", "use-cases"),
+  node("MarketEvent", "A market event Harborstone prepares approved content for.", "use-cases"),
+  node(
+    "ClientSend",
+    "A past Harborstone response: hours after the news, opens, clicks.",
+    "use-cases",
+  ),
+  node("Deal", "Harborstone's embargoed acquisition.", "use-cases"),
+  node("Firm", "The firm being acquired.", "use-cases"),
+  node("Client", "A Harborstone client: a foundation, business, or family office.", "use-cases"),
+  node("Advisor", "The Harborstone advisor who covers a client.", "use-cases"),
+  node("Product", "A Harborstone product or service a client can hold.", "use-cases"),
+  node("Signal", "Something the relationship team noticed about a client.", "use-cases"),
   // Graph nodes: long-term memory.
   node("Workspace", "The workspace that owns a memory.", "long-term-memory"),
   node(
@@ -335,6 +376,23 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
     "use-cases",
   ),
   edge("MANAGED_BY", "A location managed by its store manager.", "use-cases"),
+  edge("APPROVED_UNDER", "Regulated content and the approval it was released under.", "use-cases"),
+  edge("REQUIRES", "Regulated content and a disclosure it must carry.", "use-cases"),
+  edge("APPROVED_FOR", "Regulated content and the channel it's approved for.", "use-cases"),
+  edge("RESPONDS_TO", "Content or a past response prepared for a market event.", "use-cases"),
+  edge("EXPLAINS", "Content explaining a product.", "use-cases"),
+  edge("RELEASED_WITH", "An announcement asset, its release step, and timing.", "use-cases"),
+  edge("ADDRESSED_TO", "An announcement asset and the audience it goes to.", "use-cases"),
+  edge("ANNOUNCED_BY", "A deal announced by its brand.", "use-cases"),
+  edge("ANNOUNCES", "A campaign announcing a deal.", "use-cases"),
+  edge("ACQUIRES", "A deal and the firm it acquires.", "use-cases"),
+  edge("CLIENT_OF", "A client of a brand, or a segment of a firm's clients.", "use-cases"),
+  edge("COVERED_BY", "A client and the advisor who covers it.", "use-cases"),
+  edge("HOLDS", "A client holding a product, with its assets in $ millions.", "use-cases"),
+  edge("HAS_SIGNAL", "A client showing a signal, and when it was detected.", "use-cases"),
+  edge("SUGGESTS", "A signal pointing to a product, with the share it might capture.", "use-cases"),
+  edge("OFFERS", "A brand offering a product.", "use-cases"),
+  edge("ADVISES_FOR", "An advisor at a brand.", "use-cases"),
   edge("USED", "A push send that used a content asset."),
   edge("SENT_TO", "A push send delivered to a segment."),
   edge("SENT_UNDER", "A push send made under a consent scope."),

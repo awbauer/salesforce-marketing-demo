@@ -273,6 +273,43 @@ function inventoryCard(data: Record<string, unknown>, tool: string, at: Date): I
 }
 
 function externalCard(data: Record<string, unknown>, tool: string, at: Date): Ingested {
+  if (tool === "get_fed_announcements") {
+    const decision = (data.latestDecision ?? null) as Record<string, unknown> | null;
+    const releases = list(data.recentReleases).map((item) => item as Record<string, unknown>);
+    const verb = { raise: "raised", lower: "lowered", maintain: "held" }[
+      str(decision?.action) ?? ""
+    ];
+    return {
+      cards: [
+        {
+          id: "fed:latest",
+          kind: "context",
+          eyebrow: "Federal Reserve",
+          title: decision
+            ? `Fed ${verb ?? "announced"} rates${str(decision.targetRange) ? ` to ${decision.targetRange}` : ""}`
+            : "No rate decision in the latest releases",
+          summary: decision
+            ? `${str(decision.publishedAt)?.slice(0, 10) ?? "?"} FOMC statement, ${num(decision.hoursAgo) ?? "?"} hours ago. Event: ${str(decision.event) ?? "?"}.`
+            : `${releases.length} recent monetary policy release${releases.length === 1 ? "" : "s"}.`,
+          metric: decision ? (str(decision.change) ?? "no change") : undefined,
+          trend: decision ? "rate move" : undefined,
+          state: "ready",
+          source: {
+            system: "federal-reserve",
+            label: "Federal Reserve · live",
+            freshness: "just now",
+            status: "ready",
+          },
+          details: releases
+            .slice(0, 4)
+            .map((release) => `${str(release.publishedAt)?.slice(0, 10)} · ${str(release.title)}`),
+          updatedAt: at.toISOString(),
+          toolName: tool,
+        },
+      ],
+      records: [],
+    };
+  }
   if (tool === "get_public_holidays") {
     const country = str(data.country) ?? "?";
     const holidays = list(data.holidays).map((item) => item as Record<string, unknown>);
@@ -401,6 +438,9 @@ const GRAPH_TITLES: Record<string, string> = {
   plan_account_outreach: "Outreach plan",
   assess_location_impact: "Location impact",
   map_weather_demand: "Weather demand map",
+  match_news_to_approved_content: "Approved content",
+  prepare_deal_release: "Announcement release",
+  build_aum_account_plan: "Account plan",
   recall_decisions: "Remembered",
   recall_recent_work: "Recent work",
   explain_memory: "Memory provenance",
@@ -439,6 +479,12 @@ function graphSummary(tool: string, data: Record<string, unknown>, count: number
       return `${list(data.contacts).length} contacts at ${str(data.account) ?? "the account"} (${str(data.countryName) ?? str(data.country) ?? "?"}), with the channels each has consented to.`;
     case "map_weather_demand":
       return `${list(data.menuItems).length} dishes lifted by ${list(data.conditions).join(", ") || "the forecast"} at ${str(data.city) ?? "the location"}, made with ${list(data.inventoryItems).length} inventory items.`;
+    case "match_news_to_approved_content":
+      return `${list(data.readyToSend).length} approved asset${list(data.readyToSend).length === 1 ? "" : "s"} ready for "${str(data.eventName) ?? "the event"}"; ${list(data.blocked).length} blocked (expired, pending, or failed compliance).`;
+    case "prepare_deal_release":
+      return `${num(data.readyCount) ?? 0} of ${list(data.steps).length} announcement assets approved and ready to release in order; ${num(data.blockedCount) ?? 0} blocked.`;
+    case "build_aum_account_plan":
+      return `${list(data.plays).length} plays worth about $${num(data.totalOpportunityMillions) ?? 0}M on $${num(data.aumWithHarborstoneMillions) ?? 0}M with Harborstone (wallet share ${pct(data.walletShare)}).`;
     case "assess_location_impact": {
       const reach = list(data.reachableByChannel)
         .map((entry) => entry as Record<string, unknown>)
@@ -459,12 +505,26 @@ function graphCard(
 ): Ingested {
   const paths = list(data.paths).length;
   const subject =
+    str(data.client) ??
+    str(data.acquiredFirm) ??
+    str(data.eventName) ??
     str(data.account) ??
     str(data.campaign) ??
     str(data.subject) ??
     str((input as Record<string, unknown>)?.account);
   const memory = (MEMORY_TOOLS as readonly string[]).includes(tool);
+  const row = (item: unknown) => (item ?? {}) as Record<string, unknown>;
   const items = [
+    ...list(data.readyToSend).map(
+      (item) => `${str(row(item).asset)} · ${str(row(row(item).approval).id)}`,
+    ),
+    ...list(data.plays).map(
+      (item) => `${str(row(item).product)} · ~$${num(row(item).estimatedOpportunityMillions)}M`,
+    ),
+    ...list(data.steps).map(
+      (item) =>
+        `${num(row(item).step)}. ${str(row(item).asset)}${row(item).ready ? "" : " (blocked)"}`,
+    ),
     ...list(data.items),
     ...(data.item ? [data.item] : []),
     ...list(data.candidates),

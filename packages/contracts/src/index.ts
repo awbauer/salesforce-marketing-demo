@@ -419,10 +419,14 @@ export const CAMPAIGN_CONTEXT_TOOLS = Object.freeze([
   "get_location_inventory",
 ] as const);
 
-/** Read-only tools served by the external-services MCP (Nager.Date holidays, NWS weather alerts). */
+/**
+ * Read-only tools served by the external-services MCP (Nager.Date holidays, NWS weather alerts,
+ * Federal Reserve press releases).
+ */
 export const EXTERNAL_SERVICE_TOOLS = Object.freeze([
   "get_public_holidays",
   "get_weather_alerts",
+  "get_fed_announcements",
 ] as const);
 
 /** Read-only tools served by the knowledge-graph MCP (Neo4j, or its fictional local copy). */
@@ -436,6 +440,9 @@ export const KNOWLEDGE_GRAPH_TOOLS = Object.freeze([
   "plan_account_outreach",
   "assess_location_impact",
   "map_weather_demand",
+  "match_news_to_approved_content",
+  "prepare_deal_release",
+  "build_aum_account_plan",
 ] as const);
 
 /** Read-only recall tools over the workspace's long-term memory in the graph. See ADR-007. */
@@ -624,6 +631,7 @@ export const CONNECTED_SYSTEMS: Readonly<Record<string, { label: string }>> = Ob
   "open-meteo": { label: "Open-Meteo" },
   "nager-date": { label: "Nager.Date" },
   nws: { label: "National Weather Service" },
+  "federal-reserve": { label: "Federal Reserve" },
   "knowledge-graph": { label: "Knowledge graph" },
   "data-360": { label: "Data 360" },
   "marketing-cloud-next": { label: "Marketing Cloud Next" },
@@ -756,12 +764,16 @@ export function classifyPolicyIntent(
   // Describing a future send ("an email to send next week") is drafting, not a request to act.
   const actionVerb =
     /(?<!\b(?:to|before|after|when|once|until|ready to|how to|plan to)\s)\b(?:publish|send|activate|delete|suppress|unsubscribe)\b/i;
-  // Advisory questions ("When should we send it?") ask for guidance; "Can you send it?" is a request.
-  const advisoryQuestion = /^\s*(?:when|how|what|why|which|should)\b[^.!]*\?\s*$/i.test(
-    affirmative,
-  );
+  // Advisory questions ("When should we send it?") ask for guidance; "Can you send it?" is a
+  // request. Each sentence that names an action is judged on its own, so context before the
+  // question ("The Fed moved rates. What can we send clients?") doesn't turn it into a request.
+  const advisoryQuestion = (sentence: string) =>
+    /^\s*(?:when|how|what|why|which|should)\b[^.!]*\?\s*$/i.test(sentence);
+  const requestsAction = affirmative
+    .split(/(?<=[.!?])\s+/)
+    .some((sentence) => actionVerb.test(sentence) && !advisoryQuestion(sentence));
   if (
-    (actionVerb.test(affirmative) && !advisoryQuestion) ||
+    requestsAction ||
     /\b(?:add|remove|move)\b[^.?!]*\bbuyer group\b/i.test(affirmative) ||
     /\breveal\b|\bignore (?:the |all |any )?(?:policy|policies|rules|instructions)\b/i.test(
       affirmative,

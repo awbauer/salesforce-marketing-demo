@@ -5,6 +5,7 @@
  */
 
 export type Team = "Marketing" | "Sales" | "Service";
+export type Industry = "Financial services";
 
 export type SystemKind =
   | "Salesforce agent"
@@ -25,6 +26,8 @@ export type UseCase = {
   id: string;
   title: string;
   team: Team;
+  /** Set for scenarios built on an industry brand, such as Harborstone Wealth. */
+  industry?: Industry;
   status: "available" | "coming-soon";
   /** One sentence for the card. */
   summary: string;
@@ -62,6 +65,12 @@ const ORCHESTRATOR: UseCaseSystem = {
   name: "Northstar orchestrator (gpt-oss-20b)",
   kind: "Workers AI",
   role: "Routes the request, calls the tools in order, writes the answer",
+};
+
+const FED_NEWS: UseCaseSystem = {
+  name: "Federal Reserve press releases",
+  kind: "External API",
+  role: "Latest FOMC rate decision and monetary policy releases (free, no key)",
 };
 
 const EMAIL_PROMPT =
@@ -493,6 +502,185 @@ export const USE_CASES: UseCase[] = [
       url: "https://open-meteo.com/en/docs",
       note: "Free, keyless daily forecast, called live through the campaign-context MCP server alongside a randomized store inventory mock.",
     },
+  },
+  {
+    id: "fsi-market-news",
+    title: "Market news to pre-approved content",
+    team: "Marketing",
+    industry: "Financial services",
+    status: "available",
+    summary:
+      "When the Fed moves rates, find the compliance-approved content that's ready to send, who can get it, and what's blocked.",
+    scenario:
+      "The Fed just announced a rate decision. Harborstone Wealth prepared compliance-approved content for each outcome, and past responses sent within hours of the news opened far better than next-day ones. Marketing needs to know now what's approved to send, to whom, and what isn't, without writing a word of new regulated copy.",
+    prompts: [
+      {
+        text: "The Fed just announced its rate decision. What pre-approved content can we send clients today?",
+        demonstrates:
+          "Live Federal Reserve news, then approved content, consent, and response speed from the graph",
+      },
+      {
+        text: "What approved content do we have if the Fed cuts rates instead?",
+        demonstrates: "Content approved ahead of time for a different outcome",
+      },
+      {
+        text: "Markets are swinging hard today. What approved content can we send clients?",
+        demonstrates: "A market event without a news call, including an expired FAQ that's blocked",
+      },
+      {
+        text: "Create a Marketing Cloud campaign for the approved rate-move email",
+        demonstrates:
+          "The Campaign Creation agent drafts a brief built on the approved asset, its approval ID, and its disclosures",
+      },
+    ],
+    systems: [ORCHESTRATOR, FED_NEWS, GRAPH, SF_CAMPAIGN_AGENT],
+    flow: [
+      { from: "You", to: "Orchestrator", carries: "The news and the question" },
+      { from: "Orchestrator", to: "Federal Reserve", carries: "get_fed_announcements()" },
+      {
+        from: "Federal Reserve",
+        to: "Orchestrator",
+        carries: "The latest FOMC decision and the market event it maps to",
+      },
+      {
+        from: "Orchestrator",
+        to: "Knowledge graph",
+        carries: "match_news_to_approved_content(event)",
+      },
+      {
+        from: "Knowledge graph",
+        to: "Orchestrator",
+        carries:
+          "Approved assets with approval IDs and disclosures, blocked assets and why, reach by consent, past response speed",
+      },
+      { from: "Orchestrator", to: "You", carries: "What to send now, to whom, and what's blocked" },
+      {
+        from: "You",
+        to: "Campaign Creation agent",
+        carries: "A confirmed brief and campaign built on the approved asset",
+      },
+    ],
+    graphRole:
+      "The key element: MarketEvent ← RESPONDS_TO ← ContentAsset → APPROVED_UNDER → Approval and → REQUIRES → Disclosure say which assets are approved, until when, and what they must carry; FAILED → BrandRule explains a failed compliance check; Campaign → TARGETS → Segment → HAS_CONSENT sizes reach per channel; and past sends show how response speed affected opens.",
+    writes:
+      "Nothing from the lookup. A Marketing Cloud brief and campaign only after you confirm; nothing is sent.",
+    watch: [
+      "Workspace context: Federal Reserve · live",
+      "Graph evidence: RESPONDS_TO, APPROVED_UNDER, and REQUIRES paths",
+      "Blocked assets and exactly why: expired, pending, or failed compliance",
+      "Approved copy is used as approved; the model never writes new claims",
+    ],
+    newService: {
+      name: "Federal Reserve press releases",
+      url: "https://www.federalreserve.gov/feeds/feeds.htm",
+      note: "Free, keyless public RSS feed; the latest FOMC statement is read for its rate decision, through the external-services MCP server.",
+    },
+  },
+  {
+    id: "fsi-deal-release",
+    title: "Acquisition announcement, released on time",
+    team: "Marketing",
+    industry: "Financial services",
+    status: "available",
+    summary:
+      "Line up the embargoed, pre-approved announcement package in release order, with who each piece can reach and what's still blocked.",
+    scenario:
+      "Harborstone Wealth announces its acquisition of Bayview Retirement Advisors tomorrow at 8:00 ET. Legal and compliance approved the package under embargo. The team needs the release order, the audience and consent basis for each piece, and anything that can't go out, before the announcement, not after.",
+    prompts: [
+      {
+        text: "We announce the Bayview acquisition tomorrow at 8am. What approved content is ready to release, in what order, and who can we send it to?",
+        demonstrates:
+          "The graph's release package: sequence, approvals, disclosures, audiences, and consent basis",
+      },
+      {
+        text: "Set up the Bayview announcement emails as a Marketing Cloud campaign",
+        demonstrates:
+          "The Campaign Creation agent drafts a brief for the approved, embargoed sends",
+      },
+    ],
+    systems: [ORCHESTRATOR, GRAPH, SF_CAMPAIGN_AGENT],
+    flow: [
+      { from: "You", to: "Orchestrator", carries: "The announcement and its timing" },
+      { from: "Orchestrator", to: "Knowledge graph", carries: "prepare_deal_release(deal)" },
+      {
+        from: "Knowledge graph",
+        to: "Orchestrator",
+        carries:
+          "Each asset in order: timing, audience, consent basis, reach, approval, disclosures, blockers",
+      },
+      { from: "Orchestrator", to: "You", carries: "A numbered release plan and what's blocked" },
+      {
+        from: "You",
+        to: "Campaign Creation agent",
+        carries: "A confirmed brief and campaign for the ready sends",
+      },
+    ],
+    graphRole:
+      "The key element: ContentAsset → RELEASED_WITH → Deal orders the package; ADDRESSED_TO → Segment → HAS_CONSENT says whether each send relies on a service notice or marketing consent (Bayview's clients have service notices only); APPROVED_UNDER and REQUIRES carry the embargoed approvals and disclosures.",
+    writes:
+      "Nothing from the plan. A Marketing Cloud brief and campaign only after you confirm; nothing is released or sent early.",
+    watch: [
+      "Graph evidence: RELEASED_WITH, ADDRESSED_TO, and APPROVED_UNDER paths",
+      "An SMS that failed compliance and has no consent is blocked, with both reasons",
+      "Bayview's clients get service notices only, never marketing, until they opt in",
+    ],
+  },
+  {
+    id: "fsi-aum-plan",
+    title: "Account plan to grow assets under management",
+    team: "Sales",
+    industry: "Financial services",
+    status: "available",
+    summary:
+      "Turn a client's signals, holdings, and peers into ranked plays, then activate them with approved content on consented channels.",
+    scenario:
+      "An institutional consultant at Harborstone Wealth has 90 days to grow a foundation client's assets. Some of its money is still at another custodian, the board just raised its payout, and rates moved. They need a plan that says which products to lead with and why, who to talk to on which channel, and which approved content to use, then a campaign to run it.",
+    prompts: [
+      {
+        text: "Build an account plan to grow AUM with Cedar Valley Community Foundation",
+        demonstrates:
+          "Signals, holdings, and peers become ranked plays with approved content and consented contacts",
+      },
+      {
+        text: "What are the best plays to grow the Marin Family Office relationship?",
+        demonstrates: "A family office: different signals, peers, and plays from the same graph",
+      },
+      {
+        text: "Activate the plan: create a Marketing Cloud campaign for Cedar Valley's top play",
+        demonstrates: "The Campaign Creation agent drafts a brief from the plan's approved content",
+      },
+    ],
+    systems: [ORCHESTRATOR, GRAPH, SF_CAMPAIGN_AGENT],
+    flow: [
+      { from: "You", to: "Orchestrator", carries: "The client" },
+      { from: "Orchestrator", to: "Knowledge graph", carries: "build_aum_account_plan(client)" },
+      {
+        from: "Knowledge graph",
+        to: "Orchestrator",
+        carries:
+          "Holdings, held-away estimate, signals, plays with peer adoption, approved content, contacts and consent",
+      },
+      {
+        from: "Orchestrator",
+        to: "You",
+        carries: "Ranked plays and a 30/60/90-day activation sequence",
+      },
+      {
+        from: "You",
+        to: "Campaign Creation agent",
+        carries: "A confirmed brief and campaign that activate the plan",
+      },
+    ],
+    graphRole:
+      "The key element: Client → HAS_SIGNAL → Signal → SUGGESTS → Product finds the plays; other clients of the same type → HOLDS → Product gives peer adoption; Product ← EXPLAINS ← ContentAsset → APPROVED_UNDER → Approval says what can be sent; and Persona → WORKS_AT and HAS_CONSENT say who to contact and on which channel.",
+    writes:
+      "Nothing from the plan. A Marketing Cloud brief and campaign only after you confirm; nothing is sent.",
+    watch: [
+      "Graph evidence: HAS_SIGNAL → SUGGESTS, EXPLAINS → APPROVED_UNDER, and COVERED_BY paths",
+      "A play whose only content is pending approval has no approved content to send",
+      "A contact whose only consented channel has no approved content goes to the advisor",
+      "Amounts are fictional estimates in $ millions",
+    ],
   },
   {
     id: "consent-coverage",
