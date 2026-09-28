@@ -134,6 +134,7 @@ export const UNTAUGHT_SOURCES: ReadonlyArray<{ path: string; reason: string }> =
   },
   { path: "scripts/check-blocked-words.mjs", reason: "Delivery gate" },
   { path: "scripts/check-docs.mjs", reason: "Delivery gate" },
+  { path: "scripts/export-learn.mjs", reason: "Writes docs/learn.md from the Learn page itself" },
   { path: "scripts/check-hxl.mjs", reason: "Delivery gate" },
   { path: "scripts/check-invariants.mjs", reason: "Delivery gate" },
   { path: "scripts/check-learn.mjs", reason: "This gate" },
