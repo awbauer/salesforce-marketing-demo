@@ -1,6 +1,7 @@
 import { type TurnRecord, TurnRecordSchema } from "@northstar/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MemoryPanel } from "./MemoryPanel";
+import { turnStats } from "./turn-stats";
 import { readableToolName } from "./turn-trace";
 
 type LoadState =
@@ -203,7 +204,12 @@ function TurnCard({ turn }: { turn: TurnRecord }) {
               {OUTCOME_LABELS[turn.outcome]}
               {turn.fallback ? " · recovered" : ""}
             </span>
-            <span>{seconds(turn.durationMs)}</span>
+            <span>
+              {turnStats(seconds(turn.durationMs), {
+                tokens: turn.inputTokens + turn.outputTokens,
+                toolCalls: turn.tools.length,
+              })}
+            </span>
           </span>
         </summary>
         <dl className="evaluation-definitions history-details">

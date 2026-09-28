@@ -1,5 +1,6 @@
 import { EVAL_CHECKS, type EvalReport, EvalReportSchema } from "@northstar/evals/report";
 import { useEffect, useMemo, useState } from "react";
+import { toolCallCount, toolCallsLabel, tokensLabel, turnStats } from "./turn-stats";
 
 type LoadState =
   | { status: "loading" }
@@ -104,6 +105,19 @@ function ReportView({
   const included = report.models.filter((model) => model.included);
   const summary = (model: string, suiteId: Suite) =>
     report.summaries.find((entry) => entry.model === model && entry.suite === suiteId);
+  // Mean tokens (input plus output) and tool calls per turn, from the turns behind the summary.
+  const meanCost = (model: string, suiteId: Suite) => {
+    const turns = report.results.filter(
+      (result) => result.model === model && result.suite === suiteId,
+    );
+    if (turns.length === 0) return null;
+    const mean = (values: number[]) =>
+      Math.round((values.reduce((sum, value) => sum + value, 0) / turns.length) * 10) / 10;
+    return {
+      tokens: Math.round(mean(turns.map((turn) => turn.inputTokens + turn.outputTokens))),
+      toolCalls: mean(turns.map((turn) => toolCallCount(turn.toolCalled))),
+    };
+  };
   const suiteMeta = report.methodology.suites.find((entry) => entry.id === suite);
   const checkLabels = new Map(report.methodology.checks.map((check) => [check.id, check.label]));
   const failures = useMemo(
@@ -150,11 +164,14 @@ function ReportView({
                 <th scope="col">Median latency</th>
                 <th scope="col">Slow runs (p90)</th>
                 <th scope="col">Output tokens</th>
+                <th scope="col">Tokens per turn</th>
+                <th scope="col">Tool calls per turn</th>
               </tr>
             </thead>
             <tbody>
               {included.map((model) => {
                 const demo = summary(model.id, "demo-scenarios");
+                const cost = meanCost(model.id, "demo-scenarios");
                 return (
                   <tr key={model.id}>
                     <th scope="row">
@@ -174,6 +191,8 @@ function ReportView({
                     <td>{demo ? seconds(demo.latencyP50Ms) : "—"}</td>
                     <td>{demo ? seconds(demo.latencyP90Ms) : "—"}</td>
                     <td>{demo ? demo.meanOutputTokens.toLocaleString() : "—"}</td>
+                    <td>{cost ? tokensLabel(cost.tokens) : "—"}</td>
+                    <td>{cost ? toolCallsLabel(cost.toolCalls) : "—"}</td>
                   </tr>
                 );
               })}
@@ -343,7 +362,12 @@ function ReportView({
                     </div>
                     <div>
                       <dt>Latency</dt>
-                      <dd>{seconds(result.latencyMs)}</dd>
+                      <dd>
+                        {turnStats(seconds(result.latencyMs), {
+                          tokens: result.inputTokens + result.outputTokens,
+                          toolCalls: toolCallCount(result.toolCalled),
+                        })}
+                      </dd>
                     </div>
                     <div>
                       <dt>Answer excerpt</dt>

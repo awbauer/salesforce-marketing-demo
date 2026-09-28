@@ -70,7 +70,11 @@ export const SECTION_SOURCES: Record<string, readonly string[]> = {
     "salesforce/force-app/main/default/lightningTypes/",
     "salesforce/force-app/main/default/uiWidgets/",
   ],
-  observability: ["apps/web/src/HistoryView.tsx", "apps/web/src/turn-trace.ts"],
+  observability: [
+    "apps/web/src/HistoryView.tsx",
+    "apps/web/src/turn-trace.ts",
+    "apps/web/src/turn-stats.ts",
+  ],
   evaluations: [
     "packages/evals/src/",
     "apps/web/src/EvaluationView.tsx",

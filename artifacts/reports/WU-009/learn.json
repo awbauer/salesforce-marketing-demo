@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-28T17:56:31.573Z",
+  "generatedAt": "2026-09-28T21:24:38.145Z",
   "status": "failed",
   "baseRef": "origin/main",
-  "mergeBase": "046d1551a1db8f3878383f9ea4e1d93d53b3cb28",
+  "mergeBase": "93482b672ccab5eaf1ecac26216bc6c0c0dc20ad",
   "inventory": {
     "Tool": 40,
     "Write action": 5,
@@ -13,68 +13,23 @@
   },
   "drift": [
     {
-      "section": "use-cases",
-      "status": "updated",
-      "paths": [
-        "apps/edge/src/external-services/fed-news.ts",
-        "apps/edge/src/external-services/server.ts",
-        "apps/web/src/usecases/UseCasesView.tsx",
-        "apps/web/src/usecases/catalog.ts",
-        "apps/web/src/usecases/usecases.css",
-        "packages/knowledge-graph/src/harborstone.ts"
-      ]
-    },
-    {
-      "section": "routing",
-      "status": "updated",
-      "paths": [
-        "apps/edge/src/turn-policy.ts"
-      ]
-    },
-    {
-      "section": "workspace",
-      "status": "updated",
-      "paths": [
-        "apps/edge/src/working-set.ts"
-      ]
-    },
-    {
-      "section": "ui",
-      "status": "reviewed",
-      "paths": [
-        "apps/web/src/App.tsx"
-      ]
-    },
-    {
-      "section": "graphrag-here",
-      "status": "updated",
-      "paths": [
-        "apps/web/src/graph/GraphView.tsx",
-        "apps/web/src/graph/graph-model.ts",
-        "packages/knowledge-graph/src/dataset.ts",
-        "packages/knowledge-graph/src/index.ts",
-        "packages/knowledge-graph/src/tools.ts",
-        "scripts/check-knowledge-graph.mjs"
-      ]
-    },
-    {
-      "section": "governance",
-      "status": "updated",
-      "paths": [
-        "packages/contracts/src/index.ts"
-      ]
-    },
-    {
       "section": "evaluations",
       "status": "updated",
       "paths": [
-        "packages/evals/src/cases.ts",
-        "packages/evals/src/scoring.ts"
+        "apps/web/src/EvaluationView.tsx"
+      ]
+    },
+    {
+      "section": "observability",
+      "status": "updated",
+      "paths": [
+        "apps/web/src/HistoryView.tsx",
+        "apps/web/src/turn-trace.ts"
       ]
     }
   ],
   "notices": [],
   "failures": [
-    "Reference: Graph relationship ABOUT is listed twice."
+    "New code: apps/web/src/turn-stats.ts isn't mapped to a Learn section. Add it to SECTION_SOURCES in apps/web/src/learn/sources.ts (and teach it in that section), or to UNTAUGHT_SOURCES with a reason."
   ]
 }

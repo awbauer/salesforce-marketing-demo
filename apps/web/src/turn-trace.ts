@@ -7,6 +7,7 @@ import {
   TurnTraceSchema,
 } from "@northstar/contracts";
 import type { UIMessage } from "ai";
+import { turnStats } from "./turn-stats";
 
 export type TraceRow = {
   key: string;
@@ -202,6 +203,22 @@ function rowsFromTrace(message: UIMessage, trace: TurnTrace): TraceRow[] {
   const texts = textsOfType(message, "text");
   const openedAt = new Map<string, number>();
   const finished = trace.events.some((event) => event.kind === "turn-finish");
+  const tokens = trace.events.reduce(
+    (sum, event) =>
+      event.kind === "step-finish"
+        ? sum + (event.inputTokens ?? 0) + (event.outputTokens ?? 0)
+        : sum,
+    0,
+  );
+  const toolCalls = new Set(
+    trace.events.flatMap((event) =>
+      event.kind === "tool-input-start" ||
+      event.kind === "tool-input-available" ||
+      event.kind === "tool-input-error"
+        ? [event.toolCallId]
+        : [],
+    ),
+  ).size;
   return trace.events.flatMap((event, index): TraceRow[] => {
     const key = `${event.kind}-${index}`;
     const elapsed = `+${seconds(event.at - trace.startedAt)}`;
@@ -390,7 +407,7 @@ function rowsFromTrace(message: UIMessage, trace: TurnTrace): TraceRow[] {
             key,
             kind: "turn",
             label: `Turn ${event.outcome.replace("-", " ")}`,
-            detail: `Total ${seconds(event.at - trace.startedAt)}`,
+            detail: `Total ${turnStats(seconds(event.at - trace.startedAt), { tokens, toolCalls })}`,
             state: event.outcome === "completed" ? "complete" : "error",
             elapsed,
           },

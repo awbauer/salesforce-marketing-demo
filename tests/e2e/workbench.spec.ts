@@ -531,10 +531,18 @@ test("renders model comparison, checks, scenarios, failures, and methodology", a
   });
   await expect(models.getByText("In production")).toBeVisible();
   await expect(models.getByRole("row", { name: /gpt-oss-20b/ })).toContainText("50%");
+  // Cost per turn sits beside latency: tokens (input plus output) and tool calls, averaged.
+  await expect(models.getByRole("row", { name: /gpt-oss-120b/ })).toContainText(
+    "1,500 tokens1 tool call",
+  );
+  await expect(models.getByRole("row", { name: /gpt-oss-20b/ })).toContainText(
+    "1,500 tokens0.5 tool calls",
+  );
   await expect(page.getByText("Kimi K2.6 not evaluated: Errored.")).toBeVisible();
   await expect(page.getByRole("heading", { name: /Failed turns .*\(1\)/ })).toBeVisible();
   await page.getByText("called no tool").click();
   await expect(page.getByText("tool-calls,length")).toBeVisible();
+  await expect(page.getByText("8.0s · 1,500 tokens · 0 tool calls")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Methodology" })).toBeVisible();
   await page.getByRole("button", { name: "Suite routing-model-only" }).click();
   await expect(page.getByRole("button", { name: "Suite routing-model-only" })).toHaveAttribute(
@@ -571,6 +579,10 @@ test("records each turn with its interpretation, reasoning, and outcome in histo
     .locator(".history-turn", { hasText: "Review the sample campaign readiness" })
     .first();
   await expect(reviewed.getByText("Local fixture", { exact: true })).toBeVisible();
+  // A turn's seconds come with its tokens and tool calls.
+  await expect(reviewed.locator("summary").first()).toContainText(
+    /\d+\.\ds · [\d,]+ tokens? · \d+ tool calls?/,
+  );
   await reviewed.locator("summary").first().click();
   await expect(reviewed.getByText(/answered from the fictional fixture/i)).toBeVisible();
   await reviewed.getByText("Show reasoning").click();
