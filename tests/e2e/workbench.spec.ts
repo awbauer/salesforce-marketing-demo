@@ -240,6 +240,37 @@ test("offers a use-case library with data flows and coming-soon scenarios", asyn
   await expect(page.getByLabel("Message the orchestrator")).toHaveValue(prompt);
 });
 
+test("lists the financial services use cases with their graph tools and live Fed news", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Use cases" }).first().click();
+  const library = page.getByRole("region", { name: "Use cases" });
+  await library
+    .getByRole("group", { name: "Team" })
+    .getByRole("button", { name: /^Financial services/ })
+    .click();
+  const available = library.getByRole("list", { name: "Available use cases" });
+  await expect(available.getByRole("listitem")).toHaveCount(3);
+  await expect(library.getByRole("list", { name: "Coming soon use cases" })).toHaveCount(0);
+
+  await available.getByRole("button", { name: /Market news to pre-approved content/ }).click();
+  const detail = library.getByRole("article");
+  await expect(detail.getByRole("link", { name: /Federal Reserve press releases/ })).toBeVisible();
+  await expect(detail.getByRole("list", { name: "Data flow" })).toContainText(
+    "match_news_to_approved_content",
+  );
+
+  await available.getByRole("button", { name: /Account plan to grow assets/ }).click();
+  await expect(detail).toContainText("Sales · Financial services");
+  await expect(detail.getByRole("list", { name: "Data flow" })).toContainText(
+    "build_aum_account_plan",
+  );
+  const prompt = "Build an account plan to grow AUM with Cedar Valley Community Foundation";
+  await detail.getByRole("button", { name: new RegExp(prompt) }).click();
+  await expect(page.getByLabel("Message the orchestrator")).toHaveValue(prompt);
+});
+
 test("checks inventory against the forecast and opens a store-manager case only after confirmation", async ({
   page,
 }, testInfo) => {
@@ -719,9 +750,9 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
     .first()
     .click();
   await expect(page.getByRole("heading", { name: "Graph explorer" })).toBeVisible();
-  await expect(page.getByText("186", { exact: true })).toBeVisible();
+  await expect(page.getByText("339", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("img", { name: /Knowledge graph drawing with 186 nodes/ }),
+    page.getByRole("img", { name: /Knowledge graph drawing with 339 nodes/ }),
   ).toBeVisible();
 
   // The rain tour expands the weather node and summarizes what worked.
@@ -730,7 +761,7 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
   await expect(details.getByRole("heading", { name: "rain", exact: true })).toBeVisible();
   await expect(details.getByText(/Loaded 60 of \d+ connections/)).toBeVisible();
   await expect(details.getByText("What the graph says")).toBeVisible();
-  await expect(page.getByText("246", { exact: true })).toBeVisible();
+  await expect(page.getByText("399", { exact: true })).toBeVisible();
 
   // Search reaches every loaded node without the canvas.
   await page.getByLabel("Find a node").fill("fall loyalty");
@@ -748,7 +779,7 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
   const personas = page.getByRole("button", { name: /^Persona/ });
   await personas.click();
   await expect(personas).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByRole("img", { name: /with 194 nodes/ })).toBeVisible();
+  await expect(page.getByRole("img", { name: /with 311 nodes/ })).toBeVisible();
   await personas.click();
 
   await page.getByRole("button", { name: /A failed brand check/ }).click();
@@ -799,7 +830,7 @@ test("filters the graph explorer to one brand's own nodes", async ({ page }) => 
   await page.getByRole("button", { name: /Who a campaign reaches/ }).click();
   await expect(all).toHaveAttribute("aria-pressed", "true");
   await expect(
-    page.getByRole("img", { name: /Knowledge graph drawing with 186 nodes/ }),
+    page.getByRole("img", { name: /Knowledge graph drawing with 339 nodes/ }),
   ).toBeVisible();
 
   await northstar.click();
@@ -807,6 +838,21 @@ test("filters the graph explorer to one brand's own nodes", async ({ page }) => 
   await expect(
     page.getByRole("img", { name: /Knowledge graph drawing with 115 nodes/ }),
   ).toBeVisible();
+
+  // Harborstone Wealth keeps its regulated content, deal, and clients, not Coastline's menu.
+  const harborstone = page.getByRole("button", { name: "Harborstone Wealth", exact: true });
+  await harborstone.click();
+  await expect(
+    page.getByRole("img", { name: /Knowledge graph drawing with 158 nodes/ }),
+  ).toBeVisible();
+  await page.getByLabel("Find a node").fill("cedar valley");
+  await expect(
+    page
+      .getByRole("list", { name: "Matching nodes" })
+      .getByRole("button", { name: "Cedar Valley Community Foundation Client" }),
+  ).toBeVisible();
+  await page.getByLabel("Find a node").fill("tortilla");
+  await expect(page.getByText(/No loaded node matches/)).toBeVisible();
 });
 
 test("has the Marketing Cloud agent save the brief, then create the campaign and its flow", async ({

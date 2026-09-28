@@ -332,3 +332,143 @@ describe("use-case graph tools", () => {
     expect(JSON.stringify(result)).not.toMatch(/@/);
   });
 });
+
+describe("financial services graph tools", () => {
+  type Approval = { id: string; status: string };
+  it("matches a rate increase to approved content, and says why the rest is blocked", async () => {
+    const result = (await tool("match_news_to_approved_content")({ event: "rate-increase" })) as {
+      readyToSend: Array<{
+        asset: string;
+        channel: string;
+        approval: Approval;
+        disclosures: string[];
+        reachableUnderMarketingConsent: number;
+      }>;
+      blocked: Array<{ asset: string; reasons: string[] }>;
+      speed: { withinSixHours: { avgOpenRate: number }; later: { avgOpenRate: number } };
+      paths: Array<{ relationships: Array<{ type: string }> }>;
+    };
+    expect(result.readyToSend.map((asset) => [asset.channel, asset.approval.id])).toEqual([
+      ["email", "COMP-2026-0412"],
+      ["sms", "COMP-2026-0413"],
+    ]);
+    // Reach is marketing consent per channel: clients plus subscribers for email, clients for SMS.
+    expect(result.readyToSend.map((asset) => asset.reachableUnderMarketingConsent)).toEqual([
+      31_400 + 22_500,
+      9_800,
+    ]);
+    expect(result.readyToSend[0]?.disclosures).toContain(
+      "Not FDIC insured. No bank guarantee. May lose value.",
+    );
+    const reasons = Object.fromEntries(result.blocked.map((asset) => [asset.asset, asset.reasons]));
+    expect(reasons["Rates rose: time to revisit your bond ladder"]?.[0]).toMatch(/expired/);
+    expect(reasons["Higher rates, higher returns"]).toEqual([
+      "Approval COMP-2026-0519 is still pending with compliance",
+      "Failed compliance check: No performance guarantees",
+    ]);
+    // Past responses sent within hours of the news opened better than next-day ones.
+    expect(result.speed.withinSixHours.avgOpenRate).toBeGreaterThan(result.speed.later.avgOpenRate);
+    expect(result.paths.map((path) => path.relationships[0]?.type)).toContain("RESPONDS_TO");
+  });
+
+  it("limits approved content to one channel when asked", async () => {
+    const result = (await tool("match_news_to_approved_content")({
+      event: "rate-hold",
+      channel: "sms",
+    })) as { readyToSend: unknown[]; blocked: Array<{ channel: string }> };
+    expect(result.readyToSend).toEqual([]);
+    expect(result.blocked.map((asset) => asset.channel)).toEqual(["sms"]);
+  });
+
+  it("orders the embargoed acquisition package and blocks what can't go out", async () => {
+    const result = (await tool("prepare_deal_release")({})) as {
+      steps: Array<{
+        step: number;
+        asset: string;
+        reachable: number | null;
+        reliesOn: string;
+        approval: Approval & { embargoed?: boolean };
+        ready: boolean;
+        blockers: string[];
+      }>;
+      readyCount: number;
+      blockedCount: number;
+    };
+    expect(result.steps.map((step) => step.step)).toEqual([1, 2, 3, 3, 4, 5]);
+    expect(result.readyCount).toBe(4);
+    expect(result.blockedCount).toBe(2);
+    const letter = result.steps.find((step) => step.asset === "Welcome letter to Bayview clients");
+    // Bayview's clients get service notices under their client agreement, never marketing.
+    expect(letter).toMatchObject({ ready: true, reachable: 12_600 });
+    expect(letter?.reliesOn).toMatch(/service notice/);
+    expect(letter?.approval.embargoed).toBe(true);
+    const sms = result.steps.find((step) => step.asset === "SMS: news about your account");
+    expect(sms?.ready).toBe(false);
+    expect(sms?.blockers.join(" ")).toMatch(/Required disclosures present/);
+    expect(sms?.blockers.join(" ")).toMatch(/no sms marketing consent/);
+  });
+
+  it("builds an AUM account plan from signals, peers, approved content, and consent", async () => {
+    const result = (await tool("build_aum_account_plan")({
+      client: "Cedar Valley Community Foundation",
+    })) as {
+      advisor: { name: string };
+      walletShare: number;
+      plays: Array<{
+        product: string;
+        estimatedOpportunityMillions: number;
+        peerAdoption: string;
+        approvedContent: Array<{ asset: string; approval: { id: string } }>;
+        blockedContent: Array<{ reasons: string[] }>;
+      }>;
+      totalOpportunityMillions: number;
+      contacts: Array<{
+        persona: string;
+        reachableBy: string[];
+        channelForPlayContent: string | null;
+      }>;
+      noApprovedContentForTheirChannels: string[];
+      paths: Array<{ relationships: Array<{ type: string }> }>;
+    };
+    expect(result.advisor.name).toBe("Marcus Oyelaran");
+    expect(result.walletShare).toBeCloseTo(42 / 107, 3);
+    // Plays are products the client doesn't hold, largest opportunity first.
+    expect(result.plays.map((play) => play.product)).toEqual([
+      "Outsourced CIO",
+      "Municipal bond ladder",
+      "Private credit fund",
+      "Securities-based lending",
+    ]);
+    expect(result.plays[0]).toMatchObject({
+      estimatedOpportunityMillions: 16.3,
+      peerAdoption: "2 of 3 other foundation clients hold it",
+    });
+    // Plans use evergreen approved content; a pending approval blocks the private credit play.
+    const content = result.plays.flatMap((play) =>
+      play.approvedContent.map((asset) => asset.asset),
+    );
+    expect(content.every((asset) => !/^Rates (?:rose|fell)/.test(asset))).toBe(true);
+    expect(result.plays[2]?.approvedContent).toEqual([]);
+    expect(result.plays[2]?.blockedContent[0]?.reasons[0]).toMatch(/pending/);
+    expect(result.totalOpportunityMillions).toBeCloseTo(
+      result.plays.reduce((sum, play) => sum + play.estimatedOpportunityMillions, 0),
+      1,
+    );
+    expect(result.contacts).toHaveLength(3);
+    // Play content is email only, so an SMS-only contact has no channel for it.
+    for (const contact of result.contacts)
+      expect(contact.channelForPlayContent).toBe(
+        contact.reachableBy.includes("email") ? "email" : null,
+      );
+    expect(result.noApprovedContentForTheirChannels).toEqual(
+      result.contacts
+        .filter(
+          (contact) => contact.reachableBy.length > 0 && !contact.reachableBy.includes("email"),
+        )
+        .map((contact) => contact.persona),
+    );
+    expect(result.paths.map((path) => path.relationships.map((rel) => rel.type).join(">"))).toEqual(
+      expect.arrayContaining(["COVERED_BY", "HAS_SIGNAL>SUGGESTS", "EXPLAINS>APPROVED_UNDER"]),
+    );
+  });
+});

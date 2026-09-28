@@ -46,7 +46,8 @@ export const DOMAINS: Domain[] = [
   {
     id: "marketing",
     title: "Brands, campaigns, and content",
-    blurb: "Northstar and its Coastline Kitchen brand: what they plan, write, and check.",
+    blurb:
+      "Northstar and its Coastline Kitchen and Harborstone Wealth brands: what they plan, write, and check.",
     labels: ["Brand", "Campaign", "Brief", "ContentAsset", "BrandRule"],
   },
   {
@@ -72,6 +73,24 @@ export const DOMAINS: Domain[] = [
       "EmailSend",
     ],
   },
+  {
+    id: "wealth",
+    title: "Harborstone Wealth",
+    blurb:
+      "Regulated content with its approvals and disclosures, an embargoed acquisition, and clients with their holdings and signals.",
+    labels: [
+      "Approval",
+      "Disclosure",
+      "MarketEvent",
+      "ClientSend",
+      "Deal",
+      "Firm",
+      "Client",
+      "Advisor",
+      "Product",
+      "Signal",
+    ],
+  },
 ];
 
 export const LABEL_COLORS: Record<string, string> = {
@@ -94,6 +113,16 @@ export const LABEL_COLORS: Record<string, string> = {
   EmailSend: "#b3a3c7",
   InventoryItem: "#b0763f",
   StoreManager: "#4f6f8f",
+  Approval: "#2e6f5e",
+  Disclosure: "#8c4a6b",
+  MarketEvent: "#a33c2f",
+  ClientSend: "#a8b6a0",
+  Deal: "#3d3a78",
+  Firm: "#6a67b0",
+  Client: "#9a5a14",
+  Advisor: "#46607a",
+  Product: "#3b7a8c",
+  Signal: "#d4a017",
 };
 
 export const LABEL_NAMES: Record<string, string> = {
@@ -106,6 +135,8 @@ export const LABEL_NAMES: Record<string, string> = {
   EmailSend: "Email send",
   InventoryItem: "Inventory item",
   StoreManager: "Store manager",
+  MarketEvent: "Market event",
+  ClientSend: "Client send",
 };
 
 export const labelName = (label: string) => LABEL_NAMES[label] ?? label;
@@ -143,6 +174,23 @@ export const RELATIONSHIP_PHRASES: Record<string, string> = {
   MADE_WITH: "is made with",
   LIFTS_DEMAND: "lifts demand for",
   MANAGED_BY: "is managed by",
+  APPROVED_UNDER: "is approved under",
+  REQUIRES: "requires disclosure",
+  APPROVED_FOR: "is approved for",
+  RESPONDS_TO: "responds to",
+  EXPLAINS: "explains",
+  RELEASED_WITH: "is released with",
+  ADDRESSED_TO: "is addressed to",
+  ANNOUNCED_BY: "is announced by",
+  ANNOUNCES: "announces",
+  ACQUIRES: "acquires",
+  CLIENT_OF: "is a client of",
+  COVERED_BY: "is covered by",
+  HOLDS: "holds",
+  HAS_SIGNAL: "shows the signal",
+  SUGGESTS: "suggests",
+  OFFERS: "offers",
+  ADVISES_FOR: "advises for",
 };
 
 export const relationshipPhrase = (type: string) =>

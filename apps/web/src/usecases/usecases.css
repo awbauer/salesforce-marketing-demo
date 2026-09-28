@@ -115,6 +115,11 @@
   background: #f4fad8;
   color: #4b5a10;
 }
+.usecase-badge.is-industry {
+  border-color: #9db4cf;
+  background: #eef3f9;
+  color: #2c4a6b;
+}
 .usecase-badge.is-soon {
   background: #e7e8e4;
   color: #6b716c;

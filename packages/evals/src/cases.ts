@@ -108,6 +108,21 @@ export const routingCases = [
     prompt: "Are any ingredients running low at our Fresno location for this week's weather?",
     expected: "get_weather_forecast",
   },
+  {
+    id: "routing-26",
+    prompt: "What approved content can we send clients now that the Fed has moved rates?",
+    expected: "get_fed_announcements",
+  },
+  {
+    id: "routing-27",
+    prompt: "What's ready to go out when we announce the Bayview acquisition?",
+    expected: "prepare_deal_release",
+  },
+  {
+    id: "routing-28",
+    prompt: "What are the best plays to grow the Marin Family Office relationship?",
+    expected: "build_aum_account_plan",
+  },
 ] as const;
 
 /** The guided demo scenarios, taken from the use-case library prompts plus the two policy cases. */
@@ -185,6 +200,23 @@ export const demoScenarios = [
     id: "demo-service-inventory",
     prompt: "Check inventory for our Sacramento store against the forecast",
     expected: "get_weather_forecast → map_weather_demand → get_location_inventory",
+  },
+  {
+    id: "demo-fsi-fed-news",
+    prompt:
+      "The Fed just announced its rate decision. What pre-approved content can we send clients today?",
+    expected: "get_fed_announcements → match_news_to_approved_content",
+  },
+  {
+    id: "demo-fsi-deal-release",
+    prompt:
+      "We announce the Bayview acquisition tomorrow at 8am. What approved content is ready to release, in what order, and who can we send it to?",
+    expected: "prepare_deal_release",
+  },
+  {
+    id: "demo-fsi-aum-plan",
+    prompt: "Build an account plan to grow AUM with Cedar Valley Community Foundation",
+    expected: "build_aum_account_plan",
   },
   {
     id: "demo-memory-recall",

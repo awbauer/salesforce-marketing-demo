@@ -7,6 +7,7 @@ import {
   ACCOUNTS,
   buildDataset,
   ALL_CAMPAIGNS,
+  CLIENT_NAMES,
   createMemoryStore,
   forgetMemory,
   KNOWLEDGE_GRAPH_TOOL_SPECS,
@@ -53,6 +54,14 @@ const cases = {
     limit: 5,
   })),
   assess_location_impact: ["los-angeles", "san-diego", "fresno"].map((location) => ({ location })),
+  match_news_to_approved_content: [
+    { event: "rate-increase", channel: "any" },
+    { event: "rate-cut", channel: "email" },
+    { event: "rate-hold", channel: "sms" },
+    { event: "market-volatility", channel: "any" },
+  ],
+  prepare_deal_release: [{ deal: "deal-bayview" }],
+  build_aum_account_plan: CLIENT_NAMES.map((client) => ({ client })),
   map_weather_demand: [
     { location: "sacramento", conditions: ["heat"] },
     { location: "san-francisco", conditions: ["fog", "rain"] },

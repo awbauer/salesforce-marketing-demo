@@ -11,6 +11,14 @@ import {
   type GraphNode,
   LOCATIONS,
 } from "./dataset.ts";
+import {
+  CLIENT_NAMES,
+  DEAL,
+  DEAL_IDS,
+  MARKET_EVENT_IDS,
+  MARKET_EVENTS,
+  marketEventId,
+} from "./harborstone.ts";
 import type { MemoryStore } from "./memory.ts";
 
 export type Row = Record<string, unknown>;
@@ -1220,6 +1228,878 @@ const mapWeatherDemand = define({
   },
 });
 
+// ---------------------------------------------------------------------------------------------
+// Financial services use cases (Harborstone Wealth): approved content for market news, an
+// embargoed acquisition release, and account plans to grow assets under management.
+
+type Consent = { scopeId: string; channel: string; purpose: string; optedIn: number };
+type Disclosure = { id: string; name: string; text: string };
+type AssetFacts = {
+  assetId: string;
+  asset: string;
+  kind: string;
+  channel: string | null;
+  approvalNodeId: string;
+  approvalId: string;
+  status: string;
+  approvedOn: string | null;
+  expiresOn: string | null;
+  embargoed: boolean | null;
+  disclosures: Disclosure[];
+  failedRules: string[];
+};
+
+const ASSET_FACTS_CYPHER = `
+MATCH (a)-[:APPROVED_UNDER]->(ap:Approval)
+CALL (a) {
+  OPTIONAL MATCH (a)-[:REQUIRES]->(d:Disclosure)
+  WITH d ORDER BY d.id
+  RETURN collect(CASE WHEN d IS NULL THEN NULL ELSE {id: d.id, name: d.name, text: d.text} END) AS disclosures
+}
+CALL (a) {
+  OPTIONAL MATCH (a)-[:FAILED]->(r:BrandRule)
+  WITH r ORDER BY r.name
+  RETURN collect(r.name) AS failedRules
+}`;
+const ASSET_FACTS_RETURN = `a.id AS assetId, a.name AS asset, a.kind AS kind, a.channel AS channel,
+  ap.id AS approvalNodeId, ap.name AS approvalId, ap.status AS status, ap.approvedOn AS approvedOn,
+  ap.expiresOn AS expiresOn, ap.embargoed AS embargoed, disclosures, failedRules`;
+
+function assetFacts(ix: Index, assetId: string): AssetFacts {
+  const asset = ix.node(assetId);
+  const approval = ix.node((ix.outgoing(assetId, "APPROVED_UNDER")[0] as { to: string }).to);
+  return {
+    assetId: asset.id,
+    asset: asset.name,
+    kind: String(asset.kind),
+    channel: (asset.channel as string | undefined) ?? null,
+    approvalNodeId: approval.id,
+    approvalId: approval.name,
+    status: String(approval.status),
+    approvedOn: (approval.approvedOn as string | undefined) ?? null,
+    expiresOn: (approval.expiresOn as string | undefined) ?? null,
+    embargoed: (approval.embargoed as boolean | undefined) ?? null,
+    disclosures: ix
+      .outgoing(assetId, "REQUIRES")
+      .map(({ to }) => ix.node(to))
+      .sort((a, b) => byText(a.id, b.id))
+      .map((node) => ({ id: node.id, name: node.name, text: String(node.text) })),
+    failedRules: ix
+      .outgoing(assetId, "FAILED")
+      .map(({ to }) => ix.node(to).name)
+      .sort(byText),
+  };
+}
+
+function consentsOf(ix: Index, segmentId: string): Consent[] {
+  return ix
+    .outgoing(segmentId, "HAS_CONSENT")
+    .map((edge) => ({ edge, scope: ix.node(edge.to) }))
+    .sort((a, b) => byText(a.scope.id, b.scope.id))
+    .map(({ edge, scope }) => ({
+      scopeId: scope.id,
+      channel: String(scope.channel),
+      purpose: String(scope.purpose),
+      optedIn: Number(edge.properties?.optedIn),
+    }));
+}
+
+/** Why an asset can't go out now, or an empty list when it's approved and releasable. */
+function releaseBlockers(facts: AssetFacts, { allowEmbargoed = false } = {}) {
+  const blockers: string[] = [];
+  if (facts.status === "Expired")
+    blockers.push(`Approval ${facts.approvalId} expired on ${facts.expiresOn}; needs re-approval`);
+  else if (facts.status === "Pending")
+    blockers.push(`Approval ${facts.approvalId} is still pending with compliance`);
+  if (facts.embargoed && !allowEmbargoed)
+    blockers.push(`Embargoed until the announcement (${facts.approvalId})`);
+  for (const rule of facts.failedRules) blockers.push(`Failed compliance check: ${rule}`);
+  return blockers;
+}
+
+const approvalSummary = (facts: AssetFacts) => ({
+  id: facts.approvalId,
+  status: facts.status,
+  approvedOn: facts.approvedOn,
+  expiresOn: facts.expiresOn,
+  ...(facts.embargoed ? { embargoed: true } : {}),
+});
+
+function assetPaths(facts: AssetFacts, anchor?: { node: PathNode; type: string }) {
+  const asset = { id: facts.assetId, label: "ContentAsset", name: facts.asset };
+  const approval = { id: facts.approvalNodeId, label: "Approval", name: facts.approvalId };
+  const lead = anchor
+    ? {
+        nodes: [asset, anchor.node, approval],
+        relationships: [
+          { type: anchor.type, from: asset.id, to: anchor.node.id },
+          { type: "APPROVED_UNDER", from: asset.id, to: approval.id },
+        ],
+      }
+    : {
+        nodes: [asset, approval],
+        relationships: [{ type: "APPROVED_UNDER", from: asset.id, to: approval.id }],
+      };
+  const disclosure = facts.disclosures[0];
+  return [
+    lead,
+    ...(disclosure
+      ? [
+          {
+            nodes: [asset, { id: disclosure.id, label: "Disclosure", name: disclosure.name }],
+            relationships: [{ type: "REQUIRES", from: asset.id, to: disclosure.id }],
+          },
+        ]
+      : []),
+  ];
+}
+
+export const NEWS_CONTENT_CYPHER = `
+MATCH (e:MarketEvent {dataset: $dataset, id: $eventId})<-[:RESPONDS_TO]-(a:ContentAsset)
+${ASSET_FACTS_CYPHER}
+OPTIONAL MATCH (camp:Campaign)-[:USES]->(a)
+RETURN e.id AS eventId, e.name AS event, camp.id AS campaignId, camp.name AS campaign,
+  ${ASSET_FACTS_RETURN}
+ORDER BY a.id`;
+
+export const NEWS_AUDIENCE_CYPHER = `
+MATCH (:MarketEvent {dataset: $dataset, id: $eventId})<-[:RESPONDS_TO]-(:ContentAsset)<-[:USES]-(:Campaign)-[:TARGETS]->(s:Segment)
+WITH DISTINCT s
+OPTIONAL MATCH (s)-[c:HAS_CONSENT]->(scope:ConsentScope)
+WITH s, scope, c ORDER BY scope.id
+RETURN s.id AS segmentId, s.name AS segment, s.size AS size,
+  collect(CASE WHEN scope IS NULL THEN NULL ELSE {scopeId: scope.id, channel: scope.channel, purpose: scope.purpose, optedIn: c.optedIn} END) AS consents
+ORDER BY segmentId`;
+
+export const NEWS_RESPONSES_CYPHER = `
+MATCH (:MarketEvent {dataset: $dataset, id: $eventId})<-[:RESPONDS_TO]-(r:ClientSend)-[:USED]->(a:ContentAsset)
+RETURN r.id AS sendId, r.name AS send, r.hoursAfterNews AS hoursAfterNews, r.openRate AS openRate,
+  r.clickRate AS clickRate, a.id AS assetId, a.name AS asset
+ORDER BY hoursAfterNews, sendId`;
+
+type NewsAssetRow = AssetFacts & {
+  eventId: string;
+  event: string;
+  campaignId: string | null;
+  campaign: string | null;
+};
+type AudienceRow = { segmentId: string; segment: string; size: number; consents: Consent[] };
+type ResponseRow = {
+  sendId: string;
+  send: string;
+  hoursAfterNews: number;
+  openRate: number;
+  clickRate: number;
+  assetId: string;
+  asset: string;
+};
+
+const matchNewsToApprovedContent = define({
+  name: "match_news_to_approved_content",
+  title: "Match market news to approved content",
+  description:
+    "For a market event (from the Federal Reserve news tool's event field: rate-increase, rate-cut, rate-hold, or market-volatility), find Harborstone Wealth's pre-approved regulated content for it: which assets are approved and releasable now (with approval ID, expiry, required disclosures, and channel), which are blocked and why (expired or pending approval, failed compliance check), how many clients and subscribers can be reached on each channel under marketing consent, and how fast past responses went out and how they performed. Each with its evidence path. Read-only.",
+  input: z.object({
+    event: z.enum(MARKET_EVENT_IDS).describe("Market event, from the news tool's event field"),
+    channel: z
+      .enum(["email", "sms", "any"])
+      .default("any")
+      .describe("Limit to one channel, or any"),
+  }),
+  run: async (backend, { event, channel }) => {
+    const eventId = marketEventId(event);
+    const eventNode = { id: eventId, label: "MarketEvent", name: MARKET_EVENTS[event] };
+    const assetRows = (await rows(backend, NEWS_CONTENT_CYPHER, { eventId }, (ix) =>
+      ix
+        .incoming(eventId, "RESPONDS_TO")
+        .map(({ from }) => ix.node(from))
+        .filter((node) => node.label === "ContentAsset")
+        .sort((a, b) => byText(a.id, b.id))
+        .map((asset) => {
+          const campaign = ix.incoming(asset.id, "USES")[0];
+          const campaignNode = campaign ? ix.node(campaign.from) : null;
+          return {
+            eventId,
+            event: MARKET_EVENTS[event],
+            campaignId: campaignNode?.id ?? null,
+            campaign: campaignNode?.name ?? null,
+            ...assetFacts(ix, asset.id),
+          };
+        }),
+    )) as NewsAssetRow[];
+    const audienceRows = (await rows(backend, NEWS_AUDIENCE_CYPHER, { eventId }, (ix) => {
+      const segments = new Set<string>();
+      for (const { from } of ix.incoming(eventId, "RESPONDS_TO"))
+        for (const uses of ix.incoming(from, "USES"))
+          for (const target of ix.outgoing(uses.from, "TARGETS")) segments.add(target.to);
+      return [...segments].sort(byText).map((segmentId) => {
+        const segment = ix.node(segmentId);
+        return {
+          segmentId,
+          segment: segment.name,
+          size: Number(segment.size),
+          consents: consentsOf(ix, segmentId),
+        };
+      });
+    })) as AudienceRow[];
+    const responseRows = (await rows(backend, NEWS_RESPONSES_CYPHER, { eventId }, (ix) =>
+      ix
+        .incoming(eventId, "RESPONDS_TO")
+        .map(({ from }) => ix.node(from))
+        .filter((node) => node.label === "ClientSend")
+        .map((send) => {
+          const asset = ix.node((ix.outgoing(send.id, "USED")[0] as { to: string }).to);
+          return {
+            sendId: send.id,
+            send: send.name,
+            hoursAfterNews: Number(send.hoursAfterNews),
+            openRate: Number(send.openRate),
+            clickRate: Number(send.clickRate),
+            assetId: asset.id,
+            asset: asset.name,
+          };
+        })
+        .sort((a, b) => a.hoursAfterNews - b.hoursAfterNews || byText(a.sendId, b.sendId)),
+    )) as ResponseRow[];
+
+    const inChannel = assetRows.filter((row) => channel === "any" || row.channel === channel);
+    const reachable = (assetChannel: string | null) =>
+      audienceRows.reduce(
+        (sum, audience) =>
+          sum +
+          (audience.consents.find(
+            (consent) => consent.channel === assetChannel && consent.purpose === "marketing",
+          )?.optedIn ?? 0),
+        0,
+      );
+    const ready = inChannel.filter((row) => releaseBlockers(row).length === 0);
+    const blocked = inChannel.filter((row) => releaseBlockers(row).length > 0);
+    const paths: EvidencePath[] = [
+      ...ready.flatMap((row) => assetPaths(row, { node: eventNode, type: "RESPONDS_TO" })),
+      ...blocked.map((row) => {
+        const asset = { id: row.assetId, label: "ContentAsset", name: row.asset };
+        const approval = { id: row.approvalNodeId, label: "Approval", name: row.approvalId };
+        return {
+          nodes: [asset, approval],
+          relationships: [
+            { type: `APPROVED_UNDER (${row.status})`, from: asset.id, to: approval.id },
+          ],
+        };
+      }),
+      ...audienceRows.flatMap((audience) =>
+        audience.consents
+          .filter((consent) => consent.purpose === "marketing")
+          .map((consent) => ({
+            nodes: [
+              { id: audience.segmentId, label: "Segment", name: audience.segment },
+              { id: consent.scopeId, label: "ConsentScope", name: `${consent.channel} marketing` },
+            ],
+            relationships: [
+              {
+                type: `HAS_CONSENT ${consent.optedIn.toLocaleString("en-US")} opted in`,
+                from: audience.segmentId,
+                to: consent.scopeId,
+              },
+            ],
+          })),
+      ),
+    ];
+    const fastest = responseRows.filter((row) => row.hoursAfterNews <= 6);
+    const slowest = responseRows.filter((row) => row.hoursAfterNews > 6);
+    const average = (values: number[]) =>
+      values.length ? round4(values.reduce((sum, value) => sum + value, 0) / values.length) : null;
+    return {
+      event,
+      eventName: MARKET_EVENTS[event],
+      channel,
+      readyToSend: ready.map((row) => ({
+        asset: row.asset,
+        channel: row.channel,
+        campaign: row.campaign,
+        approval: approvalSummary(row),
+        disclosures: row.disclosures.map((disclosure) => disclosure.text),
+        reachableUnderMarketingConsent: reachable(row.channel),
+      })),
+      blocked: blocked.map((row) => ({
+        asset: row.asset,
+        channel: row.channel,
+        approval: approvalSummary(row),
+        reasons: releaseBlockers(row),
+      })),
+      audiences: audienceRows.map((audience) => ({
+        segment: audience.segment,
+        size: audience.size,
+        marketingOptIns: Object.fromEntries(
+          audience.consents
+            .filter((consent) => consent.purpose === "marketing")
+            .map((consent) => [consent.channel, consent.optedIn]),
+        ),
+      })),
+      pastResponses: responseRows.map((row) => ({
+        asset: row.asset,
+        hoursAfterNews: row.hoursAfterNews,
+        openRate: row.openRate,
+        clickRate: row.clickRate,
+      })),
+      speed: {
+        withinSixHours: {
+          sends: fastest.length,
+          avgOpenRate: average(fastest.map((row) => row.openRate)),
+        },
+        later: { sends: slowest.length, avgOpenRate: average(slowest.map((row) => row.openRate)) },
+      },
+      paths: paths.slice(0, MAX_PATHS),
+    };
+  },
+});
+
+export const DEAL_RELEASE_CYPHER = `
+MATCH (d:Deal {dataset: $dataset, id: $dealId})
+OPTIONAL MATCH (d)-[:ACQUIRES]->(f:Firm)
+MATCH (a:ContentAsset)-[rw:RELEASED_WITH]->(d)
+${ASSET_FACTS_CYPHER}
+CALL (a) {
+  OPTIONAL MATCH (a)-[:ADDRESSED_TO]->(s:Segment)
+  OPTIONAL MATCH (s)-[c:HAS_CONSENT]->(scope:ConsentScope)
+  WITH s, scope, c ORDER BY scope.id
+  RETURN s.id AS segmentId, s.name AS segment, s.size AS size,
+    collect(CASE WHEN scope IS NULL THEN NULL ELSE {scopeId: scope.id, channel: scope.channel, purpose: scope.purpose, optedIn: c.optedIn} END) AS consents
+}
+RETURN d.id AS dealId, d.name AS deal, d.status AS dealStatus, f.id AS firmId, f.name AS firm,
+  rw.step AS step, rw.timing AS timing, rw.purpose AS purpose, segmentId, segment, size, consents,
+  ${ASSET_FACTS_RETURN}
+ORDER BY step, assetId`;
+
+type DealRow = AssetFacts & {
+  dealId: string;
+  deal: string;
+  dealStatus: string;
+  firmId: string | null;
+  firm: string | null;
+  step: number;
+  timing: string;
+  purpose: string;
+  segmentId: string | null;
+  segment: string | null;
+  size: number | null;
+  consents: Consent[];
+};
+
+const prepareDealRelease = define({
+  name: "prepare_deal_release",
+  title: "Prepare an acquisition announcement release",
+  description:
+    "For Harborstone Wealth's embargoed acquisition (deal-bayview: Bayview Retirement Advisors), the pre-approved announcement package in release order: each asset's timing, audience, the consent it relies on (a service notice, marketing, internal, or public) and how many can be reached under it, its approval (embargoed until the announcement) and required disclosures, and anything that blocks it. Each with its evidence path. Read-only: it releases nothing.",
+  input: z.object({
+    deal: z.enum(DEAL_IDS).default(DEAL.id).describe("The acquisition"),
+  }),
+  run: async (backend, { deal }) => {
+    const result = (await rows(backend, DEAL_RELEASE_CYPHER, { dealId: deal }, (ix) => {
+      const dealNode = ix.byId.get(deal);
+      if (!dealNode) return [];
+      const firmEdge = ix.outgoing(deal, "ACQUIRES")[0];
+      const firm = firmEdge ? ix.node(firmEdge.to) : null;
+      return ix
+        .incoming(deal, "RELEASED_WITH")
+        .map((edge) => {
+          const audienceEdge = ix.outgoing(edge.from, "ADDRESSED_TO")[0];
+          const segment = audienceEdge ? ix.node(audienceEdge.to) : null;
+          return {
+            dealId: dealNode.id,
+            deal: dealNode.name,
+            dealStatus: String(dealNode.status),
+            firmId: firm?.id ?? null,
+            firm: firm?.name ?? null,
+            step: Number(edge.properties?.step),
+            timing: String(edge.properties?.timing),
+            purpose: String(edge.properties?.purpose),
+            segmentId: segment?.id ?? null,
+            segment: segment?.name ?? null,
+            size: segment ? Number(segment.size) : null,
+            consents: segment ? consentsOf(ix, segment.id) : [],
+            ...assetFacts(ix, edge.from),
+          };
+        })
+        .sort((a, b) => a.step - b.step || byText(a.assetId, b.assetId));
+    })) as DealRow[];
+    const first = result[0];
+    if (!first) return { deal, found: false, paths: [] };
+    const dealNode = { id: first.dealId, label: "Deal", name: first.deal };
+    const steps = result.map((row) => {
+      const scope =
+        row.purpose === "transactional" || row.purpose === "marketing"
+          ? row.consents.find(
+              (consent) => consent.channel === row.channel && consent.purpose === row.purpose,
+            )
+          : undefined;
+      const reachable =
+        row.purpose === "internal"
+          ? row.size
+          : row.purpose === "public"
+            ? null
+            : (scope?.optedIn ?? 0);
+      const blockers = releaseBlockers(row, { allowEmbargoed: true });
+      if (row.segment && reachable === 0)
+        blockers.push(
+          `${row.segment} have no ${row.channel} ${row.purpose} consent with Harborstone`,
+        );
+      return {
+        step: row.step,
+        timing: row.timing,
+        asset: row.asset,
+        kind: row.kind,
+        channel: row.channel,
+        audience: row.segment ?? (row.purpose === "public" ? "Public (newswire)" : null),
+        audienceSize: row.size,
+        reliesOn:
+          row.purpose === "transactional"
+            ? `${row.channel} service notice (client agreement)`
+            : row.purpose === "marketing"
+              ? `${row.channel} marketing consent`
+              : row.purpose === "internal"
+                ? "internal audience"
+                : "public release",
+        reachable,
+        approval: approvalSummary(row),
+        disclosures: row.disclosures.map((disclosure) => disclosure.text),
+        ready: blockers.length === 0,
+        blockers,
+      };
+    });
+    const paths: EvidencePath[] = [
+      ...(first.firmId && first.firm
+        ? [
+            {
+              nodes: [dealNode, { id: first.firmId, label: "Firm", name: first.firm }],
+              relationships: [{ type: "ACQUIRES", from: dealNode.id, to: first.firmId }],
+            },
+          ]
+        : []),
+      ...result.flatMap((row) => {
+        const asset = { id: row.assetId, label: "ContentAsset", name: row.asset };
+        return [
+          ...assetPaths(row, { node: dealNode, type: `RELEASED_WITH step ${row.step}` }),
+          ...(row.segmentId && row.segment
+            ? [
+                {
+                  nodes: [asset, { id: row.segmentId, label: "Segment", name: row.segment }],
+                  relationships: [{ type: "ADDRESSED_TO", from: asset.id, to: row.segmentId }],
+                },
+              ]
+            : []),
+        ];
+      }),
+    ];
+    return {
+      deal: first.deal,
+      dealStatus: first.dealStatus,
+      acquiredFirm: first.firm,
+      found: true,
+      steps,
+      readyCount: steps.filter((step) => step.ready).length,
+      blockedCount: steps.filter((step) => !step.ready).length,
+      paths: paths.slice(0, MAX_PATHS),
+    };
+  },
+});
+
+export const ACCOUNT_PLAN_CYPHER = `
+MATCH (c:Client {dataset: $dataset, name: $client})
+OPTIONAL MATCH (c)-[:COVERED_BY]->(adv:Advisor)
+CALL (c) {
+  OPTIONAL MATCH (c)-[h:HOLDS]->(p:Product)
+  WITH p, h ORDER BY p.id
+  RETURN collect(CASE WHEN p IS NULL THEN NULL ELSE {productId: p.id, product: p.name, aum: h.aum} END) AS holdings
+}
+CALL (c) {
+  OPTIONAL MATCH (c)-[hs:HAS_SIGNAL]->(sig:Signal)-[sg:SUGGESTS]->(p:Product)
+  WITH sig, hs, sg, p ORDER BY sig.id, p.id
+  RETURN collect(CASE WHEN sig IS NULL THEN NULL ELSE {signalId: sig.id, signal: sig.name, detectedDaysAgo: hs.detectedDaysAgo, detail: hs.detail, productId: p.id, product: p.name, capture: sg.capture, why: sg.why} END) AS suggestions
+}
+CALL (c) {
+  MATCH (peer:Client {dataset: $dataset})-[:HOLDS]->(p:Product)
+  WHERE peer.clientType = c.clientType AND peer.id <> c.id
+  WITH p, count(DISTINCT peer) AS holders ORDER BY p.id
+  RETURN collect({productId: p.id, holders: holders}) AS peerHoldings
+}
+CALL (c) {
+  OPTIONAL MATCH (peer:Client {dataset: $dataset})
+  WHERE peer.clientType = c.clientType AND peer.id <> c.id
+  RETURN count(peer) AS peerCount
+}
+CALL (c) {
+  OPTIONAL MATCH (c)-[:HAS_SIGNAL]->(:Signal)-[:SUGGESTS]->(p:Product)<-[:EXPLAINS]-(a:ContentAsset)-[:APPROVED_UNDER]->(ap:Approval)
+  WHERE NOT EXISTS { (a)-[:RESPONDS_TO]->(:MarketEvent) }
+  WITH DISTINCT p, a, ap
+  CALL (a) {
+    OPTIONAL MATCH (a)-[:REQUIRES]->(d:Disclosure)
+    WITH d ORDER BY d.id
+    RETURN collect(d.text) AS disclosures
+  }
+  CALL (a) {
+    OPTIONAL MATCH (a)-[:FAILED]->(r:BrandRule)
+    WITH r ORDER BY r.name
+    RETURN collect(r.name) AS failedRules
+  }
+  WITH p, a, ap, disclosures, failedRules ORDER BY p.id, a.id
+  RETURN collect(CASE WHEN a IS NULL THEN NULL ELSE {productId: p.id, assetId: a.id, asset: a.name,
+    channel: a.channel, approvalNodeId: ap.id, approvalId: ap.name, status: ap.status,
+    approvedOn: ap.approvedOn, expiresOn: ap.expiresOn, embargoed: ap.embargoed,
+    disclosures: disclosures, failedRules: failedRules} END) AS content
+}
+CALL (c) {
+  OPTIONAL MATCH (per:Persona)-[:WORKS_AT]->(c)
+  CALL (per) {
+    OPTIONAL MATCH (per)-[:HAS_CONSENT]->(s:ConsentScope {purpose: "marketing"})
+    WITH s ORDER BY s.channel
+    RETURN collect(s.channel) AS channels
+  }
+  CALL (per) {
+    OPTIONAL MATCH (per)-[e:ENGAGED_WITH]->(a:ContentAsset)
+    WITH a, e ORDER BY a.id
+    RETURN collect(CASE WHEN a IS NULL THEN NULL ELSE {assetId: a.id, asset: a.name, count: e.count, lastDaysAgo: e.lastDaysAgo} END) AS engaged
+  }
+  WITH per, channels, engaged ORDER BY per.id
+  RETURN collect(CASE WHEN per IS NULL THEN NULL ELSE {personaId: per.id, persona: per.name, role: per.role, roleWeight: per.roleWeight, channels: channels, engaged: engaged} END) AS contacts
+}
+RETURN c.id AS clientId, c.name AS client, c.clientType AS clientType, c.aum AS aum,
+  c.heldAwayEstimate AS heldAway, adv.id AS advisorId, adv.name AS advisor, adv.title AS advisorTitle,
+  holdings, suggestions, peerHoldings, peerCount, content, contacts`;
+
+type PlanContent = Omit<AssetFacts, "kind" | "disclosures"> & {
+  productId: string;
+  disclosures: string[];
+};
+type PlanRow = {
+  clientId: string;
+  client: string;
+  clientType: string;
+  aum: number;
+  heldAway: number;
+  advisorId: string | null;
+  advisor: string | null;
+  advisorTitle: string | null;
+  holdings: Array<{ productId: string; product: string; aum: number }>;
+  suggestions: Array<{
+    signalId: string;
+    signal: string;
+    detectedDaysAgo: number;
+    detail: string;
+    productId: string;
+    product: string;
+    capture: number;
+    why: string;
+  }>;
+  peerHoldings: Array<{ productId: string; holders: number }>;
+  peerCount: number;
+  content: PlanContent[];
+  contacts: Array<{
+    personaId: string;
+    persona: string;
+    role: string;
+    roleWeight: number;
+    channels: string[];
+    engaged: Array<{ assetId: string; asset: string; count: number; lastDaysAgo: number }>;
+  }>;
+};
+
+const round1 = (value: number) => Math.round(value * 10) / 10;
+
+const buildAumAccountPlan = define({
+  name: "build_aum_account_plan",
+  title: "Build an account plan to grow assets under management",
+  description:
+    "For a Harborstone Wealth client (a foundation, business, or family office; never an individual): assets with Harborstone and the estimated assets held elsewhere, the signals the relationship team has seen, and the plays they point to (products the client doesn't hold yet, the estimated AUM opportunity, and how many similar clients already hold each), the pre-approved content for each play (usable or blocked, with approval IDs and disclosures), the advisor, and the client's contacts ranked by role and engagement with the marketing channels each has consented to. Each with its evidence path. Read-only.",
+  input: z.object({
+    client: z.enum(CLIENT_NAMES).describe("Fictional Harborstone client name"),
+  }),
+  run: async (backend, { client }) => {
+    const [row] = (await rows(backend, ACCOUNT_PLAN_CYPHER, { client }, (ix) => {
+      const clientNode = [...ix.byId.values()].find(
+        (node) => node.label === "Client" && node.name === client,
+      );
+      if (!clientNode) return [];
+      const advisorEdge = ix.outgoing(clientNode.id, "COVERED_BY")[0];
+      const advisor = advisorEdge ? ix.node(advisorEdge.to) : null;
+      const peers = [...ix.byId.values()].filter(
+        (node) =>
+          node.label === "Client" &&
+          node.clientType === clientNode.clientType &&
+          node.id !== clientNode.id,
+      );
+      const holders = new Map<string, number>();
+      for (const peer of peers)
+        for (const { to } of ix.outgoing(peer.id, "HOLDS"))
+          holders.set(to, (holders.get(to) ?? 0) + 1);
+      const suggestions = ix
+        .outgoing(clientNode.id, "HAS_SIGNAL")
+        .flatMap((has) => ix.outgoing(has.to, "SUGGESTS").map((suggests) => ({ has, suggests })))
+        .sort((a, b) => byText(a.has.to, b.has.to) || byText(a.suggests.to, b.suggests.to))
+        .map(({ has, suggests }) => ({
+          signalId: has.to,
+          signal: ix.node(has.to).name,
+          detectedDaysAgo: Number(has.properties?.detectedDaysAgo),
+          detail: String(has.properties?.detail),
+          productId: suggests.to,
+          product: ix.node(suggests.to).name,
+          capture: Number(suggests.properties?.capture),
+          why: String(suggests.properties?.why),
+        }));
+      const content = [...new Set(suggestions.map((entry) => entry.productId))]
+        .flatMap((product) =>
+          ix
+            .incoming(product, "EXPLAINS")
+            // News responses are timed to their event; plans use evergreen content only.
+            .filter(({ from }) => ix.outgoing(from, "RESPONDS_TO").length === 0)
+            .map(({ from }) => ({ product, facts: assetFacts(ix, from) })),
+        )
+        .sort((a, b) => byText(a.product, b.product) || byText(a.facts.assetId, b.facts.assetId))
+        .map(({ product, facts }) => ({
+          productId: product,
+          assetId: facts.assetId,
+          asset: facts.asset,
+          channel: facts.channel,
+          approvalNodeId: facts.approvalNodeId,
+          approvalId: facts.approvalId,
+          status: facts.status,
+          approvedOn: facts.approvedOn,
+          expiresOn: facts.expiresOn,
+          embargoed: facts.embargoed,
+          disclosures: facts.disclosures.map((disclosure) => disclosure.text),
+          failedRules: facts.failedRules,
+        }));
+      const contacts = ix
+        .incoming(clientNode.id, "WORKS_AT")
+        .map(({ from }) => ix.node(from))
+        .filter((node) => node.label === "Persona")
+        .sort((a, b) => byText(a.id, b.id))
+        .map((persona) => ({
+          personaId: persona.id,
+          persona: persona.name,
+          role: String(persona.role),
+          roleWeight: Number(persona.roleWeight),
+          channels: ix
+            .outgoing(persona.id, "HAS_CONSENT")
+            .map(({ to }) => ix.node(to))
+            .filter((scope) => scope.purpose === "marketing")
+            .map((scope) => String(scope.channel))
+            .sort(byText),
+          engaged: ix
+            .outgoing(persona.id, "ENGAGED_WITH")
+            .sort((a, b) => byText(a.to, b.to))
+            .map((edge) => ({
+              assetId: edge.to,
+              asset: ix.node(edge.to).name,
+              count: Number(edge.properties?.count),
+              lastDaysAgo: Number(edge.properties?.lastDaysAgo),
+            })),
+        }));
+      return [
+        {
+          clientId: clientNode.id,
+          client: clientNode.name,
+          clientType: String(clientNode.clientType),
+          aum: Number(clientNode.aum),
+          heldAway: Number(clientNode.heldAwayEstimate),
+          advisorId: advisor?.id ?? null,
+          advisor: advisor?.name ?? null,
+          advisorTitle: advisor ? String(advisor.title) : null,
+          holdings: ix
+            .outgoing(clientNode.id, "HOLDS")
+            .sort((a, b) => byText(a.to, b.to))
+            .map((edge) => ({
+              productId: edge.to,
+              product: ix.node(edge.to).name,
+              aum: Number(edge.properties?.aum),
+            })),
+          suggestions,
+          peerHoldings: [...holders.entries()]
+            .sort(([a], [b]) => byText(a, b))
+            .map(([productId, count]) => ({ productId, holders: count })),
+          peerCount: peers.length,
+          content,
+          contacts,
+        },
+      ];
+    })) as PlanRow[];
+    if (!row) return { client, found: false, paths: [] };
+    const held = new Set(row.holdings.map((holding) => holding.productId));
+    const typeName = row.clientType.toLowerCase();
+    const plays = new Map<
+      string,
+      {
+        productId: string;
+        product: string;
+        capture: number;
+        signals: Array<{ signalId: string; signal: string; detail: string; why: string }>;
+      }
+    >();
+    for (const suggestion of row.suggestions) {
+      if (held.has(suggestion.productId)) continue;
+      const play = plays.get(suggestion.productId) ?? {
+        productId: suggestion.productId,
+        product: suggestion.product,
+        capture: 0,
+        signals: [],
+      };
+      play.capture = Math.max(play.capture, suggestion.capture);
+      play.signals.push({
+        signalId: suggestion.signalId,
+        signal: suggestion.signal,
+        detail: suggestion.detail,
+        why: suggestion.why,
+      });
+      plays.set(suggestion.productId, play);
+    }
+    const ranked = [...plays.values()]
+      .map((play) => {
+        const holders =
+          row.peerHoldings.find((entry) => entry.productId === play.productId)?.holders ?? 0;
+        const content = row.content.filter((entry) => entry.productId === play.productId);
+        const facts = (entry: PlanContent): AssetFacts => ({
+          ...entry,
+          kind: "Email",
+          disclosures: [],
+        });
+        return {
+          ...play,
+          opportunity: round1(row.heldAway * play.capture),
+          holders,
+          usable: content.filter((entry) => releaseBlockers(facts(entry)).length === 0),
+          blocked: content
+            .filter((entry) => releaseBlockers(facts(entry)).length > 0)
+            .map((entry) => ({ entry, reasons: releaseBlockers(facts(entry)) })),
+        };
+      })
+      .sort((a, b) => b.opportunity - a.opportunity || byText(a.product, b.product));
+    const playAssets = new Set(ranked.flatMap((play) => play.usable.map((entry) => entry.assetId)));
+    const playChannels = new Set(
+      ranked.flatMap((play) => play.usable.map((entry) => String(entry.channel))),
+    );
+    const contacts = row.contacts
+      .map((contact) => {
+        const relevant = contact.engaged.filter((entry) => playAssets.has(entry.assetId));
+        return {
+          ...contact,
+          relevant,
+          score:
+            contact.roleWeight +
+            relevant.reduce((sum, entry) => sum + entry.count, 0) * 2 +
+            contact.engaged.length,
+        };
+      })
+      .sort((a, b) => b.score - a.score || byText(a.persona, b.persona));
+    const clientNode = { id: row.clientId, label: "Client", name: row.client };
+    const paths: EvidencePath[] = [
+      ...(row.advisorId && row.advisor
+        ? [
+            {
+              nodes: [clientNode, { id: row.advisorId, label: "Advisor", name: row.advisor }],
+              relationships: [{ type: "COVERED_BY", from: clientNode.id, to: row.advisorId }],
+            },
+          ]
+        : []),
+      ...ranked.flatMap((play) => {
+        const product = { id: play.productId, label: "Product", name: play.product };
+        const signal = play.signals[0] as { signalId: string; signal: string };
+        const signalNode = { id: signal.signalId, label: "Signal", name: signal.signal };
+        const asset = play.usable[0];
+        return [
+          {
+            nodes: [clientNode, signalNode, product],
+            relationships: [
+              { type: "HAS_SIGNAL", from: clientNode.id, to: signalNode.id },
+              { type: "SUGGESTS", from: signalNode.id, to: product.id },
+            ],
+          },
+          ...(asset
+            ? [
+                {
+                  nodes: [
+                    { id: asset.assetId, label: "ContentAsset", name: asset.asset },
+                    product,
+                    { id: asset.approvalNodeId, label: "Approval", name: asset.approvalId },
+                  ],
+                  relationships: [
+                    { type: "EXPLAINS", from: asset.assetId, to: product.id },
+                    { type: "APPROVED_UNDER", from: asset.assetId, to: asset.approvalNodeId },
+                  ],
+                },
+              ]
+            : []),
+        ];
+      }),
+      ...contacts.slice(0, 3).map((contact) => ({
+        nodes: [{ id: contact.personaId, label: "Persona", name: contact.persona }, clientNode],
+        relationships: [{ type: "WORKS_AT", from: contact.personaId, to: clientNode.id }],
+      })),
+    ];
+    const total = round1(ranked.reduce((sum, play) => sum + play.opportunity, 0));
+    return {
+      client: row.client,
+      clientType: row.clientType,
+      found: true,
+      advisor: row.advisor ? { name: row.advisor, title: row.advisorTitle } : null,
+      aumWithHarborstoneMillions: row.aum,
+      heldAwayEstimateMillions: row.heldAway,
+      walletShare: round4(row.aum / (row.aum + row.heldAway)),
+      holdings: row.holdings.map((holding) => ({
+        product: holding.product,
+        aumMillions: holding.aum,
+      })),
+      signals: [
+        ...new Map(
+          row.suggestions.map((entry) => [
+            entry.signalId,
+            {
+              signal: entry.signal,
+              detail: entry.detail,
+              detectedDaysAgo: entry.detectedDaysAgo,
+            },
+          ]),
+        ).values(),
+      ].sort((a, b) => a.detectedDaysAgo - b.detectedDaysAgo || byText(a.signal, b.signal)),
+      plays: ranked.map((play) => ({
+        product: play.product,
+        why: play.signals.map((signal) => `${signal.why} (${signal.detail})`),
+        estimatedOpportunityMillions: play.opportunity,
+        peerAdoption: `${play.holders} of ${row.peerCount} other ${typeName} clients hold it`,
+        approvedContent: play.usable.map((entry) => ({
+          asset: entry.asset,
+          channel: entry.channel,
+          approval: { id: entry.approvalId, expiresOn: entry.expiresOn },
+          disclosures: entry.disclosures,
+        })),
+        blockedContent: play.blocked.map(({ entry, reasons }) => ({
+          asset: entry.asset,
+          reasons,
+        })),
+      })),
+      totalOpportunityMillions: total,
+      contacts: contacts.map((contact) => ({
+        persona: contact.persona,
+        role: contact.role,
+        reachableBy: contact.channels,
+        // Approved play content goes only on a channel it's approved for and they consented to.
+        channelForPlayContent:
+          contact.channels.find((channel) => playChannels.has(channel)) ?? null,
+        engagedWithPlayContent: contact.relevant.map((entry) => entry.asset),
+      })),
+      notReachable: contacts
+        .filter((contact) => contact.channels.length === 0)
+        .map((contact) => contact.persona),
+      noApprovedContentForTheirChannels: contacts
+        .filter(
+          (contact) =>
+            contact.channels.length > 0 &&
+            !contact.channels.some((channel) => playChannels.has(channel)),
+        )
+        .map((contact) => contact.persona),
+      paths: paths.slice(0, MAX_PATHS),
+    };
+  },
+});
+
 export const KNOWLEDGE_GRAPH_TOOL_SPECS = [
   getGraphOverview,
   explainBuyerGroup,
@@ -1230,6 +2110,9 @@ export const KNOWLEDGE_GRAPH_TOOL_SPECS = [
   planAccountOutreach,
   assessLocationImpact,
   mapWeatherDemand,
+  matchNewsToApprovedContent,
+  prepareDealRelease,
+  buildAumAccountPlan,
 ] as const;
 
 export { pathNode };

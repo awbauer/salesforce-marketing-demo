@@ -24,6 +24,36 @@ import {
   slug,
   storeManagerId,
 } from "./coastline.ts";
+import {
+  ADVISORS,
+  approvalNodeId,
+  CLIENT_TYPES,
+  CLIENTS,
+  clientId,
+  DEAL,
+  DEAL_ASSETS,
+  DISCLOSURES,
+  type DisclosureKey,
+  disclosureId,
+  GROWTH_ASSETS,
+  GROWTH_CAMPAIGN,
+  HARBORSTONE,
+  HARBORSTONE_RULES,
+  HARBORSTONE_SEGMENTS,
+  type LibraryAsset,
+  MARKET_ASSETS,
+  MARKET_EVENTS,
+  MARKET_MOMENTS_CAMPAIGN,
+  type MarketEvent,
+  marketEventId,
+  PAST_RESPONSES,
+  PRODUCTS,
+  type ProductKey,
+  productId,
+  SIGNALS,
+  type SignalKey,
+  signalId,
+} from "./harborstone.ts";
 
 export const DATASET_VERSION = "northstar-kg-v2";
 
@@ -220,6 +250,9 @@ export const ALL_CAMPAIGNS = [
     status: campaign.status,
   })),
   { ...COASTLINE_EMAIL_CAMPAIGN },
+  { ...MARKET_MOMENTS_CAMPAIGN },
+  { id: DEAL.campaign.id, name: DEAL.campaign.name, status: DEAL.campaign.status },
+  { ...GROWTH_CAMPAIGN },
 ];
 
 export const coastlineSegmentId = (location: string) => `segment-coastline-${location}`;
@@ -556,5 +589,188 @@ export function buildDataset(seed = 20260926): Dataset {
     rel("SENT_DURING", send, `daypart-${daypart}`);
     rel("UNDER", send, `weather-${condition}`);
   }
+  addHarborstone(node, rel, random(seed + 2));
   return { nodes, relationships };
+}
+
+/**
+ * Harborstone Wealth, a wealth-management brand under Northstar: pre-approved regulated content
+ * with its approvals and disclosures, an embargoed acquisition package, and institutional
+ * clients with their holdings, signals, and contacts. Its own seed leaves everything above as it was.
+ */
+function addHarborstone(
+  node: (label: string, id: string, name: string, extra?: Record<string, unknown>) => string,
+  rel: (
+    type: string,
+    from: string,
+    to: string,
+    properties?: GraphRelationship["properties"],
+  ) => void,
+  rand: () => number,
+) {
+  node("Brand", HARBORSTONE.id, HARBORSTONE.name, {
+    kind: "wealth management brand",
+    voice: HARBORSTONE.voice,
+  });
+  rel("PART_OF", HARBORSTONE.id, NORTHSTAR_BRAND.id);
+  const ruleIds = HARBORSTONE_RULES.map((rule) => {
+    const id = node("BrandRule", `rule-${slug(rule)}`, rule);
+    rel("RULE_OF", id, HARBORSTONE.id);
+    return id;
+  });
+  for (const [key, disclosure] of Object.entries(DISCLOSURES))
+    node("Disclosure", disclosureId(key as DisclosureKey), disclosure.name, {
+      text: disclosure.text,
+    });
+  for (const [key, name] of Object.entries(MARKET_EVENTS))
+    node("MarketEvent", marketEventId(key as MarketEvent), name);
+  for (const [key, name] of Object.entries(PRODUCTS)) {
+    node("Product", productId(key as ProductKey), name);
+    rel("OFFERS", HARBORSTONE.id, productId(key as ProductKey));
+  }
+  for (const [key, signal] of Object.entries(SIGNALS)) {
+    node("Signal", signalId(key as SignalKey), signal.name);
+    for (const [product, capture, why] of signal.suggests)
+      rel("SUGGESTS", signalId(key as SignalKey), productId(product), { capture, why });
+  }
+
+  // Audiences, with aggregate consent per scope.
+  for (const segment of HARBORSTONE_SEGMENTS) {
+    node("Segment", segment.id, segment.name, {
+      size: segment.size,
+      audienceType: segment.audienceType,
+    });
+    for (const [scope, optedIn] of segment.consent)
+      rel("HAS_CONSENT", segment.id, scope, {
+        optedIn,
+        coverageRate: Math.round((optedIn / segment.size) * 1000) / 1000,
+      });
+  }
+
+  // Each asset: its approval record, required disclosures, approved channel, and rule results.
+  const addAsset = (asset: LibraryAsset, campaign: string, brief: string) => {
+    node("ContentAsset", asset.id, asset.name, {
+      kind: asset.kind,
+      ...(asset.channel ? { channel: asset.channel } : {}),
+    });
+    rel("USES", campaign, asset.id);
+    rel("BUILT_FROM", asset.id, brief);
+    const approval = approvalNodeId(asset.approval.id);
+    node("Approval", approval, asset.approval.id, {
+      status: asset.approval.status,
+      reviewer: "Registered principal",
+      ...(asset.approval.approvedOn ? { approvedOn: asset.approval.approvedOn } : {}),
+      ...(asset.approval.expiresOn ? { expiresOn: asset.approval.expiresOn } : {}),
+      ...(asset.approval.embargoed ? { embargoed: true } : {}),
+    });
+    rel("APPROVED_UNDER", asset.id, approval);
+    for (const disclosure of asset.disclosures) rel("REQUIRES", asset.id, disclosureId(disclosure));
+    if (asset.channel) rel("APPROVED_FOR", asset.id, `channel-${asset.channel}`);
+    for (const [index, ruleId] of ruleIds.entries())
+      rel(asset.failed === HARBORSTONE_RULES[index] ? "FAILED" : "PASSED", asset.id, ruleId);
+    if (asset.event) rel("RESPONDS_TO", asset.id, marketEventId(asset.event));
+    for (const product of asset.explains ?? []) rel("EXPLAINS", asset.id, productId(product));
+  };
+  const addCampaign = (
+    campaign: { id: string; name: string; status: string },
+    channels: string[],
+    segments: string[],
+  ) => {
+    node("Campaign", campaign.id, campaign.name, { status: campaign.status });
+    rel("BELONGS_TO", campaign.id, HARBORSTONE.id);
+    for (const channel of channels) rel("ON", campaign.id, `channel-${channel}`);
+    for (const segment of segments) rel("TARGETS", campaign.id, segment);
+    const brief = node("Brief", `brief-${campaign.id}`, `${campaign.name} brief`);
+    rel("FOR", brief, campaign.id);
+    return brief;
+  };
+
+  const momentsBrief = addCampaign(
+    MARKET_MOMENTS_CAMPAIGN,
+    ["email", "sms"],
+    ["segment-harborstone-clients", "segment-harborstone-subscribers"],
+  );
+  for (const asset of MARKET_ASSETS) addAsset(asset, MARKET_MOMENTS_CAMPAIGN.id, momentsBrief);
+  for (const response of PAST_RESPONSES) {
+    const asset = MARKET_ASSETS.find((candidate) => candidate.id === response.asset);
+    const id = node(
+      "ClientSend",
+      response.id,
+      `${asset?.name ?? response.asset} (${response.hoursAfterNews}h after the news)`,
+      {
+        hoursAfterNews: response.hoursAfterNews,
+        openRate: response.openRate,
+        clickRate: response.clickRate,
+      },
+    );
+    rel("PART_OF", id, MARKET_MOMENTS_CAMPAIGN.id);
+    rel("USED", id, response.asset);
+    rel("RESPONDS_TO", id, marketEventId(response.event));
+    rel("SENT_TO", id, "segment-harborstone-clients");
+    rel("ON", id, "channel-email");
+    rel("SENT_UNDER", id, "consent-email-marketing");
+  }
+
+  // The acquisition: the deal, the firm, and its announcement package in release order.
+  node("Firm", DEAL.firm.id, DEAL.firm.name, { clients: DEAL.firm.clients });
+  node("Deal", DEAL.id, DEAL.name, { status: DEAL.status });
+  rel("ANNOUNCED_BY", DEAL.id, HARBORSTONE.id);
+  rel("ACQUIRES", DEAL.id, DEAL.firm.id);
+  rel("CLIENT_OF", "segment-bayview-clients", DEAL.firm.id);
+  const dealBrief = addCampaign(
+    DEAL.campaign,
+    ["email", "sms"],
+    ["segment-bayview-clients", "segment-harborstone-clients", "segment-harborstone-advisors"],
+  );
+  rel("ANNOUNCES", DEAL.campaign.id, DEAL.id);
+  for (const asset of DEAL_ASSETS) {
+    addAsset(asset, DEAL.campaign.id, dealBrief);
+    rel("RELEASED_WITH", asset.id, DEAL.id, {
+      step: asset.step,
+      timing: asset.timing,
+      purpose: asset.purpose,
+    });
+    if (asset.audience) rel("ADDRESSED_TO", asset.id, asset.audience, { purpose: asset.purpose });
+  }
+
+  // Relationship growth: product explainers, advisors, and clients with holdings and signals.
+  const growthBrief = addCampaign(GROWTH_CAMPAIGN, ["email"], ["segment-harborstone-clients"]);
+  for (const asset of GROWTH_ASSETS) addAsset(asset, GROWTH_CAMPAIGN.id, growthBrief);
+  for (const advisor of Object.values(ADVISORS)) {
+    node("Advisor", advisor.id, advisor.name, { title: advisor.title });
+    rel("ADVISES_FOR", advisor.id, HARBORSTONE.id);
+  }
+  const engageable = [...GROWTH_ASSETS, ...MARKET_ASSETS]
+    .filter((asset) => asset.approval.status === "Approved")
+    .map((asset) => asset.id);
+  for (const client of CLIENTS) {
+    const type = CLIENT_TYPES[client.type];
+    const id = node("Client", clientId(client.name), client.name, {
+      clientType: type.name,
+      aum: Object.values(client.holds).reduce((sum, amount) => sum + amount, 0),
+      heldAwayEstimate: client.heldAway,
+    });
+    rel("CLIENT_OF", id, HARBORSTONE.id);
+    rel("COVERED_BY", id, ADVISORS[type.advisor].id);
+    for (const [product, aum] of Object.entries(client.holds))
+      rel("HOLDS", id, productId(product as ProductKey), { aum });
+    for (const [signal, detectedDaysAgo, detail] of client.signals)
+      rel("HAS_SIGNAL", id, signalId(signal), { detectedDaysAgo, detail });
+    for (const [role, weight] of type.roles) {
+      const persona = node("Persona", `${id}-${slug(role)}`, `${client.name} · ${role}`, {
+        role,
+        roleWeight: weight,
+      });
+      rel("WORKS_AT", persona, id);
+      if (rand() < 0.8) rel("HAS_CONSENT", persona, "consent-email-marketing");
+      if (rand() < 0.35) rel("HAS_CONSENT", persona, "consent-sms-marketing");
+      rel("HAS_CONSENT", persona, "consent-email-transactional");
+      for (const asset of engageable)
+        if (rand() < 0.18)
+          rel("ENGAGED_WITH", persona, asset, {
+            count: 1 + Math.floor(rand() * 4),
+            lastDaysAgo: 1 + Math.floor(rand() * 45),
+          });
+    }
+  }
 }
