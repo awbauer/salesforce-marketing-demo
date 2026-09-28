@@ -396,7 +396,7 @@ const GRAPH_TITLES: Record<string, string> = {
   explain_buyer_group: "Buyer group evidence",
   find_audience_overlap: "Audience overlap",
   check_consent_coverage: "Consent coverage",
-  find_similar_past_pushes: "Similar past pushes",
+  find_similar_past_pushes: "Similar past sends",
   trace_content_lineage: "Content lineage",
   plan_account_outreach: "Outreach plan",
   assess_location_impact: "Location impact",
@@ -425,7 +425,7 @@ function graphSummary(tool: string, data: Record<string, unknown>, count: number
         num(audience.optedIn) !== undefined
           ? `; ${num(audience.optedIn)?.toLocaleString("en-US")} opted in to ${str(audience.channel) ?? "push"}`
           : "";
-      return `${num(data.totalSends) ?? 0} past sends in ${[data.location, data.daypart, data.condition].filter(Boolean).join(", ")}${str(data.bestAngle) ? `; best angle: ${data.bestAngle}` : ""}${reach}.`;
+      return `${num(data.totalSends) ?? 0} past ${str(data.history) === "email" ? "emails" : "pushes"} in ${[data.location, data.daypart, data.condition].filter(Boolean).join(", ")}${str(data.bestAngle) ? `; best angle: ${data.bestAngle}` : ""}${reach}.`;
     }
     case "check_consent_coverage":
       return `${num(data.covered) ?? 0} of ${num(data.audience) ?? 0} audience members covered for ${str(data.channel) ?? "the channel"} (${pct(data.coverageRate)}).`;

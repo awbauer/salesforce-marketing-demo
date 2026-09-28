@@ -205,31 +205,59 @@ describe("Neo4j Query API client", () => {
     expect(types).toEqual(expect.arrayContaining(["FEATURED", "USED", "SENT_TO"]));
   });
 
-  it("reports the audience's consent for the campaign's channel, not push", async () => {
+  it("reports email history, email content, and email consent for an email campaign", async () => {
     const result = (await tool("find_similar_past_pushes")({
       location: "los-angeles",
       daypart: "lunch",
       condition: "rain",
       channel: "email",
     })) as {
+      history: string;
+      topItems: Array<{ content: string | null; avgOpenRate: number }>;
       audience: { optedIn: number; consentScope: string; channel: string };
       note: string;
       paths: Array<{
-        nodes: Array<{ name: string }>;
+        nodes: Array<{ label: string; name: string }>;
         relationships: Array<{ type: string }>;
       }>;
     };
+    expect(result.history).toBe("email");
+    expect(result.topItems.length).toBeGreaterThan(0);
+    expect(result.topItems.every((item) => item.content?.endsWith("· email"))).toBe(true);
+    const labels = result.paths.flatMap((path) => path.nodes.map((node) => node.label));
+    expect(labels).toContain("EmailSend");
+    expect(labels).not.toContain("PushSend");
     expect(result.audience).toMatchObject({
       channel: "email",
       optedIn: 13100,
       consentScope: "email marketing",
     });
-    expect(result.note).toMatch(/email marketing consent, not push/);
+    expect(result.note).toBe("Fictional email history for demonstration.");
     const scopes = result.paths.flatMap((path) =>
       path.nodes.filter((node) => node.name.endsWith("marketing")).map((node) => node.name),
     );
     expect(scopes).toEqual(["email marketing"]);
-    // The pushes weren't sent to the email audience, so no SENT_TO path joins them.
+    // The emails were sent to this audience, under its email consent.
+    expect(result.paths.flatMap((path) => path.relationships.map((edge) => edge.type))).toContain(
+      "SENT_TO",
+    );
+  });
+
+  it("uses push history for SMS, which has none of its own, and says so", async () => {
+    const result = (await tool("find_similar_past_pushes")({
+      location: "los-angeles",
+      daypart: "lunch",
+      condition: "rain",
+      channel: "sms",
+    })) as {
+      history: string;
+      audience: { optedIn: number; consentScope: string };
+      note: string;
+      paths: Array<{ relationships: Array<{ type: string }> }>;
+    };
+    expect(result.history).toBe("push");
+    expect(result.audience).toMatchObject({ optedIn: 5200, consentScope: "sms marketing" });
+    expect(result.note).toMatch(/no SMS send history/);
     expect(
       result.paths.flatMap((path) => path.relationships.map((edge) => edge.type)),
     ).not.toContain("SENT_TO");

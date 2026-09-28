@@ -482,8 +482,17 @@ const checkConsentCoverage = define({
   },
 });
 
-export const PUSH_HISTORY_CYPHER = `
-MATCH (s:PushSend {dataset: $dataset})-[:FOR]->(:Location {id: $locationId}),
+/** Past sends by channel. SMS has no send history of its own, so it reads push history. */
+const SEND_HISTORY = {
+  push: { label: "PushSend", name: "Push send" },
+  email: { label: "EmailSend", name: "Email send" },
+} as const;
+
+/** Past sends of one kind; the label comes only from SEND_HISTORY, never from input. */
+export const sendHistoryCypher = (
+  label: (typeof SEND_HISTORY)[keyof typeof SEND_HISTORY]["label"],
+) => `
+MATCH (s:${label} {dataset: $dataset})-[:FOR]->(:Location {id: $locationId}),
   (s)-[:SENT_DURING]->(:Daypart {id: $daypartId}),
   (s)-[:FEATURED]->(m:MenuItem),
   (s)-[:USED]->(a:ContentAsset)
@@ -506,9 +515,9 @@ const round4 = (value: number) => Math.round(value * 10000) / 10000;
 
 const findSimilarPastPushes = define({
   name: "find_similar_past_pushes",
-  title: "Find similar past pushes",
+  title: "Find similar past sends",
   description:
-    "Look up Coastline Kitchen's fictional push history for the same location, daypart, and weather condition, and return the best-performing menu items and message angle by average order rate, plus the location's audience and how many of them hold marketing consent for the campaign's channel. Condition must be clear, cloudy, fog, rain, or heat (use heat when feels-like is 85°F or more; rain for drizzle or storms). If fewer than 5 matching sends exist, it widens to all weather for that location and daypart.",
+    "Look up Coastline Kitchen's fictional send history on the campaign's channel (email sends for email, push sends for push; SMS has no history, so it uses push) for the same location, daypart, and weather condition, and return the best-performing menu items, their content, and the message angle by average order rate, plus the location's audience and how many of them hold marketing consent for the campaign's channel. Condition must be clear, cloudy, fog, rain, or heat (use heat when feels-like is 85°F or more; rain for drizzle or storms). If fewer than 5 matching sends exist, it widens to all weather for that location and daypart.",
   input: z.object({
     location: z.enum(LOCATION_IDS).describe("Restaurant location (same IDs as the weather tool)"),
     daypart: z.enum(DAYPARTS).describe("Local daypart"),
@@ -517,19 +526,23 @@ const findSimilarPastPushes = define({
       .enum(["push", "email", "sms"])
       .default("push")
       .describe(
-        "Channel of the campaign being planned: its consent is the one reported for the audience",
+        "Channel of the campaign being planned: its send history and its consent are the ones reported",
       ),
   }),
   run: async (backend, { location, daypart, condition, channel = "push" }) => {
     const scopeId = consentScopeFor(channel === "push" ? "mobile-app" : channel);
+    const history = channel === "email" ? "email" : "push";
+    const sendKind = SEND_HISTORY[history];
     const query = (conditionId: string | null) =>
       rows(
         backend,
-        PUSH_HISTORY_CYPHER,
+        sendHistoryCypher(sendKind.label),
         { locationId: `location-${location}`, daypartId: `daypart-${daypart}`, conditionId },
         (ix) => {
           const groups = new Map<string, { item: GraphNode; sends: GraphNode[] }>();
-          for (const send of [...ix.byId.values()].filter((node) => node.label === "PushSend")) {
+          for (const send of [...ix.byId.values()].filter(
+            (node) => node.label === sendKind.label,
+          )) {
             const has = (type: string, id: string) =>
               ix.outgoing(send.id, type).some((r) => r.to === id);
             if (!has("FOR", `location-${location}`) || !has("SENT_DURING", `daypart-${daypart}`))
@@ -625,7 +638,7 @@ const findSimilarPastPushes = define({
     const paths: EvidencePath[] = top.map((row) => {
       const send = {
         id: row.exampleSends[0] as string,
-        label: "PushSend",
+        label: sendKind.label,
         name: `${row.sends} past sends`,
       };
       const asset = mainAsset(row.assets);
@@ -649,8 +662,8 @@ const findSimilarPastPushes = define({
           to: audience.scopeId,
         }
       : null;
-    // The pushes were sent to this audience; another channel's consent stands on its own.
-    if (audience && consentPath && channel !== "push")
+    // The sends went to this audience; SMS has no sends of its own, so its consent stands alone.
+    if (audience && consentPath && channel === "sms")
       paths.push({
         nodes: [
           { id: audience.segmentId, label: "Segment", name: audience.segment },
@@ -661,7 +674,7 @@ const findSimilarPastPushes = define({
     else if (audience && consentPath && exampleSend)
       paths.push({
         nodes: [
-          { id: exampleSend, label: "PushSend", name: "Push send" },
+          { id: exampleSend, label: sendKind.label, name: sendKind.name },
           { id: audience.segmentId, label: "Segment", name: audience.segment },
           { id: audience.scopeId, label: "ConsentScope", name: audience.scope },
         ],
@@ -685,6 +698,7 @@ const findSimilarPastPushes = define({
         content: mainAsset(row.assets)?.name ?? null,
       })),
       bestAngle: topAngle ?? null,
+      history,
       audience: audience
         ? {
             segment: audience.segment,
@@ -695,9 +709,9 @@ const findSimilarPastPushes = define({
           }
         : null,
       note:
-        channel === "push"
-          ? "Fictional push history for demonstration."
-          : `Fictional push history for demonstration: menu performance comes from past pushes, and the audience count is ${channel} marketing consent, not push.`,
+        channel === "sms"
+          ? "Fictional history for demonstration. There is no SMS send history, so menu performance and content come from past pushes; the audience count is SMS marketing consent."
+          : `Fictional ${history} history for demonstration.`,
       paths,
     };
   },
@@ -990,7 +1004,9 @@ const assessLocationImpact = define({
             .map(({ from }) => ix.node(from))
             .sort((a, b) => byText(a.name, b.name))
             .map((campaign) => ({ id: campaign.id, name: campaign.name, status: campaign.status })),
-          pastSends: ix.incoming(segment.id, "SENT_TO").length,
+          pastSends: ix
+            .incoming(segment.id, "SENT_TO")
+            .filter(({ from }) => ix.node(from).label === "PushSend").length,
         };
       });
     })) as ImpactRow[];

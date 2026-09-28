@@ -192,7 +192,7 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   tool(
     "find_similar_past_pushes",
     "graphrag-here",
-    "Past Coastline pushes for a location, daypart, and weather, which menu items performed best, and the audience's opt-ins for the campaign's channel.",
+    "Past Coastline sends on the campaign's channel (emails or pushes) for a location, daypart, and weather, which menu items and content performed best, and the audience's opt-ins for that channel.",
   ),
   tool(
     "plan_account_outreach",
@@ -288,6 +288,7 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   node("InventoryItem", "Stock a restaurant keeps, counted in kitchen units.", "use-cases"),
   node("StoreManager", "A restaurant's store manager, by name only.", "use-cases"),
   node("PushSend", "One past push notification send and how it performed."),
+  node("EmailSend", "One past Coastline email send: its opens, clicks, and orders."),
   // Graph nodes: long-term memory.
   node("Workspace", "The workspace that owns a memory.", "long-term-memory"),
   node(

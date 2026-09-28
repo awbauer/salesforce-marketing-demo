@@ -74,7 +74,7 @@ describe("working set", () => {
     expect(weather?.title).toBe("Clear in Los Angeles");
     expect(weather?.metric).toBe("71°F");
     expect(weather?.source.system).toBe("open-meteo");
-    expect(set.cards[0]?.summary).toMatch(/past sends in los-angeles, lunch, clear/);
+    expect(set.cards[0]?.summary).toMatch(/past pushes in los-angeles, lunch, clear/);
     expect(set.records).toEqual([
       expect.objectContaining({
         system: "restaurant-data",
