@@ -292,3 +292,39 @@ export function pushInsight(state: GraphState, nodeId: string, limit = 5): Insig
     ? { groupedBy: groupType === "UNDER" ? "weather" : "menu item", pushes: pushes.size, rows }
     : null;
 }
+
+/**
+ * The nodes that belong with a brand: those at least as close to it as to any other brand,
+ * counting hops over loaded relationships in either direction and never walking through another
+ * brand. So a sub-brand keeps its own campaigns, locations, menu, and the channels and consent it
+ * shares, but not what's reached through its parent brand (the parent's rules, B2B accounts).
+ */
+export function brandScope(state: GraphState, brandId: string): Set<string> {
+  const brands = new Set(state.nodes.filter((node) => node.label === "Brand").map((n) => n.id));
+  const neighbors = new Map<string, string[]>();
+  const connect = (a: string, b: string) => neighbors.set(a, [...(neighbors.get(a) ?? []), b]);
+  for (const link of state.links) {
+    connect(link.from, link.to);
+    connect(link.to, link.from);
+  }
+  const distancesFrom = (start: string) => {
+    const distance = new Map([[start, 0]]);
+    const queue = [start];
+    for (let head = 0; head < queue.length; head += 1) {
+      const id = queue[head] as string;
+      for (const next of neighbors.get(id) ?? []) {
+        if (distance.has(next) || brands.has(next)) continue;
+        distance.set(next, (distance.get(id) ?? 0) + 1);
+        queue.push(next);
+      }
+    }
+    return distance;
+  };
+  const own = distancesFrom(brandId);
+  const others = [...brands].filter((id) => id !== brandId).map(distancesFrom);
+  const scope = new Set<string>();
+  for (const [id, distance] of own)
+    if (others.every((other) => distance <= (other.get(id) ?? Number.POSITIVE_INFINITY)))
+      scope.add(id);
+  return scope;
+}

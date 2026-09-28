@@ -59,6 +59,7 @@ const endpointId = (end: SimLink["source"]) => (typeof end === "object" ? end.id
 export function GraphCanvas({
   graph,
   hiddenLabels,
+  scope = null,
   selectedId,
   onSelect,
   onHover,
@@ -66,6 +67,8 @@ export function GraphCanvas({
 }: {
   graph: GraphState;
   hiddenLabels: ReadonlySet<string>;
+  /** When set, only these node ids are drawn (a brand filter). */
+  scope?: ReadonlySet<string> | null;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onHover: (node: SimNode | null) => void;
@@ -416,7 +419,9 @@ export function GraphCanvas({
   useEffect(() => {
     const simulation = simRef.current;
     if (!simulation) return;
-    const nodes = graph.nodes.filter((node) => !hiddenLabels.has(node.label));
+    const nodes = graph.nodes.filter(
+      (node) => !hiddenLabels.has(node.label) && (!scope || scope.has(node.id)),
+    );
     const ids = new Set(nodes.map((node) => node.id));
     const links = graph.links.filter(
       (link) => ids.has(endpointId(link.source)) && ids.has(endpointId(link.target)),
@@ -432,7 +437,7 @@ export function GraphCanvas({
       if (!fitted.current) fitted.current = fit(false);
       draw();
     }
-  }, [graph, hiddenLabels]);
+  }, [graph, hiddenLabels, scope]);
 
   useEffect(() => {
     selected.current = selectedId;
@@ -598,7 +603,9 @@ export function GraphCanvas({
     }
   };
 
-  const visibleCount = graph.nodes.filter((node) => !hiddenLabels.has(node.label)).length;
+  const visibleCount = graph.nodes.filter(
+    (node) => !hiddenLabels.has(node.label) && (!scope || scope.has(node.id)),
+  ).length;
   const selectedNode = graph.nodes.find((node) => node.id === selectedId);
 
   return (

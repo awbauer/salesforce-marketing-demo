@@ -760,6 +760,55 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
   await page.screenshot({ path: `artifacts/evidence/WU-033/graph-${testInfo.project.name}.png` });
 });
 
+test("filters the graph explorer to one brand's own nodes", async ({ page }) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: /^\W*Graph$/ })
+    .first()
+    .click();
+  await expect(page.getByRole("heading", { name: "Graph explorer" })).toBeVisible();
+  const all = page.getByRole("button", { name: "All brands", exact: true });
+  const coastline = page.getByRole("button", { name: "Coastline Kitchen", exact: true });
+  const northstar = page.getByRole("button", { name: "Northstar", exact: true });
+  await expect(all).toHaveAttribute("aria-pressed", "true");
+
+  await coastline.click();
+  await expect(coastline).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText(/loaded nodes connect to Coastline Kitchen/)).toContainText(
+    "Northstar, its parent brand, is hidden",
+  );
+  await expect(
+    page.getByRole("img", { name: /Knowledge graph drawing with 83 nodes/ }),
+  ).toBeVisible();
+
+  // Search only reaches nodes in scope.
+  await page.getByLabel("Find a node").fill("acme");
+  await expect(page.getByText(/No loaded node matches/)).toBeVisible();
+  await page.getByLabel("Find a node").fill("coastline weather");
+  await page
+    .getByRole("list", { name: "Matching nodes" })
+    .getByRole("button", { name: "Coastline Weather Moments Campaign" })
+    .click();
+  await expect(
+    page.getByRole("complementary", { name: "Node details" }).getByRole("heading", {
+      name: "Coastline Weather Moments",
+    }),
+  ).toBeVisible();
+
+  // A tour outside the filtered brand clears it back to all brands.
+  await page.getByRole("button", { name: /Who a campaign reaches/ }).click();
+  await expect(all).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("img", { name: /Knowledge graph drawing with 186 nodes/ }),
+  ).toBeVisible();
+
+  await northstar.click();
+  await expect(northstar).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("img", { name: /Knowledge graph drawing with 115 nodes/ }),
+  ).toBeVisible();
+});
+
 test("has the Marketing Cloud agent save the brief, then create the campaign and its flow", async ({
   page,
 }, testInfo) => {
