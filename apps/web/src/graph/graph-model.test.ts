@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { connectionsOf, DOMAINS, LABEL_COLORS, mergeGraph, pushInsight } from "./graph-model";
+import {
+  brandScope,
+  connectionsOf,
+  DOMAINS,
+  LABEL_COLORS,
+  mergeGraph,
+  pushInsight,
+} from "./graph-model";
 
 const node = (id: string, label: string, properties: Record<string, unknown> = {}) => ({
   id,
@@ -76,5 +83,45 @@ describe("graph model", () => {
       ],
     );
     expect(pushInsight(graph, "bowl")).toBeNull();
+  });
+});
+
+describe("brand scope", () => {
+  const graph = mergeGraph(
+    { nodes: [], links: [] },
+    [
+      node("brand-parent", "Brand"),
+      node("brand-sub", "Brand"),
+      node("rule-parent-only", "BrandRule"),
+      node("channel-shared", "Channel"),
+      node("campaign-sub", "Campaign"),
+      node("account-parent-only", "Account"),
+    ],
+    [
+      link("brand-sub", "PART_OF", "brand-parent"),
+      link("rule-parent-only", "RULE_OF", "brand-parent"),
+      // The shared channel is one hop from both brands: it belongs to whichever brand it's
+      // closer to, and ties go to neither being strictly closer, so equidistant nodes count.
+      link("brand-parent", "OPERATES", "channel-shared"),
+      link("brand-sub", "OPERATES", "channel-shared"),
+      link("campaign-sub", "BELONGS_TO", "brand-sub"),
+      link("account-parent-only", "WORKS_AT", "account-parent-only"),
+    ],
+  );
+
+  it("keeps a sub-brand's own nodes and what it shares equally, but not the parent's own", () => {
+    const scope = brandScope(graph, "brand-sub");
+    expect(scope).toContain("brand-sub");
+    expect(scope).toContain("campaign-sub");
+    expect(scope).toContain("channel-shared");
+    expect(scope).not.toContain("rule-parent-only");
+    expect(scope).not.toContain("brand-parent");
+  });
+
+  it("never walks through another brand to reach that brand's own nodes", () => {
+    // campaign-sub is one hop from brand-sub; going brand-sub -> brand-parent -> rule-parent-only
+    // would be two hops through another brand, which the walk never crosses.
+    const scope = brandScope(graph, "brand-sub");
+    expect(scope.has("rule-parent-only")).toBe(false);
   });
 });

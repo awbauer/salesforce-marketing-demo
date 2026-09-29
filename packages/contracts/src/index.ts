@@ -17,6 +17,7 @@ export const PROOF_DEFAULTS = Object.freeze({
     "create-marketing-campaign",
     "create-review-task",
     "attach-generated-image",
+    "create-inventory-case",
   ] as const,
 });
 
@@ -124,8 +125,34 @@ export type MarketingWrite = z.infer<typeof MarketingWriteSchema>;
 export const ConfirmationSchema = z.object({
   id: z.string().uuid(),
   action: z.enum(PROOF_DEFAULTS.allowedWrites),
-  /** The record the write is bound to: the campaign, the brief a campaign comes from, or "new". */
-  recordId: z.string().regex(/^(?:[a-zA-Z0-9]{15,18}|new)$/),
+  /**
+   * The record the write is bound to: the campaign, the brief a campaign comes from, "new", or,
+   * for an inventory case, the Coastline Kitchen location it's about.
+   */
+  recordId: z.string().regex(/^(?:[a-zA-Z0-9]{15,18}|new|location:[a-z-]{2,40})$/),
+  /** An inventory case's contents, bound by the request hash so Salesforce can verify them. */
+  inventoryCase: z
+    .object({
+      locationId: z.string(),
+      city: z.string(),
+      manager: z.object({ name: z.string() }),
+      conditions: z.array(z.string()),
+      items: z
+        .array(
+          z.object({
+            name: z.string(),
+            unit: z.string(),
+            onHand: z.number(),
+            onOrder: z.number(),
+            projectedNeed: z.number(),
+            menuItems: z.array(z.string()),
+          }),
+        )
+        .min(1)
+        .max(15),
+      detailsJson: z.string(),
+    })
+    .optional(),
   write: MarketingWriteSchema.optional(),
   permissions: PermissionReportSchema.optional(),
   imageId: z.string().uuid().optional(),
@@ -191,6 +218,7 @@ export const PHASE_2_CURATED_TOOLS = Object.freeze([
   "create_campaign_review_request",
   "attach_campaign_image",
   "check_write_access",
+  "create_inventory_case",
 ] as const);
 
 /** The Salesforce agents behind the Hosted MCP tools, as published in the org. */
@@ -366,6 +394,10 @@ export const SALESFORCE_TOOL_DETAILS: Record<string, SalesforceToolDetail> = {
     actions: [apex("NorthstarGetMarketingRecords", "Get Marketing Records")],
   },
   check_write_access: { actions: [apex("NorthstarCheckWriteAccess", "Check Write Access")] },
+  create_inventory_case: {
+    actions: [apex("NorthstarCreateInventoryCase", "Create Inventory Case")],
+    creates: ["Case"],
+  },
   create_campaign_review_request: {
     actions: [apex("NorthstarCreateCampaignReviewRequest", "Create Campaign Review Request")],
     creates: ["Task"],
@@ -376,10 +408,25 @@ export const SALESFORCE_TOOL_DETAILS: Record<string, SalesforceToolDetail> = {
   },
 };
 
-/** Read-only tools served by the campaign-context MCP (mocked restaurant profile and live weather). */
+/**
+ * Read-only tools served by the campaign-context MCP: the mocked restaurant profile and store
+ * inventory, and live Open-Meteo weather and forecasts.
+ */
 export const CAMPAIGN_CONTEXT_TOOLS = Object.freeze([
   "get_restaurant_profile",
   "get_current_weather",
+  "get_weather_forecast",
+  "get_location_inventory",
+] as const);
+
+/**
+ * Read-only tools served by the external-services MCP (Nager.Date holidays, NWS weather alerts,
+ * Federal Reserve press releases).
+ */
+export const EXTERNAL_SERVICE_TOOLS = Object.freeze([
+  "get_public_holidays",
+  "get_weather_alerts",
+  "get_fed_announcements",
 ] as const);
 
 /** Read-only tools served by the knowledge-graph MCP (Neo4j, or its fictional local copy). */
@@ -390,6 +437,12 @@ export const KNOWLEDGE_GRAPH_TOOLS = Object.freeze([
   "check_consent_coverage",
   "find_similar_past_pushes",
   "trace_content_lineage",
+  "plan_account_outreach",
+  "assess_location_impact",
+  "map_weather_demand",
+  "match_news_to_approved_content",
+  "prepare_deal_release",
+  "build_aum_account_plan",
 ] as const);
 
 /** Read-only recall tools over the workspace's long-term memory in the graph. See ADR-007. */
@@ -403,6 +456,7 @@ export const MEMORY_TOOLS = Object.freeze([
 export const ORCHESTRATOR_TOOLS = Object.freeze([
   ...PHASE_2_CURATED_TOOLS,
   ...CAMPAIGN_CONTEXT_TOOLS,
+  ...EXTERNAL_SERVICE_TOOLS,
   ...KNOWLEDGE_GRAPH_TOOLS,
   ...MEMORY_TOOLS,
 ] as const);
@@ -454,7 +508,8 @@ export const WorkingRecordSchema = RecordRefSchema.extend({
   title: z.string().min(1).max(200),
   systemLabel: z.string(),
   url: z.string().url().optional(),
-  relation: z.enum(["read", "created", "updated"]),
+  /** "remembered": reopened from long-term memory, not re-read from its system in this chat. */
+  relation: z.enum(["read", "created", "updated", "remembered"]),
   via: z.string(),
   addedAt: z.string(),
 });
@@ -572,7 +627,11 @@ export const emptyWorkingSet = (): WorkingSet => ({
 export const CONNECTED_SYSTEMS: Readonly<Record<string, { label: string }>> = Object.freeze({
   salesforce: { label: "Salesforce" },
   "restaurant-data": { label: "Restaurant data" },
+  "store-inventory": { label: "Store inventory" },
   "open-meteo": { label: "Open-Meteo" },
+  "nager-date": { label: "Nager.Date" },
+  nws: { label: "National Weather Service" },
+  "federal-reserve": { label: "Federal Reserve" },
   "knowledge-graph": { label: "Knowledge graph" },
   "data-360": { label: "Data 360" },
   "marketing-cloud-next": { label: "Marketing Cloud Next" },
@@ -618,7 +677,7 @@ export type ActivityEvent = z.infer<typeof ActivityEventSchema>;
  */
 export const SuggestedActionSchema = z.object({
   id: z.string(),
-  action: z.enum(["save-focus", "create-review-task"]),
+  action: z.enum(["save-focus", "create-review-task", "create-inventory-case"]),
   title: z.string(),
   detail: z.string(),
   cta: z.string(),
@@ -626,8 +685,61 @@ export const SuggestedActionSchema = z.object({
 });
 export type SuggestedAction = z.infer<typeof SuggestedActionSchema>;
 
+/**
+ * Weather-driven low stock at one Coastline Kitchen location, computed by code from the forecast,
+ * the graph's weather → dish → inventory mapping, and the store's stock counts.
+ */
+export const InventoryRiskSchema = z.object({
+  locationId: z.string(),
+  city: z.string(),
+  manager: z.object({ name: z.string() }),
+  window: z.object({ from: z.string(), to: z.string(), days: z.number().int() }),
+  conditions: z.array(z.string()),
+  lowItems: z.array(
+    z.object({
+      name: z.string(),
+      unit: z.string(),
+      onHand: z.number(),
+      onOrder: z.number(),
+      projectedNeed: z.number(),
+      menuItems: z.array(z.string()),
+    }),
+  ),
+  checkedItems: z.number().int(),
+});
+export type InventoryRisk = z.infer<typeof InventoryRiskSchema>;
+
+/**
+ * A confirmed write's steps as it runs: what the workbench and Salesforce are doing, published
+ * live so the person who confirmed it can follow along, then kept as a record of how it went.
+ */
+export const WriteProgressStepSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  status: z.enum(["pending", "active", "done", "skipped", "failed"]),
+  detail: z.string().optional(),
+  startedAt: z.string().optional(),
+  endedAt: z.string().optional(),
+});
+export const WriteProgressSchema = z.object({
+  /** Preparing a confirmation (plan, permission check), or running a confirmed write. */
+  phase: z.enum(["prepare", "execute"]).default("execute"),
+  confirmationId: z.string().optional(),
+  action: z.enum(PROOF_DEFAULTS.allowedWrites),
+  title: z.string(),
+  startedAt: z.string(),
+  finishedAt: z.string().optional(),
+  outcome: z.enum(["succeeded", "failed"]).optional(),
+  steps: z.array(WriteProgressStepSchema),
+});
+export type WriteProgress = z.infer<typeof WriteProgressSchema>;
+
 export const OrchestratorStateSchema = z.object({
+  /** The confirmation being prepared or the confirmed write running now (or the last), step by step. */
+  writeProgress: WriteProgressSchema.nullable().default(null),
   suggestions: z.array(SuggestedActionSchema).default([]),
+  /** The latest weather-driven inventory check in this chat, which a case can be opened from. */
+  inventoryRisk: InventoryRiskSchema.nullable().default(null),
   workspaceId: z.literal(PROOF_DEFAULTS.workspaceId),
   workingSet: WorkingSetSchema,
   activity: z.array(ActivityEventSchema),
@@ -652,12 +764,16 @@ export function classifyPolicyIntent(
   // Describing a future send ("an email to send next week") is drafting, not a request to act.
   const actionVerb =
     /(?<!\b(?:to|before|after|when|once|until|ready to|how to|plan to)\s)\b(?:publish|send|activate|delete|suppress|unsubscribe)\b/i;
-  // Advisory questions ("When should we send it?") ask for guidance; "Can you send it?" is a request.
-  const advisoryQuestion = /^\s*(?:when|how|what|why|which|should)\b[^.!]*\?\s*$/i.test(
-    affirmative,
-  );
+  // Advisory questions ("When should we send it?") ask for guidance; "Can you send it?" is a
+  // request. Each sentence that names an action is judged on its own, so context before the
+  // question ("The Fed moved rates. What can we send clients?") doesn't turn it into a request.
+  const advisoryQuestion = (sentence: string) =>
+    /^\s*(?:when|how|what|why|which|should)\b[^.!]*\?\s*$/i.test(sentence);
+  const requestsAction = affirmative
+    .split(/(?<=[.!?])\s+/)
+    .some((sentence) => actionVerb.test(sentence) && !advisoryQuestion(sentence));
   if (
-    (actionVerb.test(affirmative) && !advisoryQuestion) ||
+    requestsAction ||
     /\b(?:add|remove|move)\b[^.?!]*\bbuyer group\b/i.test(affirmative) ||
     /\breveal\b|\bignore (?:the |all |any )?(?:policy|policies|rules|instructions)\b/i.test(
       affirmative,
@@ -804,6 +920,7 @@ export const WRITE_TOOL_BY_ACTION = Object.freeze({
   "create-marketing-campaign": "create_marketing_campaign",
   "create-review-task": "create_campaign_review_request",
   "attach-generated-image": "attach_campaign_image",
+  "create-inventory-case": "create_inventory_case",
 } as const);
 
 export const OperationControlsSchema = z.object({
@@ -902,6 +1019,8 @@ export const ErrorEnvelopeSchema = z.object({
 
 export const initialOrchestratorState: OrchestratorState = {
   workspaceId: "northstar-demo",
+  writeProgress: null,
+  inventoryRisk: null,
   sourcesConnected: 3,
   connector: {
     id: "salesforce",

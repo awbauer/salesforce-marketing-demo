@@ -7,7 +7,7 @@
  */
 global with sharing class NorthstarCheckWriteAccess {
     global class Input {
-        @InvocableVariable(required=true label='Action' description='save-marketing-brief, create-marketing-campaign, create-review-task, or attach-generated-image.') global String action;
+        @InvocableVariable(required=true label='Action' description='save-marketing-brief, create-marketing-campaign, create-review-task, attach-generated-image, or create-inventory-case.') global String action;
         @InvocableVariable(label='Record ID' description='The Brief a campaign is created from, or the record a write updates.') global Id recordId;
         @InvocableVariable(label='Creates Campaign' description='True when the write also creates a new campaign.') global Boolean createsCampaign;
     }
@@ -32,13 +32,16 @@ global with sharing class NorthstarCheckWriteAccess {
         'save-marketing-brief' => new List<String>{ 'Brief', 'BriefPlanStep' },
         'create-marketing-campaign' => new List<String>{ 'Campaign' },
         'create-review-task' => new List<String>{ 'Task' },
-        'attach-generated-image' => new List<String>{ 'ContentVersion' }
+        'attach-generated-image' => new List<String>{ 'ContentVersion' },
+        'create-inventory-case' => new List<String>{ 'Case' }
     };
     private static final Map<String, List<String>> FIELDS = new Map<String, List<String>>{
         'save-marketing-brief' => new List<String>{ 'Brief.KeyMessage', 'Brief.TargetAudience', 'BriefPlanStep.Content' },
-        'create-marketing-campaign' => new List<String>{ 'Campaign.BriefId', 'Campaign.Stage' },
+        // Campaign.Stage is set by Marketing Cloud's own flow; no user can write it through the API.
+        'create-marketing-campaign' => new List<String>{ 'Campaign.Name', 'Campaign.BriefId' },
         'create-review-task' => new List<String>{ 'Task.Description' },
-        'attach-generated-image' => new List<String>{ 'ContentVersion.Title' }
+        'attach-generated-image' => new List<String>{ 'ContentVersion.Title' },
+        'create-inventory-case' => new List<String>{ 'Case.Subject', 'Case.Description', 'Case.ContactId' }
     };
 
     @InvocableMethod(label='Check Write Access' description='Reports whether the signed-in user may perform one workbench write. Read-only.')
@@ -79,6 +82,12 @@ global with sharing class NorthstarCheckWriteAccess {
                     Boolean ok = describe.isUpdateable() || describe.isCreateable();
                     checks.add(new Check('Field: ' + describe.getLabel(), ok,
                         ok ? 'Field-level security allows writing it.' : 'Field-level security blocks it.'));
+                }
+                if (action == 'create-inventory-case') {
+                    // The case goes to the store manager's contact, so the user must be able to see it.
+                    Boolean ok = Contact.SObjectType.getDescribe().isAccessible();
+                    checks.add(new Check('Read Contact', ok,
+                        ok ? 'You can see the store manager\'s contact.' : 'Contacts are not visible to your user.'));
                 }
                 if (item.recordId != null) {
                     List<UserRecordAccess> access = [

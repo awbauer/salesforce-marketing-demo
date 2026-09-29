@@ -38,7 +38,12 @@ export const RESTAURANT_PROFILES = {
       city: location.city,
       neighborhood: location.neighborhood,
       appUsers: location.appUsers,
-      pushOptIns: location.pushOptIns,
+      // Marketing consent is per channel: an email campaign counts email opt-ins, not push.
+      optIns: {
+        push: location.pushOptIns,
+        email: location.emailOptIns,
+        sms: location.smsOptIns,
+      },
     })),
     brandVoice: COASTLINE.brandVoice,
     menuId: COASTLINE.menu.id,
@@ -58,12 +63,14 @@ export const RESTAURANT_PROFILES = {
       Object.entries(DAYPART_HOURS).map(([daypart, hours]) => [daypart.replace("-", " "), hours]),
     ),
     audience: {
-      channel: "mobile app (push notifications)",
       appUsers: COASTLINE_LOCATIONS.reduce((sum, location) => sum + location.appUsers, 0),
-      appUsersWithPushEnabled: COASTLINE_LOCATIONS.reduce(
-        (sum, location) => sum + location.pushOptIns,
-        0,
-      ),
+      marketingOptInsByChannel: {
+        push: COASTLINE_LOCATIONS.reduce((sum, location) => sum + location.pushOptIns, 0),
+        email: COASTLINE_LOCATIONS.reduce((sum, location) => sum + location.emailOptIns, 0),
+        sms: COASTLINE_LOCATIONS.reduce((sum, location) => sum + location.smsOptIns, 0),
+      },
+      consentRule:
+        "Count only the opt-ins for the campaign's channel: push opt-ins for a push, email opt-ins for an email, SMS opt-ins for a text.",
       pushOpenRate: COASTLINE.pushOpenRate,
       busiestDayparts: COASTLINE.busiestDayparts.map((daypart) => daypart.replace("-", " ")),
       note: "Aggregate, fictional figures. No individual customer data.",

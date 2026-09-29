@@ -31,7 +31,9 @@ import { LearnView } from "./learn/LearnView";
 import { Markdown } from "./Markdown";
 import { SalesforceAgentsPanel } from "./SalesforceAgents";
 import { executionTrace } from "./turn-trace";
+import { UseCasesView } from "./usecases/UseCasesView";
 import { WorkspacePanel } from "./WorkspacePanel";
+import { WriteProgress } from "./WriteProgress";
 
 function rawMessageText(message: UIMessage) {
   return message.parts
@@ -103,7 +105,54 @@ const CONFIRMATION_COPY = {
     title: "Attach image to the Salesforce campaign?",
     confirm: "Confirm attach",
   },
+  "create-inventory-case": {
+    title: "Open a Salesforce case for the store manager?",
+    confirm: "Confirm case",
+  },
 } as const;
+
+/** What an inventory case will list: the store manager, the forecast, and each low item. */
+function InventoryCaseDetails({ confirmation }: { confirmation: Confirmation }) {
+  const details = confirmation.inventoryCase;
+  if (!details) return null;
+  return (
+    <div className="inventory-case">
+      <p>
+        <strong>For {details.manager.name}</strong>, store manager, Coastline Kitchen {details.city}{" "}
+        · forecast: {details.conditions.join(", ")}
+      </p>
+      <table>
+        <caption className="sr-only">Items that won't cover the forecast</caption>
+        <thead>
+          <tr>
+            <th scope="col">Item</th>
+            <th scope="col">On hand</th>
+            <th scope="col">On order</th>
+            <th scope="col">Needed</th>
+            <th scope="col">Dishes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {details.items.map((item) => (
+            <tr key={item.name}>
+              <th scope="row">{item.name}</th>
+              <td>
+                {item.onHand} {item.unit}
+              </td>
+              <td>
+                {item.onOrder} {item.unit}
+              </td>
+              <td>
+                {item.projectedNeed} {item.unit}
+              </td>
+              <td>{item.menuItems.join(", ")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export function App() {
   const [state, setState] = useState<OrchestratorState>(initialOrchestratorState);
@@ -112,6 +161,10 @@ export function App() {
   const [connectorBusy, setConnectorBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [pendingConfirmation, setPendingConfirmation] = useState<Confirmation | null>(null);
+  /** True from the moment Confirm is clicked until the write finishes. */
+  const [executing, setExecuting] = useState(false);
+  // What's being prepared for confirmation: an action card's id, or "image" for an attachment.
+  const [preparing, setPreparing] = useState<string | null>(null);
   const [createdRecord, setCreatedRecord] = useState<{
     objectApiName: "Task";
     recordId: string;
@@ -121,6 +174,14 @@ export function App() {
     status: string;
     campaignId: string;
   } | null>(null);
+  const [openedCase, setOpenedCase] = useState<{
+    recordId: string;
+    caseNumber: string;
+    subject: string;
+    priority: string;
+    contactName: string;
+    source: string;
+  } | null>(null);
   const [savedRecord, setSavedRecord] = useState<{
     label: string;
     title: string;
@@ -128,6 +189,7 @@ export function App() {
     recordId: string;
     agent: string;
     actions: string[];
+    note?: string;
   } | null>(null);
   const [attachedImage, setAttachedImage] = useState<{
     contentDocumentId: string;
@@ -152,18 +214,18 @@ export function App() {
   );
   const briefCampaignId = openCampaign?.recordId;
   const [imageBusy, setImageBusy] = useState(false);
-  const [quickstartOpen, setQuickstartOpen] = useState(false);
   const [operations, setOperations] = useState<OperationControls>({
     writesEnabled: true,
     memoryEnabled: true,
     disabledTools: [],
   });
-  const [view, setView] = useState<"overview" | "history" | "evaluations" | "learn" | "graph">(
-    "overview",
-  );
+  const [view, setView] = useState<
+    "overview" | "history" | "evaluations" | "learn" | "graph" | "usecases"
+  >("overview");
   const confirmationRef = useRef<HTMLElement>(null);
-  const quickstartCloseRef = useRef<HTMLButtonElement>(null);
   const connectorStatusLoaded = useRef(false);
+  /** The confirmation the server holds, from its latest state: a failed write may have spent it. */
+  const serverConfirmationId = useRef<string | null>(null);
   const agent = useAgent<OrchestratorState>({
     agent: "MarketingOrchestrator",
     basePath: "agent",
@@ -174,6 +236,7 @@ export function App() {
           ...parsed.data,
           connector: connectorStatusLoaded.current ? current.connector : parsed.data.connector,
         }));
+        serverConfirmationId.current = parsed.data.pendingConfirmation?.id ?? null;
         if (parsed.data.pendingConfirmation) {
           setPendingConfirmation(parsed.data.pendingConfirmation);
         }
@@ -214,6 +277,7 @@ export function App() {
     });
   }, []);
   const busy = status === "submitted" || status === "streaming" || isRecovering;
+  const [resetting, setResetting] = useState(false);
   const salesforceReady = state.connector.state === "ready";
   const showChatError = shouldShowChatError(
     status === "error" && Boolean(error) && !isRecovering,
@@ -234,19 +298,12 @@ export function App() {
     return () => window.clearInterval(timer);
   }, [state.connector.state]);
 
+  // Scroll to a confirmation once, when it appears. State broadcasts (such as a write's progress)
+  // re-deliver the same confirmation, which must not pull the view back to the card's top.
+  const pendingConfirmationId = pendingConfirmation?.id;
   useEffect(() => {
-    if (pendingConfirmation) confirmationRef.current?.scrollIntoView({ block: "nearest" });
-  }, [pendingConfirmation]);
-
-  useEffect(() => {
-    if (!quickstartOpen) return;
-    quickstartCloseRef.current?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setQuickstartOpen(false);
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [quickstartOpen]);
+    if (pendingConfirmationId) confirmationRef.current?.scrollIntoView({ block: "nearest" });
+  }, [pendingConfirmationId]);
 
   function writeBlock(action: keyof typeof WRITE_TOOL_BY_ACTION) {
     if (!operations.writesEnabled) return "Writes paused by an operator";
@@ -311,37 +368,47 @@ export function App() {
     }
   }
 
-  /** Clears the conversation and its working set together. */
+  /**
+   * Clears the conversation and its working set together. Sending waits until the server has
+   * reset, so a reset that lands late can't wipe what the new chat's first turn added. The
+   * cleared workspace arrives through the agent's state broadcast, which is always the newest.
+   */
   function startNewChat() {
     clearHistory();
     setSavedRecord(null);
+    setOpenedCase(null);
     setImages([]);
     setSelectedImageId(null);
+    setResetting(true);
     agentAction<OrchestratorState["workingSet"]>("working-set/reset")
-      .then((workingSet) =>
-        setState((current) => ({
-          ...current,
-          workingSet,
-          activity: [],
-          pendingConfirmation: null,
-        })),
-      )
       .catch((resetError: unknown) =>
         setActionError(
           resetError instanceof Error ? resetError.message : "The workspace could not be cleared.",
         ),
-      );
+      )
+      .finally(() => setResetting(false));
   }
 
   /** Accepting an action card prepares its confirmation, with the Salesforce permission check. */
   async function acceptSuggestion(id: string) {
+    if (preparing) return;
+    startPreparing(id);
     try {
       const confirmation = await agentAction<Confirmation>(`suggestions/${id}/accept`);
       setPendingConfirmation(confirmation);
       setState((current) => ({ ...current, pendingConfirmation: confirmation }));
     } catch (actionError) {
       setActionError(actionError instanceof Error ? actionError.message : "Preflight failed.");
+    } finally {
+      setPreparing(null);
     }
+  }
+
+  /** Clears the last run's steps so the panel shows only this preparation's, as the Worker sends them. */
+  function startPreparing(what: string) {
+    setPreparing(what);
+    setActionError("");
+    setState((current) => ({ ...current, writeProgress: null }));
   }
 
   async function dismissSuggestion(id: string) {
@@ -408,7 +475,8 @@ export function App() {
   }
 
   async function requestImageAttachment() {
-    if (!generatedImage) return;
+    if (!generatedImage || preparing) return;
+    startPreparing("image");
     try {
       const confirmation = await agentAction<Confirmation>("confirmations", {
         action: "attach-generated-image",
@@ -419,11 +487,18 @@ export function App() {
       setState((current) => ({ ...current, pendingConfirmation: confirmation }));
     } catch (actionError) {
       setActionError(actionError instanceof Error ? actionError.message : "Preflight failed.");
+    } finally {
+      setPreparing(null);
     }
   }
 
   async function resolveConfirmation(decision: "execute" | "deny") {
     const action = pendingConfirmation?.action;
+    if (decision === "execute") {
+      if (executing) return;
+      setExecuting(true);
+      setActionError("");
+    }
     try {
       const result = await agentAction<{
         result?: {
@@ -444,6 +519,10 @@ export function App() {
           brief?: { id: string; name: string };
           preview?: unknown[];
           campaign?: { id: string; name: string; flow: { label: string } | null };
+          note?: string;
+          caseNumber?: string;
+          contactName?: string;
+          source?: string;
         };
       }>(`confirmations/${decision}`);
       setPendingConfirmation(null);
@@ -451,7 +530,17 @@ export function App() {
         ...current,
         pendingConfirmation: null,
       }));
-      if (
+      if (decision === "execute" && result.result?.readBack && action === "create-inventory-case") {
+        setActionError("");
+        setOpenedCase({
+          recordId: result.result.recordId,
+          caseNumber: result.result.caseNumber ?? "",
+          subject: result.result.subject,
+          priority: result.result.priority,
+          contactName: result.result.contactName ?? "",
+          source: result.result.source ?? "salesforce",
+        });
+      } else if (
         decision === "execute" &&
         result.result?.readBack &&
         action === "attach-generated-image"
@@ -476,7 +565,7 @@ export function App() {
         const campaign = result.result.campaign;
         const brief = result.result.brief;
         setSavedRecord(
-          campaign
+          campaign && pendingConfirmation.write.kind === "campaign"
             ? {
                 label: "Campaign and flow created in Marketing Cloud",
                 title: `${campaign.name}${campaign.flow ? ` · ${campaign.flow.label}` : ""}`,
@@ -484,6 +573,7 @@ export function App() {
                 recordId: campaign.id,
                 agent: result.result.agent?.label ?? "Campaign Creation agent",
                 actions: (result.result.actions ?? []).map((item) => item.label),
+                note: result.result.note,
               }
             : {
                 label: "Brief saved in Marketing Cloud",
@@ -492,6 +582,7 @@ export function App() {
                 recordId: brief?.id ?? result.result.recordId,
                 agent: result.result.agent?.label ?? "Campaign Creation agent",
                 actions: (result.result.actions ?? []).map((item) => item.label),
+                note: result.result.note,
               },
         );
       } else if (decision === "execute" && result.result?.readBack) {
@@ -508,6 +599,11 @@ export function App() {
       }
     } catch (actionError) {
       setActionError(actionError instanceof Error ? actionError.message : "Confirmation failed.");
+      // A Marketing Cloud write spends its confirmation before calling the agent, so after a
+      // failure there may be nothing left to confirm: drop the card rather than offer a dead button.
+      if (serverConfirmationId.current !== pendingConfirmation?.id) setPendingConfirmation(null);
+    } finally {
+      if (decision === "execute") setExecuting(false);
     }
   }
 
@@ -576,8 +672,13 @@ export function App() {
             >
               <span>⋈</span>Graph
             </button>
-            <button type="button" className="nav-item" onClick={() => setQuickstartOpen(true)}>
-              <span>?</span>Quickstart
+            <button
+              type="button"
+              className={`nav-item ${view === "usecases" ? "active" : ""}`}
+              aria-current={view === "usecases" ? "page" : undefined}
+              onClick={() => setView("usecases")}
+            >
+              <span>▤</span>Use cases
             </button>
           </div>
           <div>
@@ -605,6 +706,24 @@ export function App() {
                 className={`dot ${operations.disabledTools.includes("get_current_weather") ? "stale" : "ready"}`}
               />
               Weather · Open-Meteo
+            </div>
+            <div className="source-row">
+              <i
+                className={`dot ${operations.disabledTools.includes("get_public_holidays") ? "stale" : "ready"}`}
+              />
+              Holidays · Nager.Date
+            </div>
+            <div className="source-row">
+              <i
+                className={`dot ${operations.disabledTools.includes("get_weather_alerts") ? "stale" : "ready"}`}
+              />
+              Weather alerts · NWS
+            </div>
+            <div className="source-row">
+              <i
+                className={`dot ${operations.disabledTools.includes("get_fed_announcements") ? "stale" : "ready"}`}
+              />
+              Rate news · Federal Reserve
             </div>
             <div className="source-row">
               <i
@@ -696,6 +815,15 @@ export function App() {
           />
         )}
         {view === "graph" && <GraphView onClose={() => setView("overview")} />}
+        {view === "usecases" && (
+          <UseCasesView
+            onClose={() => setView("overview")}
+            onTryPrompt={(prompt) => {
+              setInput(prompt);
+              setView("overview");
+            }}
+          />
+        )}
         {view === "history" && (
           <HistoryView
             refreshKey={busy ? -1 : messages.length}
@@ -746,9 +874,9 @@ export function App() {
               <button
                 type="button"
                 className="quickstart-button"
-                onClick={() => setQuickstartOpen(true)}
+                onClick={() => setView("usecases")}
               >
-                Quickstart
+                Use cases
               </button>
               <span className="agent-badge">
                 <i />
@@ -859,6 +987,31 @@ export function App() {
                 </details>
               </section>
             )}
+            {!pendingConfirmation && !preparing && (
+              <WriteProgress progress={state.writeProgress} running={false} />
+            )}
+            {openedCase && (
+              <section className="success-banner" role="status">
+                <div>
+                  <strong>
+                    Case {openedCase.caseNumber} opened for {openedCase.contactName}
+                  </strong>
+                  <span>{` · ${openedCase.subject} · ${openedCase.priority} priority`}</span>
+                  <small className="saved-agent">
+                    create_inventory_case · Apex verified the signed confirmation and the case
+                    contents · read back from{" "}
+                    {openedCase.source === "salesforce" ? "Salesforce" : "the local fixture"}
+                  </small>
+                </div>
+                <a
+                  href={salesforceRecordUrl("Case", openedCase.recordId)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open case in Salesforce <span aria-hidden="true">↗</span>
+                </a>
+              </section>
+            )}
             {savedRecord && (
               <section className="success-banner" role="status">
                 <div>
@@ -866,7 +1019,7 @@ export function App() {
                   <span>{` · ${savedRecord.title}`}</span>
                   <small className="saved-agent">
                     By the {savedRecord.agent} agent · {savedRecord.actions.join(" → ")} · read back
-                    from Salesforce
+                    from Salesforce{savedRecord.note ? ` · ${savedRecord.note}` : ""}
                   </small>
                 </div>
                 <a
@@ -931,8 +1084,16 @@ export function App() {
             {!pendingConfirmation && (
               <ActionCards
                 suggestions={state.suggestions ?? []}
+                preparing={preparing}
                 onAccept={(id) => void acceptSuggestion(id)}
                 onDismiss={(id) => void dismissSuggestion(id)}
+              />
+            )}
+            {!pendingConfirmation && preparing && (
+              <WriteProgress
+                running
+                phase="prepare"
+                progress={state.writeProgress?.phase === "prepare" ? state.writeProgress : null}
               />
             )}
             {pendingConfirmation && (
@@ -947,6 +1108,7 @@ export function App() {
                 </h3>
                 <p className="confirmation-summary">{pendingConfirmation.summary}</p>
                 <MarketingWriteDetails confirmation={pendingConfirmation} />
+                <InventoryCaseDetails confirmation={pendingConfirmation} />
                 {pendingConfirmation.action === "attach-generated-image" &&
                   generatedImage &&
                   generatedImage.id === pendingConfirmation.imageId && (
@@ -966,7 +1128,7 @@ export function App() {
                       </dd>
                     </div>
                   )}
-                  {!pendingConfirmation.write && (
+                  {!pendingConfirmation.write && !pendingConfirmation.inventoryCase && (
                     <div className="confirmation-detail">
                       <dt>Campaign</dt>
                       <dd>
@@ -994,10 +1156,21 @@ export function App() {
                   </div>
                 </dl>
                 <PermissionDetails confirmation={pendingConfirmation} />
+                {executing && (
+                  <WriteProgress
+                    running
+                    progress={
+                      state.writeProgress?.confirmationId === pendingConfirmation.id
+                        ? state.writeProgress
+                        : null
+                    }
+                  />
+                )}
                 <div className="confirmation-actions">
                   <button
                     type="button"
                     className="text-button"
+                    disabled={executing}
                     onClick={() => void resolveConfirmation("deny")}
                   >
                     Cancel
@@ -1005,9 +1178,11 @@ export function App() {
                   <button
                     type="button"
                     className="confirm-button"
+                    disabled={executing}
+                    aria-busy={executing}
                     onClick={() => void resolveConfirmation("execute")}
                   >
-                    {CONFIRMATION_COPY[pendingConfirmation.action].confirm}
+                    {executing ? "Working…" : CONFIRMATION_COPY[pendingConfirmation.action].confirm}
                   </button>
                 </div>
               </section>
@@ -1018,7 +1193,7 @@ export function App() {
             onSubmit={(event) => {
               event.preventDefault();
               const text = input.trim();
-              if (!text || busy) return;
+              if (!text || busy || resetting) return;
               void sendMessage({ text });
               setInput("");
             }}
@@ -1042,7 +1217,7 @@ export function App() {
                 <button
                   type="submit"
                   className="send"
-                  disabled={!input.trim()}
+                  disabled={!input.trim() || resetting}
                   aria-label="Send message"
                 >
                   <span aria-hidden="true">↑</span>
@@ -1160,12 +1335,14 @@ export function App() {
                         type="button"
                         className="secondary-button attach-image-button"
                         onClick={() => void requestImageAttachment()}
+                        aria-busy={preparing === "image"}
                         disabled={
                           pendingConfirmation !== null ||
+                          preparing !== null ||
                           writeBlock("attach-generated-image") !== null
                         }
                       >
-                        Attach to campaign
+                        {preparing === "image" ? "Preparing…" : "Attach to campaign"}
                       </button>
                     )}
                     {generatedImage.lifecycle === "draft" && (
@@ -1229,86 +1406,6 @@ export function App() {
           </section>
         </aside>
       </div>
-      {quickstartOpen && (
-        <div className="dialog-backdrop" role="presentation">
-          <section
-            className="quickstart-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="quickstart-title"
-          >
-            <div className="quickstart-heading">
-              <div>
-                <p className="kicker">Guided demo</p>
-                <h2 id="quickstart-title">Start with a real workflow</h2>
-              </div>
-              <button
-                ref={quickstartCloseRef}
-                type="button"
-                className="dialog-close"
-                onClick={() => setQuickstartOpen(false)}
-                aria-label="Close quickstart"
-              >
-                ×
-              </button>
-            </div>
-            <p>
-              Connect Salesforce, then choose a prompt. Each example uses fictional Northstar data
-              and stays inside the demo’s governed tool set.
-            </p>
-            <ol className="quickstart-steps">
-              <li>Confirm the Salesforce connector shows “ready.”</li>
-              <li>Choose a prompt below and send it from the composer.</li>
-              <li>Review the evidence cards; Salesforce records open in a new tab.</li>
-              <li>Expand the technical trace to inspect tool selection and sanitized payloads.</li>
-              <li>Approve a write only when the confirmation card matches your intent.</li>
-            </ol>
-            <h3>Try now</h3>
-            <div className="prompt-list">
-              {[
-                "Summarize the sample campaign and its recent performance",
-                "Draft campaign content for the sample audience",
-                "Check the sample campaign readiness and explain every blocker",
-                "Recommend buyer group members using the available sample signals",
-                "Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
-                "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
-                "Who should be in the buyer group for Acme Outfitters, and why?",
-                "Is the fall campaign audience covered for commercial email consent?",
-                "Which members of the fall loyalty audience overlap with other active campaigns?",
-                "What content was built from the fall brief, and what are its brand rule results?",
-              ].map((prompt) => (
-                <button
-                  type="button"
-                  key={prompt}
-                  onClick={() => {
-                    setInput(prompt);
-                    setQuickstartOpen(false);
-                  }}
-                >
-                  <span>{prompt}</span>
-                  <span aria-hidden="true">→</span>
-                </button>
-              ))}
-            </div>
-            <p>
-              Once a campaign is open in the chat, use <strong>Generate campaign visual</strong> in
-              the Workspace panel to create a governed Workers AI draft, then{" "}
-              <strong>Attach to campaign</strong> and confirm to store it on the Salesforce Campaign
-              as a file.
-            </p>
-            <h3>Coming soon / not yet built</h3>
-            <ul className="coming-soon">
-              <li>Additional HXL cards for standard Salesforce agent results.</li>
-              <li>Representative consent-data evaluation in the supplied sandbox.</li>
-              <li>Expanded account discovery and buyer-group evidence.</li>
-            </ul>
-            <p className="boundary-note">
-              Publishing, sending, activation, deletion, suppression, and arbitrary Salesforce edits
-              are intentionally unavailable in this demo.
-            </p>
-          </section>
-        </div>
-      )}
     </main>
   );
 }

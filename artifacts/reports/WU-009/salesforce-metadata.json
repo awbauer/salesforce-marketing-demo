@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-29T19:24:00.917Z",
+  "generatedAt": "2026-09-29T19:27:07.537Z",
   "status": "passed",
   "requiredFiles": [
     "aiAuthoringBundles/Campaign_Readiness_Governance/Campaign_Readiness_Governance.agent",
@@ -16,8 +16,9 @@
     "classes/NorthstarMarketingAgentTest.cls",
     "aiAuthoringBundles/Northstar_Campaign_Creation/Northstar_Campaign_Creation.agent",
     "objects/Activity/fields/Northstar_Idempotency_Key__c.field-meta.xml",
-    "objects/Campaign/fields/Northstar_Idempotency_Key__c.field-meta.xml",
     "objects/ContentVersion/fields/Northstar_Idempotency_Key__c.field-meta.xml",
+    "objects/Case/fields/Northstar_Idempotency_Key__c.field-meta.xml",
+    "classes/NorthstarCreateInventoryCase.cls",
     "objects/Northstar_Confirmation_Config__c/Northstar_Confirmation_Config__c.object-meta.xml",
     "objects/Northstar_Confirmation_Config__c/fields/Signing_Key__c.field-meta.xml",
     "mcpServerDefinitions/NorthstarMarketingWorkbench.mcpServerDefinition-meta.xml",
@@ -30,12 +31,13 @@
     "migrations/0001_phase2_confirmation_audit.sql"
   ],
   "agentActionTargets": 3,
-  "toolCount": 17,
-  "hostedMcpToolCount": 17,
+  "toolCount": 18,
+  "hostedMcpToolCount": 18,
   "writeTools": [
     "save_marketing_brief",
     "create_marketing_campaign",
     "create_campaign_review_request",
+    "create_inventory_case",
     "attach_campaign_image"
   ],
   "failures": []

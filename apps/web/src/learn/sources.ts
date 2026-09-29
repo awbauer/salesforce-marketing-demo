@@ -44,7 +44,6 @@ export const SECTION_SOURCES: Record<string, readonly string[]> = {
     "salesforce/force-app/main/default/bots/",
     "salesforce/force-app/main/default/mcpServerDefinitions/",
     "packages/contracts/src/tool-catalog.json",
-    "salesforce/force-app/main/default/objects/Campaign/",
     "salesforce/force-app/main/default/objects/Activity/",
     "salesforce/force-app/main/default/objects/ContentVersion/",
     "salesforce/force-app/main/default/classes/NorthstarGetCampaignContext.cls",
@@ -65,12 +64,17 @@ export const SECTION_SOURCES: Record<string, readonly string[]> = {
   ],
   ui: [
     "apps/web/src/App.tsx",
+    "apps/web/src/WriteProgress.tsx",
     "apps/web/src/Markdown.tsx",
     "packages/ui/src/",
     "salesforce/force-app/main/default/lightningTypes/",
     "salesforce/force-app/main/default/uiWidgets/",
   ],
-  observability: ["apps/web/src/HistoryView.tsx", "apps/web/src/turn-trace.ts"],
+  observability: [
+    "apps/web/src/HistoryView.tsx",
+    "apps/web/src/turn-trace.ts",
+    "apps/web/src/turn-stats.ts",
+  ],
   evaluations: [
     "packages/evals/src/",
     "apps/web/src/EvaluationView.tsx",
@@ -96,6 +100,14 @@ export const SECTION_SOURCES: Record<string, readonly string[]> = {
     "apps/edge/src/marketing-writes.ts",
     "salesforce/force-app/main/default/aiAuthoringBundles/Northstar_Campaign_Creation/",
     "salesforce/force-app/main/default/classes/NorthstarGetMarketingRecords.cls",
+  ],
+  "use-cases": [
+    "apps/edge/src/external-services/",
+    "apps/web/src/usecases/",
+    "apps/edge/src/campaign-context/store-inventory.ts",
+    "packages/knowledge-graph/src/harborstone.ts",
+    "apps/edge/src/inventory-risk.ts",
+    "salesforce/force-app/main/default/classes/NorthstarCreateInventoryCase.cls",
   ],
   "long-term-memory": [
     "packages/knowledge-graph/src/memory.ts",
@@ -127,12 +139,18 @@ export const UNTAUGHT_SOURCES: ReadonlyArray<{ path: string; reason: string }> =
     path: "salesforce/force-app/main/default/classes/NorthstarMarketingAgentTest.cls",
     reason: "Apex tests",
   },
+  {
+    path: "salesforce/force-app/main/default/classes/NorthstarInventoryCaseTest.cls",
+    reason: "Apex tests",
+  },
   { path: "scripts/check-blocked-words.mjs", reason: "Delivery gate" },
   { path: "scripts/check-docs.mjs", reason: "Delivery gate" },
+  { path: "scripts/export-learn.mjs", reason: "Writes docs/learn.md from the Learn page itself" },
   { path: "scripts/check-hxl.mjs", reason: "Delivery gate" },
   { path: "scripts/check-invariants.mjs", reason: "Delivery gate" },
   { path: "scripts/check-learn.mjs", reason: "This gate" },
   { path: "scripts/check-salesforce-metadata.mjs", reason: "Delivery gate" },
+  { path: "scripts/check-retired-salesforce.mjs", reason: "Delivery gate" },
   { path: "scripts/install-git-hooks.mjs", reason: "Developer setup" },
   { path: "scripts/verify.mjs", reason: "Delivery gate runner" },
   { path: "scripts/lib/report.mjs", reason: "Gate report helper" },
@@ -142,5 +160,14 @@ export const UNTAUGHT_SOURCES: ReadonlyArray<{ path: string; reason: string }> =
   { path: "scripts/validate-salesforce.mjs", reason: "Salesforce CI validation" },
 ];
 
-/** Changes to these never need a Learn update: tests, fixtures, and formatting-only files. */
-export const DRIFT_IGNORED = [/\.test\.[cm]?[jt]sx?$/, /Test\.cls$/, /-meta\.xml$/, /\.snap$/];
+/**
+ * Changes to these never need a Learn update: tests, snapshots, and the metadata companions of
+ * Apex classes. Other `-meta.xml` files (objects, fields, permission sets, the MCP definition) are
+ * Salesforce source and are checked like code.
+ */
+export const DRIFT_IGNORED = [
+  /\.test\.[cm]?[jt]sx?$/,
+  /Test\.cls(?:-meta\.xml)?$/,
+  /\.cls-meta\.xml$/,
+  /\.snap$/,
+];

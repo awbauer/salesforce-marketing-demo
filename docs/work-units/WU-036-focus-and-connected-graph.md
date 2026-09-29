@@ -1,7 +1,7 @@
 ---
 id: WU-036
 title: Workspace focus (phase 2 of #46) and a connected Northstar and Coastline graph
-status: active
+status: complete
 plan_sections: [9, 15, 16]
 owners: [agent]
 issue: 46

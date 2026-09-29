@@ -21,7 +21,7 @@ test("builds the workspace from the chat and completes a durable turn", async ({
   await expect(page.getByRole("heading", { name: "Campaign intelligence" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Workspace" })).toBeVisible();
   await expect(page.locator(".image-workflow-summary")).toBeVisible();
-  await expect(page.getByText("17 configured tools")).toBeVisible();
+  await expect(page.getByText("18 configured tools")).toBeVisible();
   // A new chat starts with an empty workspace and nothing to write to.
   await page.getByRole("button", { name: "New chat" }).click();
   await expect(page.locator(".messages .message.user")).toHaveCount(0);
@@ -85,12 +85,31 @@ test("builds the workspace from the chat and completes a durable turn", async ({
   await page.screenshot({
     path: `artifacts/evidence/WU-038/action-card-${testInfo.project.name}.png`,
   });
+  // Hold the request so preparing stays on screen: the card shows it's working right away.
+  let releasePrepare = () => {};
+  const preparing = new Promise<void>((resolve) => {
+    releasePrepare = resolve;
+  });
+  await page.route("**/agent/suggestions/*/accept", async (route) => {
+    await preparing;
+    await route.continue();
+  });
   await page
     .getByTestId("action-card")
     .filter({ hasText: "Request a review" })
     .getByRole("button", { name: "Prepare review request" })
     .click();
+  await expect(page.getByRole("button", { name: "Preparing…" })).toBeDisabled();
+  const preparingPanel = page.getByRole("region", { name: "Preparing the confirmation" });
+  await expect(preparingPanel).toBeVisible();
+  await expect(preparingPanel).toBeInViewport({ ratio: 0.9 });
+  await page.screenshot({
+    path: `artifacts/evidence/WU-049/prepare-progress-${testInfo.project.name}.png`,
+  });
+  releasePrepare();
   await expect(page.getByRole("heading", { name: "Create Salesforce review task?" })).toBeVisible();
+  await page.unroute("**/agent/suggestions/*/accept");
+  await expect(preparingPanel).toHaveCount(0);
   await expect(
     page.locator(".confirmation-card").getByRole("link", { name: /701jV000004GglIQAS/ }),
   ).toBeVisible();
@@ -100,8 +119,30 @@ test("builds the workspace from the chat and completes a durable turn", async ({
   });
   const completedReviews = page.getByText("Review request created");
   const completedBefore = await completedReviews.count();
+  // Hold the response so the running state stays on screen: the steps show while it works.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/agent/confirmations/execute", async (route) => {
+    const response = await route.fetch();
+    await held;
+    await route.fulfill({ response });
+  });
   await page.getByRole("button", { name: "Confirm create" }).click();
+  const running = page.getByRole("region", { name: "Running the confirmed write" });
+  await expect(running).toBeVisible();
+  await expect(page.getByRole("button", { name: "Working…" })).toBeDisabled();
+  await expect(running).toContainText("NorthstarCreateCampaignReviewRequest");
+  await expect(running).toBeInViewport({ ratio: 0.9 });
+  await page.screenshot({
+    path: `artifacts/evidence/WU-048/write-progress-${testInfo.project.name}.png`,
+  });
+  release();
   await expect.poll(() => completedReviews.count()).toBeGreaterThan(completedBefore);
+  await page.unroute("**/agent/confirmations/execute");
+  const record = page.getByTestId("write-progress");
+  await expect(record).toContainText("Behind the scenes · Review request created · done");
   await expect(page.getByText(/Local fixture read-back/).last()).toBeVisible();
   // The created task joins the workspace as a created record.
   await expect(workspace.getByTestId("workspace-record").first()).toContainText("Created");
@@ -169,23 +210,102 @@ test("renders the accessible native fallback when the HXL resource is unavailabl
   });
 });
 
-test("offers a quickstart with supported prompts and honest roadmap boundaries", async ({
+test("offers a use-case library with data flows and coming-soon scenarios", async ({
   page,
 }, testInfo) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Quickstart" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Start with a real workflow" });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("heading", { name: "Try now" })).toBeVisible();
-  await expect(dialog.getByRole("heading", { name: "Coming soon / not yet built" })).toBeVisible();
-  await expect(dialog.getByText(/Publishing, sending, activation/)).toBeVisible();
+  await page.getByRole("button", { name: "Use cases" }).first().click();
+  const library = page.getByRole("region", { name: "Use cases" });
+  await expect(library).toBeVisible();
+  await library
+    .getByRole("group", { name: "Team" })
+    .getByRole("button", { name: /^Service/ })
+    .click();
+  await library.getByRole("button", { name: /Severe-weather customer impact/ }).click();
+  const detail = library.getByRole("article");
+  await expect(detail.getByRole("link", { name: /National Weather Service/ })).toBeVisible();
+  await expect(detail.getByRole("list", { name: "Data flow" })).toContainText(
+    "assess_location_impact",
+  );
+  const comingSoon = library.getByRole("list", { name: "Coming soon use cases" });
+  await expect(comingSoon.locator("[aria-disabled='true']").first()).toBeVisible();
+  await expect(comingSoon.getByRole("button")).toHaveCount(0);
   await page.screenshot({
-    path: `artifacts/evidence/WU-006/quickstart-${testInfo.project.name}.png`,
+    path: `artifacts/evidence/WU-045/use-cases-${testInfo.project.name}.png`,
     fullPage: true,
   });
-  const prompt = "Check the sample campaign readiness and explain every blocker";
-  await dialog.getByRole("button", { name: prompt }).click();
+  const prompt =
+    "There are weather alerts near our San Diego location. Which customers are affected and what should we tell them?";
+  await detail.getByRole("button", { name: new RegExp(prompt.slice(0, 40)) }).click();
   await expect(page.getByLabel("Message the orchestrator")).toHaveValue(prompt);
+});
+
+test("lists the financial services use cases with their graph tools and live Fed news", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Use cases" }).first().click();
+  const library = page.getByRole("region", { name: "Use cases" });
+  await library
+    .getByRole("group", { name: "Team" })
+    .getByRole("button", { name: /^Financial services/ })
+    .click();
+  const available = library.getByRole("list", { name: "Available use cases" });
+  await expect(available.getByRole("listitem")).toHaveCount(3);
+  await expect(library.getByRole("list", { name: "Coming soon use cases" })).toHaveCount(0);
+
+  await available.getByRole("button", { name: /Market news to pre-approved content/ }).click();
+  const detail = library.getByRole("article");
+  await expect(detail.getByRole("link", { name: /Federal Reserve press releases/ })).toBeVisible();
+  await expect(detail.getByRole("list", { name: "Data flow" })).toContainText(
+    "match_news_to_approved_content",
+  );
+
+  await available.getByRole("button", { name: /Account plan to grow assets/ }).click();
+  await expect(detail).toContainText("Sales · Financial services");
+  await expect(detail.getByRole("list", { name: "Data flow" })).toContainText(
+    "build_aum_account_plan",
+  );
+  const prompt = "Build an account plan to grow AUM with Cedar Valley Community Foundation";
+  await detail.getByRole("button", { name: new RegExp(prompt) }).click();
+  await expect(page.getByLabel("Message the orchestrator")).toHaveValue(prompt);
+});
+
+test("checks inventory against the forecast and opens a store-manager case only after confirmation", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "New chat" }).click();
+  await page
+    .getByLabel("Message the orchestrator")
+    .fill("Check inventory for our Sacramento store against the forecast");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.locator(".message.assistant").last()).toContainText(
+    "Inventory check for Coastline Kitchen Sacramento",
+  );
+  const workspace = page.getByRole("complementary", { name: "Workspace" });
+  await expect(workspace.getByText("Store inventory · randomized mock")).toBeVisible();
+  await expect(workspace.getByText("Inventory risk")).toBeVisible();
+  const card = page.getByTestId("action-card").filter({ hasText: "Tom Okafor" });
+  await expect(card).toBeVisible();
+  await card.getByRole("button", { name: "Review case" }).click();
+  const confirmation = page.locator(".confirmation-card");
+  await expect(
+    confirmation.getByRole("heading", { name: "Open a Salesforce case for the store manager?" }),
+  ).toBeVisible();
+  await expect(confirmation.getByRole("table")).toContainText("Needed");
+  await expect(confirmation).toContainText("Create Case");
+  await page.screenshot({
+    path: `artifacts/evidence/WU-047/inventory-case-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+  await confirmation.getByRole("button", { name: "Confirm case" }).click();
+  await expect(page.getByText("Case 00001001 opened for Tom Okafor")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Open case in Salesforce/ })).toHaveAttribute(
+    "href",
+    /\/lightning\/r\/Case\/500000000000001\/view$/,
+  );
+  await expect(workspace.getByTestId("workspace-record").first()).toContainText("Created");
 });
 
 test("routes chat write requests to the confirmation flow without claiming a write", async ({
@@ -430,6 +550,13 @@ test("renders model comparison, checks, scenarios, failures, and methodology", a
   });
   await expect(models.getByText("In production")).toBeVisible();
   await expect(models.getByRole("row", { name: /gpt-oss-20b/ })).toContainText("50%");
+  // Cost per turn sits beside latency: tokens (input plus output) and tool calls, averaged.
+  await expect(models.getByRole("row", { name: /gpt-oss-120b/ })).toContainText(
+    "1,500 tokens1 tool call",
+  );
+  await expect(models.getByRole("row", { name: /gpt-oss-20b/ })).toContainText(
+    "1,500 tokens0.5 tool calls",
+  );
   await expect(models.getByRole("row", { name: /gpt-oss-120b/ })).toContainText("72 ±8");
   await expect(models.getByRole("row", { name: /gpt-oss-120b/ })).toContainText("$0.0020");
   await expect(page.getByText(/run cost \$0\.059/)).toBeVisible();
@@ -438,6 +565,7 @@ test("renders model comparison, checks, scenarios, failures, and methodology", a
   await expect(page.getByRole("heading", { name: /Failed turns .*\(1\)/ })).toBeVisible();
   await page.getByText("called no tool").click();
   await expect(page.getByText("tool-calls,length")).toBeVisible();
+  await expect(page.getByText("8.0s · 1,500 tokens · 0 tool calls")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Methodology" })).toBeVisible();
   await page.getByRole("button", { name: "Suite routing-model-only" }).click();
   await expect(page.getByRole("button", { name: "Suite routing-model-only" })).toHaveAttribute(
@@ -474,6 +602,10 @@ test("records each turn with its interpretation, reasoning, and outcome in histo
     .locator(".history-turn", { hasText: "Review the sample campaign readiness" })
     .first();
   await expect(reviewed.getByText("Local fixture", { exact: true })).toBeVisible();
+  // A turn's seconds come with its tokens and tool calls.
+  await expect(reviewed.locator("summary").first()).toContainText(
+    /\d+\.\ds · [\d,]+ tokens? · \d+ tool calls?/,
+  );
   await reviewed.locator("summary").first().click();
   await expect(reviewed.getByText(/answered from the fictional fixture/i)).toBeVisible();
   await reviewed.getByText("Show reasoning").click();
@@ -653,9 +785,9 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
     .first()
     .click();
   await expect(page.getByRole("heading", { name: "Graph explorer" })).toBeVisible();
-  await expect(page.getByText("157", { exact: true })).toBeVisible();
+  await expect(page.getByText("339", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("img", { name: /Knowledge graph drawing with 157 nodes/ }),
+    page.getByRole("img", { name: /Knowledge graph drawing with 339 nodes/ }),
   ).toBeVisible();
 
   // The rain tour expands the weather node and summarizes what worked.
@@ -664,7 +796,7 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
   await expect(details.getByRole("heading", { name: "rain", exact: true })).toBeVisible();
   await expect(details.getByText(/Loaded 60 of \d+ connections/)).toBeVisible();
   await expect(details.getByText("What the graph says")).toBeVisible();
-  await expect(page.getByText("217", { exact: true })).toBeVisible();
+  await expect(page.getByText("399", { exact: true })).toBeVisible();
 
   // Search reaches every loaded node without the canvas.
   await page.getByLabel("Find a node").fill("fall loyalty");
@@ -682,7 +814,7 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
   const personas = page.getByRole("button", { name: /^Persona/ });
   await personas.click();
   await expect(personas).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByRole("img", { name: /with 165 nodes/ })).toBeVisible();
+  await expect(page.getByRole("img", { name: /with 311 nodes/ })).toBeVisible();
   await personas.click();
 
   await page.getByRole("button", { name: /A failed brand check/ }).click();
@@ -692,6 +824,70 @@ test("explores the knowledge graph with tours, search, and expansion", async ({
   // Let the layout and camera settle before the evidence screenshot.
   await page.waitForTimeout(1500);
   await page.screenshot({ path: `artifacts/evidence/WU-033/graph-${testInfo.project.name}.png` });
+});
+
+test("filters the graph explorer to one brand's own nodes", async ({ page }) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: /^\W*Graph$/ })
+    .first()
+    .click();
+  await expect(page.getByRole("heading", { name: "Graph explorer" })).toBeVisible();
+  const all = page.getByRole("button", { name: "All brands", exact: true });
+  const coastline = page.getByRole("button", { name: "Coastline Kitchen", exact: true });
+  const northstar = page.getByRole("button", { name: "Northstar", exact: true });
+  await expect(all).toHaveAttribute("aria-pressed", "true");
+
+  await coastline.click();
+  await expect(coastline).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText(/loaded nodes connect to Coastline Kitchen/)).toContainText(
+    "Northstar, its parent brand, is hidden",
+  );
+  await expect(
+    page.getByRole("img", { name: /Knowledge graph drawing with 83 nodes/ }),
+  ).toBeVisible();
+
+  // Search only reaches nodes in scope.
+  await page.getByLabel("Find a node").fill("acme");
+  await expect(page.getByText(/No loaded node matches/)).toBeVisible();
+  await page.getByLabel("Find a node").fill("coastline weather");
+  await page
+    .getByRole("list", { name: "Matching nodes" })
+    .getByRole("button", { name: "Coastline Weather Moments Campaign" })
+    .click();
+  await expect(
+    page.getByRole("complementary", { name: "Node details" }).getByRole("heading", {
+      name: "Coastline Weather Moments",
+    }),
+  ).toBeVisible();
+
+  // A tour outside the filtered brand clears it back to all brands.
+  await page.getByRole("button", { name: /Who a campaign reaches/ }).click();
+  await expect(all).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("img", { name: /Knowledge graph drawing with 339 nodes/ }),
+  ).toBeVisible();
+
+  await northstar.click();
+  await expect(northstar).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("img", { name: /Knowledge graph drawing with 115 nodes/ }),
+  ).toBeVisible();
+
+  // Harborstone Wealth keeps its regulated content, deal, and clients, not Coastline's menu.
+  const harborstone = page.getByRole("button", { name: "Harborstone Wealth", exact: true });
+  await harborstone.click();
+  await expect(
+    page.getByRole("img", { name: /Knowledge graph drawing with 158 nodes/ }),
+  ).toBeVisible();
+  await page.getByLabel("Find a node").fill("cedar valley");
+  await expect(
+    page
+      .getByRole("list", { name: "Matching nodes" })
+      .getByRole("button", { name: "Cedar Valley Community Foundation Client" }),
+  ).toBeVisible();
+  await page.getByLabel("Find a node").fill("tortilla");
+  await expect(page.getByText(/No loaded node matches/)).toBeVisible();
 });
 
 test("has the Marketing Cloud agent save the brief, then create the campaign and its flow", async ({
@@ -812,6 +1008,23 @@ test("remembers a draft, recalls it in a new chat, and forgets it", async ({ pag
   await expect(answer).toContainText(/re-check Salesforce/);
   await page.screenshot({
     path: `artifacts/evidence/WU-039/recall-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+
+  // Reopen puts the remembered draft back in this chat's workspace as the focus.
+  await expect(page.getByTestId("workspace-focus")).toHaveCount(0);
+  await page.getByRole("button", { name: "History" }).first().click();
+  await page.getByRole("button", { name: "Memory", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Reopen Rainy-day comfort: Spicy Tortilla Soup in the workspace" })
+    .first()
+    .click();
+  await expect(page.getByTestId("workspace-focus")).toContainText(
+    "Rainy-day comfort: Spicy Tortilla Soup",
+  );
+  await expect(page.getByTestId("workspace-focus")).toContainText("Reopened from memory");
+  await page.screenshot({
+    path: `artifacts/evidence/WU-046/reopen-${testInfo.project.name}.png`,
     fullPage: true,
   });
 

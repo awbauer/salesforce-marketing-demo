@@ -197,6 +197,16 @@ const CREATIVE_WEIGHTS: DimensionWeights = {
   marketerUsefulness: 1,
 };
 
+/** A named criterion from the restaurant brief set, reused by other brief-drafting scenarios. */
+function fromBrief(id: string): Criterion {
+  const found = restaurantCriteria("push").find((criterion) => criterion.id === id);
+  if (!found) throw new Error(`No brief criterion ${id}`);
+  return found;
+}
+
+// Compliance approval IDs look like COMP-2026-0519.
+const APPROVAL_ID = /\b[A-Z]{2,6}-\d{4}-\d{3,5}\b/;
+
 const MAYA =
   "Maya, 29, works near Coastline Kitchen's flagship and has the app with push on. She opens messages that match what she is craving right now and ignores generic promotions.";
 
@@ -444,6 +454,210 @@ export const scenarioRubrics: Record<string, ScenarioRubric> = {
       noUngrounded,
     ],
     weights: { accuracy: 3, contextFidelity: 2, clarity: 1, marketerUsefulness: 1 },
+  },
+  "demo-mcn-create": {
+    goal: "Have the Campaign Creation agent draft a Marketing Cloud campaign brief for Coastline Kitchen's late-night tacos, presented as an unsaved draft.",
+    persona:
+      "Jordan, 27, finishes a late shift and opens the Coastline app after 9 pm looking for something quick and filling.",
+    criteria: [
+      fromBrief("brief-fields"),
+      fromBrief("key-message-length"),
+      {
+        id: "late-night",
+        label: "Aims at the late-night moment",
+        check: ({ answer }) => has(answer, /late[- ]night|after (?:9|dark|hours)|night/i),
+      },
+      {
+        id: "tacos",
+        label: "Features the tacos",
+        check: ({ answer }) => has(answer, /\btacos?\b/i),
+      },
+      fromBrief("measurable-kpi"),
+      hasCta,
+      notSaved,
+    ],
+    weights: {
+      engagement: 2.5,
+      actionIntent: 2.5,
+      brandVoice: 1.5,
+      accuracy: 1.5,
+      clarity: 1,
+      marketerUsefulness: 1.5,
+    },
+  },
+  "demo-mcn-refine": {
+    goal: "Ask the Campaign Creation agent to shorten the second email of a saved preview, then say plainly what changed.",
+    criteria: [
+      {
+        id: "says-refined",
+        label: "Says the email was made shorter",
+        check: ({ answer }) =>
+          has(answer, /\b(?:refin|shorter|shortened|trimmed|cut down|condensed)/i),
+      },
+      {
+        id: "names-email",
+        label: "Refers to the second email",
+        check: ({ answer }) => has(answer, /\b(?:second|2nd|email 2)\b/i),
+      },
+      {
+        id: "keeps-cta",
+        label: "Keeps the call to action",
+        check: ({ answer }) => has(answer, /\b(?:call to action|cta|same)\b/i),
+      },
+    ],
+    weights: { accuracy: 2.5, marketerUsefulness: 3, clarity: 1.5 },
+  },
+  "demo-sales-outreach": {
+    goal: "Plan a month of outreach to a buyer group that avoids public holidays, with a clear order of touches.",
+    criteria: [
+      {
+        id: "cadence",
+        label: "Lays out timed touches",
+        check: ({ answer }) =>
+          has(answer, /\b(?:week|day)\s*\d|\bweek(?:s)?\b[^.]{0,40}\b(?:email|call|touch|follow)/i),
+      },
+      {
+        id: "holidays",
+        label: "Accounts for public holidays the tool returned",
+        check: ({ answer, trace }) =>
+          trace.some((item) => item.name === "get_public_holidays") && has(answer, /\bholiday/i),
+      },
+      {
+        id: "roles",
+        label: "Names who to reach",
+        check: ({ answer }) =>
+          has(answer, /\b(?:marketing lead|operations|buyer|champion|decision[- ]maker|contact)/i),
+      },
+      noUngrounded,
+      notSaved,
+    ],
+    weights: { marketerUsefulness: 3, accuracy: 2.5, contextFidelity: 2, clarity: 1.5 },
+  },
+  "demo-service-weather": {
+    goal: "Say which customers a weather alert affects and what to tell them, without sending anything.",
+    criteria: [
+      {
+        id: "alert",
+        label: "Names the alert",
+        check: ({ answer }) => has(answer, /\b(?:alert|warning|advisory|watch)\b/i),
+      },
+      {
+        id: "affected",
+        label: "Says who is affected",
+        check: ({ answer }) =>
+          has(answer, /\b(?:affected|impact|customers?|guests?|locations?)\b/i),
+      },
+      {
+        id: "message",
+        label: "Suggests what to tell them",
+        check: ({ answer }) =>
+          has(answer, /\b(?:tell|message|notify|notice|communicat|draft|reach out)/i),
+      },
+      noUngrounded,
+      notSaved,
+    ],
+    weights: { accuracy: 3, marketerUsefulness: 3, contextFidelity: 2, clarity: 1 },
+  },
+  "demo-service-inventory": {
+    goal: "Compare a location's inventory with the weather forecast and say what to reorder or prep.",
+    criteria: [
+      {
+        id: "forecast",
+        label: "Uses the forecast",
+        check: ({ answer }) =>
+          has(answer, /\b(?:forecast|expected|this week|heat|rain|cold|warm|hot|weather)\b/i),
+      },
+      {
+        id: "shortage",
+        label: "Flags items running low",
+        check: ({ answer }) => has(answer, /\b(?:low|short|runs? out|running low|reorder|stock)/i),
+      },
+      {
+        id: "action",
+        label: "Recommends an action",
+        check: ({ answer }) =>
+          has(answer, /\b(?:order|reorder|prep|adjust|stock up|recommend|should)\b/i),
+      },
+      noUngrounded,
+    ],
+    weights: { accuracy: 3, marketerUsefulness: 3, contextFidelity: 2, clarity: 1 },
+  },
+  "demo-fsi-fed-news": {
+    goal: "Match a Fed announcement to pre-approved client content and offer only content that is approved.",
+    criteria: [
+      {
+        id: "approval-ids",
+        label: "Cites approval IDs from the tools",
+        check: ({ answer }) => has(answer, APPROVAL_ID),
+      },
+      {
+        id: "approved-only",
+        label: "Says the content is approved",
+        check: ({ answer }) => has(answer, /\bapproved\b/i),
+      },
+      noUngrounded,
+      notSaved,
+    ],
+    weights: { accuracy: 3.5, marketerUsefulness: 2.5, clarity: 1.5 },
+  },
+  "demo-fsi-deal-release": {
+    goal: "Say what approved content is ready for a deal announcement, in what order, and to whom, flagging anything not ready.",
+    criteria: [
+      {
+        id: "sequence",
+        label: "Gives a release order",
+        check: ({ answer }) =>
+          has(answer, /\b(?:first|then|second|step|order|sequence|before|after)\b/i),
+      },
+      {
+        id: "time",
+        label: "Ties the release to the announcement time",
+        check: ({ answer }) => has(answer, /\b8\s*(?:am|a\.m\.|:00)/i),
+      },
+      {
+        id: "approval-ids",
+        label: "Cites approval IDs from the tools",
+        check: ({ answer }) => has(answer, APPROVAL_ID),
+      },
+      {
+        id: "audience",
+        label: "Says who can receive it",
+        check: ({ answer }) =>
+          has(answer, /\b(?:client|audience|recipients?|advisors?|distribution)\b/i),
+      },
+      {
+        id: "not-ready",
+        label: "Flags content that is pending or embargoed",
+        check: ({ answer }) =>
+          has(answer, /\b(?:pending|embargo|hold|not (?:yet )?approved|awaiting)\b/i),
+      },
+      noUngrounded,
+      notSaved,
+    ],
+    weights: { accuracy: 3.5, marketerUsefulness: 3, clarity: 1.5 },
+  },
+  "demo-fsi-aum-plan": {
+    goal: "Build an account plan of concrete plays to grow assets under management, each tied to evidence.",
+    criteria: [
+      {
+        id: "plays",
+        label: "Proposes concrete plays",
+        check: ({ answer }) => has(answer, /\b(?:play|opportunit|recommend|next step|grow|aum)/i),
+      },
+      {
+        id: "rationale",
+        label: "Ties each play to evidence",
+        check: ({ answer }) => has(answer, /\b(?:because|signal|evidence|based on|since|given)\b/i),
+      },
+      noUngrounded,
+      {
+        id: "no-change",
+        label: "Does not claim a change was made",
+        check: ({ answer }) =>
+          !has(answer, /\bI(?:'ve| have)? (?:added|updated|changed|created)\b/i),
+      },
+    ],
+    weights: { accuracy: 3, marketerUsefulness: 3, contextFidelity: 1.5, clarity: 1 },
   },
 };
 

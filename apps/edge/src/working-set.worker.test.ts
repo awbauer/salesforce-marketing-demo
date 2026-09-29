@@ -1,13 +1,16 @@
 import { runInDurableObject, SELF } from "cloudflare:test";
-import { emptyWorkingSet, type WorkingSet } from "@northstar/contracts";
+import { emptyWorkingSet, type WorkingSet, type WriteProgress } from "@northstar/contracts";
 import { describe, expect, it } from "vitest";
+import type { MemoryView } from "../../../packages/knowledge-graph/src/index.ts";
 import { connectCampaignContextTools } from "./campaign-context/server";
+import { connectExternalServiceTools } from "./external-services/server";
 import { connectKnowledgeGraphTools, knowledgeGraphBackend } from "./knowledge-graph/server";
 import { agentStubFor, CATALOG_CAMPAIGN_ID, openCatalogCampaign } from "./worker.test-helpers";
 import {
   baseToolName,
   ingestToolResult,
   openCampaign,
+  reopenFromMemory,
   salesforceRecordsIn,
   workingSetPrompt,
 } from "./working-set";
@@ -72,7 +75,7 @@ describe("working set", () => {
     expect(weather?.title).toBe("Clear in Los Angeles");
     expect(weather?.metric).toBe("71°F");
     expect(weather?.source.system).toBe("open-meteo");
-    expect(set.cards[0]?.summary).toMatch(/past sends in los-angeles, lunch, clear/);
+    expect(set.cards[0]?.summary).toMatch(/past pushes in los-angeles, lunch, clear/);
     expect(set.records).toEqual([
       expect.objectContaining({
         system: "restaurant-data",
@@ -83,6 +86,59 @@ describe("working set", () => {
         relation: "read",
       }),
     ]);
+  });
+
+  it("turns Federal Reserve news and the financial services graph tools into cards", async () => {
+    const external = await connectExternalServiceTools({
+      now: () => new Date("2026-09-17T12:00:00Z"),
+      fetch: async (input) =>
+        String(input).endsWith(".xml")
+          ? new Response(
+              "<rss><item><title>Federal Reserve issues FOMC statement</title><link><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm]]></link><pubDate>Wed, 16 Sep 2026 18:00:00 GMT</pubDate></item></rss>",
+            )
+          : new Response(
+              "<p>The Committee decided to raise the target range for the federal funds rate by 1/4 percentage point to 3-3/4 to 4 percent.</p>",
+            ),
+    });
+    const graph = await connectKnowledgeGraphTools(knowledgeGraphBackend({}));
+    const call = async (tools: Record<string, unknown>, key: string, input: unknown) =>
+      (tools[key] as { execute: (input: unknown, options: unknown) => Promise<unknown> }).execute(
+        input,
+        { toolCallId: "t", messages: [] },
+      );
+    let set: WorkingSet = emptyWorkingSet();
+    const steps: Array<[Record<string, unknown>, string, unknown]> = [
+      [external.tools, "ext_get_fed_announcements", {}],
+      [graph.tools, "graph_match_news_to_approved_content", { event: "rate-increase" }],
+      [
+        graph.tools,
+        "graph_build_aum_account_plan",
+        { client: "Cedar Valley Community Foundation" },
+      ],
+    ];
+    for (const [tools, key, input] of steps)
+      set = ingestToolResult(set, {
+        toolName: key,
+        input,
+        output: await call(tools, key, input),
+        at,
+      });
+    await external.close();
+    await graph.close();
+
+    const fed = set.cards.find((card) => card.source.system === "federal-reserve");
+    expect(fed).toMatchObject({
+      title: "Fed raised rates to 3-3/4 to 4 percent",
+      metric: "1/4 percentage point",
+    });
+    expect(fed?.summary).toMatch(/18 hours ago\. Event: rate-increase/);
+    const content = set.cards.find((card) => card.toolName === "match_news_to_approved_content");
+    expect(content?.title).toBe("Approved content: Fed raises rates");
+    expect(content?.details).toContain("Rates rose: what it means for your cash · COMP-2026-0412");
+    const plan = set.cards.find((card) => card.toolName === "build_aum_account_plan");
+    expect(plan?.title).toBe("Account plan: Cedar Valley Community Foundation");
+    expect(plan?.summary).toMatch(/^4 plays worth about \$32\.6M on \$42M/);
+    expect(plan?.details?.[0]).toBe("Outsourced CIO · ~$16.3M");
   });
 
   it("opens Salesforce records named by id or catalog name, and skips failed results", () => {
@@ -161,6 +217,24 @@ describe("working set", () => {
       }),
     });
     expect(preflight.status).toBe(201);
+    // Preparing it was published step by step too: the plan, the permission check, the binding.
+    const prepared = await runInDurableObject(
+      await agentStubFor(),
+      (instance) =>
+        (instance as unknown as { state: { writeProgress: WriteProgress | null } }).state
+          .writeProgress,
+    );
+    expect(prepared).toMatchObject({
+      phase: "prepare",
+      action: "create-review-task",
+      outcome: "succeeded",
+    });
+    expect(prepared?.steps.map((step) => [step.id, step.status])).toEqual([
+      ["plan", "done"],
+      ["permissions", "done"],
+      ["confirm", "done"],
+    ]);
+    expect(prepared?.steps[1]?.detail).toMatch(/checks passed \(local fixture\)/);
     const execute = await SELF.fetch("https://example.test/agent/confirmations/execute", {
       method: "POST",
     });
@@ -173,6 +247,99 @@ describe("working set", () => {
       ["Task", "created"],
       ["Campaign", "read"],
     ]);
+    // The write's progress was published step by step and kept as a record of what happened.
+    const progress = await runInDurableObject(
+      await agentStubFor(),
+      (instance) =>
+        (instance as unknown as { state: { writeProgress: WriteProgress | null } }).state
+          .writeProgress,
+    );
+    expect(progress).toMatchObject({
+      phase: "execute",
+      action: "create-review-task",
+      outcome: "succeeded",
+    });
+    expect(progress?.steps.map((step) => [step.id, step.status])).toEqual([
+      ["confirm", "done"],
+      ["sign", "skipped"],
+      ["call", "skipped"],
+      ["readback", "done"],
+      ["remember", "done"],
+    ]);
+    expect(progress?.steps[1]?.detail).toMatch(/Local development has no Salesforce/);
+  });
+});
+
+describe("reopening remembered work", () => {
+  const memory = (overrides: Partial<MemoryView>): MemoryView => ({
+    id: "11111111-1111-4111-8111-111111111111",
+    type: "Draft",
+    kind: "push-message",
+    title: "Rainy-day comfort",
+    summary: "Soup push for the lunch crowd.",
+    at: "2026-09-20T12:00:00Z",
+    expiresAt: "2026-10-04T12:00:00Z",
+    author: "you",
+    source: "Remembered from the chat",
+    about: [],
+    records: [],
+    fields: [{ label: "Headline", value: "Soup is on" }],
+    version: 3,
+    focusId: "focus-1",
+    ...overrides,
+  });
+
+  it("makes a remembered draft the focus again, at its remembered version", () => {
+    const set = reopenFromMemory(emptyWorkingSet(), memory({}), memory({}), at);
+    expect(set.focus).toMatchObject({ id: "focus-1", kind: "push-message", current: 3 });
+    expect(set.focus?.saved).toBeUndefined();
+    expect(set.focus?.versions[0]?.changeNote).toBe(
+      "Reopened from memory (remembered from the chat, 2026-09-20)",
+    );
+    expect(set.focus?.versions[0]?.fields).toEqual([{ label: "Headline", value: "Soup is on" }]);
+  });
+
+  it("adds a decision's records as remembered, never as a write target", () => {
+    const draft = memory({});
+    const decision = memory({
+      id: "22222222-2222-4222-8222-222222222222",
+      type: "Decision",
+      kind: "confirmed-write",
+      fields: [],
+      draft: { id: draft.id, title: draft.title, version: 3 },
+      records: [
+        {
+          system: "salesforce",
+          objectType: "Campaign",
+          recordId: "701000000000001AAA",
+          title: "Rainy Day Comfort",
+        },
+      ],
+    });
+    const set = reopenFromMemory(emptyWorkingSet(), decision, draft, at);
+    expect(set.focus?.id).toBe("focus-1");
+    expect(set.records.map((entry) => [entry.objectType, entry.relation, entry.via])).toEqual([
+      ["Campaign", "remembered", "memory"],
+    ]);
+    expect(openCampaign(set)).toBeUndefined();
+    expect(workingSetPrompt(set)).toContain("reopened from memory, not re-read");
+    // Reading the record again in this chat makes it the open campaign.
+    const reread = ingestToolResult(set, {
+      toolName: "tool_salesforce_x_summarize_campaign",
+      input: { campaignId: "701000000000001AAA" },
+      output: text("Rainy Day Comfort (701000000000001AAA) is planned."),
+      at,
+    });
+    expect(openCampaign(reread)?.relation).toBe("read");
+  });
+
+  it("reopens a memory from the Memory tab through the Worker", async () => {
+    await SELF.fetch("https://example.test/agent/working-set/reset", { method: "POST" });
+    const missing = await SELF.fetch(
+      "https://example.test/agent/memory/33333333-3333-4333-8333-333333333333/reopen",
+      { method: "POST" },
+    );
+    expect(missing.status).toBe(404);
   });
 });
 

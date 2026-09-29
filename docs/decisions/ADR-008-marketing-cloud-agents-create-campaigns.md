@@ -39,7 +39,11 @@ What the proof org and the documentation show:
 ## Consequences
 
 - Records created by the workbench are ordinary Marketing Cloud Next briefs and campaigns, editable and activatable in the Marketing app.
-- The standard actions aren't idempotent. The confirmation is spent before the agent is called, and a failure asks the user to check Marketing Cloud before retrying.
+- The standard actions aren't idempotent (#61). Retries are made safe in the workbench:
+  - The confirmation is spent before the agent is called.
+  - Before calling the agent, the workbench looks in Salesforce. A brief with the same name and key message is linked only if this exact save was sent before and never confirmed, so an unrelated chat's brief isn't linked. A brief's existing campaign is always linked, never duplicated.
+  - After a failed call, it checks Salesforce once more, since a timeout can come after the save.
+  - The audit marks the confirmation `confirmed` (sent, not yet verified) until the read-back succeeds.
 - The preview's channels are the ones the agent plans: email in this org. A push request is recorded in the brief's guardrails.
 - The D1 audit accepts the new action names (migration 0004) and keeps the retired ones for old rows.
 - After the MCP definition is deployed, the retired Apex classes and custom objects are deleted from the proof org.

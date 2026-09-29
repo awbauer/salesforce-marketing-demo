@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   type Confirmation,
   currentFocusVersion,
@@ -178,6 +179,23 @@ function stepContent(content: unknown) {
   }
 }
 
+const normalized = (value: string | undefined) =>
+  (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+
+/**
+ * Whether a brief in Marketing Cloud is the one a save would create: the same name and key
+ * message. Used to link an earlier attempt's brief instead of saving a duplicate.
+ */
+export function sameBrief(
+  saved: Pick<MarketingBrief, "name" | "keyMessage">,
+  brief: MarketingBrief,
+) {
+  return (
+    normalized(saved.name) === normalized(brief.name) &&
+    normalized(saved.keyMessage) === normalized(brief.keyMessage)
+  );
+}
+
 /** Parses get_marketing_records: the Brief, its preview steps, and its Campaign and flow. */
 export function parseMarketingReadBack(output: unknown): MarketingReadBack | null {
   let recordsJson = findKey(output, "recordsJson");
@@ -289,12 +307,17 @@ export function fixturePermissionReport(
             { label: "Create Campaign", detail: "Allowed by your profile and permission sets." },
             { label: "Edit this brief", detail: "Sharing gives you edit access to the record." },
           ]
-        : [
-            {
-              label: `Create ${action === "create-review-task" ? "Task" : "Content Version"}`,
-              detail: "Allowed by your profile and permission sets.",
-            },
-          ]),
+        : action === "create-inventory-case"
+          ? [
+              { label: "Create Case", detail: "Allowed by your profile and permission sets." },
+              { label: "Read Contact", detail: "You can see the store manager's contact." },
+            ]
+          : [
+              {
+                label: `Create ${action === "create-review-task" ? "Task" : "Content Version"}`,
+                detail: "Allowed by your profile and permission sets.",
+              },
+            ]),
   ].map((check) => ({ ...check, passed: true }));
   return {
     source: "local-fixture",
@@ -378,6 +401,32 @@ BRIEF_LABELS.set("primary calls-to-action", "Primary CTAs");
 BRIEF_LABELS.set("primary calls to action", "Primary CTAs");
 
 /**
+ * The turn's answer when the model wrote none after the Campaign Creation agent drafted a
+ * brief: the brief's own fields, so the chat still says what was drafted.
+ */
+export function briefAnswer(focus: FocusItem | null): string | null {
+  if (focus?.kind !== "brief") return null;
+  const lines = (
+    [
+      ["Key message", /^(key message)$/i],
+      ["Target audience", /^(target audience|audience)$/i],
+      ["Primary goal", /^(primary goal|goal|objective)$/i],
+      ["Primary CTAs", /^(primary ctas?|ctas?)$/i],
+      ["Primary KPI", /^(primary kpi|kpi)$/i],
+    ] as const
+  ).flatMap(([label, pattern]) => {
+    const value = clip(field(focus, pattern)?.trim(), 400);
+    return value ? [`- **${label}:** ${value}`] : [];
+  });
+  return [
+    `The Marketing Cloud Campaign Creation agent drafted **${currentFocusVersion(focus).title}**.`,
+    ...(lines.length ? ["", ...lines] : []),
+    "",
+    "The full brief is in the workspace. Nothing is saved in Marketing Cloud until you confirm the save.",
+  ].join("\n");
+}
+
+/**
  * A brief the Campaign Creation agent drafted (its "Name: … / Description: …" lines) as focus
  * input, so the workspace holds the agent's brief rather than a model paraphrase of it.
  */
@@ -403,19 +452,44 @@ export function briefFocusFromAgent(reply: string, changeNote: string): FocusInp
   };
 }
 
+/** A tool's input schema as JSON Schema: the Agents SDK holds a Zod schema, the AI SDK a wrapper. */
+async function inputJsonSchema(inputSchema: unknown): Promise<unknown> {
+  if (inputSchema instanceof z.ZodType) return z.toJSONSchema(inputSchema, { io: "input" });
+  if (inputSchema && typeof inputSchema === "object" && "jsonSchema" in inputSchema)
+    return await (inputSchema as { jsonSchema: unknown }).jsonSchema;
+  return inputSchema;
+}
+
 /**
  * The arguments for an agent-backed MCP tool: the request goes in the tool's text parameter,
  * whatever the Hosted MCP names it, read from the tool's own input schema.
  */
-export function agentToolInput(tool: { inputSchema?: unknown }, message: string) {
-  const raw = tool.inputSchema as { jsonSchema?: unknown } | undefined;
-  const schema = (raw?.jsonSchema ?? raw) as
-    | { properties?: Record<string, { type?: unknown }>; required?: string[] }
-    | undefined;
-  const properties = schema?.properties ?? {};
-  const strings = Object.keys(properties).filter((name) => properties[name]?.type === "string");
+export async function agentToolInput(tool: { inputSchema?: unknown }, message: string) {
+  let resolved: unknown;
+  try {
+    resolved = await inputJsonSchema(tool.inputSchema);
+  } catch {
+    resolved = undefined;
+  }
+  const schema = (resolved && typeof resolved === "object" ? resolved : {}) as {
+    properties?: unknown;
+    required?: unknown;
+  };
+  const properties = (
+    schema.properties && typeof schema.properties === "object" ? schema.properties : {}
+  ) as Record<string, { type?: unknown } | undefined>;
+  const isString = (type: unknown) =>
+    type === "string" || (Array.isArray(type) && type.includes("string"));
+  const strings = Object.keys(properties).filter((name) => isString(properties[name]?.type));
+  const required = Array.isArray(schema.required)
+    ? schema.required.filter((name): name is string => typeof name === "string")
+    : [];
+  // Parameter names only, never values: the record of what the Hosted MCP tool expects.
+  console.log(
+    `[marketing] agent tool input: properties=${Object.keys(properties).join(",") || "none"} required=${required.join(",") || "none"}`,
+  );
   const key =
-    schema?.required?.find((name) => strings.includes(name)) ??
+    required.find((name) => strings.includes(name)) ??
     strings.find((name) => /message|input|utterance|prompt|query|text/i.test(name)) ??
     strings[0] ??
     "message";
@@ -479,4 +553,46 @@ export function localAgentWrite(
     },
   });
   return `Your campaign has been created and saved (local fixture).\n\nCampaign ID: ${campaignId}`;
+}
+
+type ExecutableTool = { execute?: (input: never, options: never) => unknown };
+
+/**
+ * Makes every Refine Campaign Preview request name the saved brief. The model often leaves the
+ * Brief ID out, and the Campaign Creation agent then has to guess which brief to change; the
+ * server knows it, so it adds it when the request doesn't already contain it.
+ */
+export function pinBriefToRefinement<T extends Record<string, unknown>>(
+  tools: T,
+  briefId: string | undefined,
+): T {
+  if (!briefId) return tools;
+  return Object.fromEntries(
+    Object.entries(tools).map(([name, definition]) => {
+      const execute = (definition as ExecutableTool).execute;
+      if (!/(?:^|_)refine_campaign_preview$/.test(name) || typeof execute !== "function")
+        return [name, definition];
+      return [
+        name,
+        {
+          ...(definition as object),
+          execute: (input: Record<string, unknown>, options: unknown) => {
+            const text = JSON.stringify(input ?? {});
+            if (text.includes(briefId)) return execute(input as never, options as never);
+            const key =
+              Object.keys(input ?? {}).find((field) => typeof input[field] === "string") ??
+              "message";
+            return execute(
+              {
+                ...input,
+                [key]:
+                  `Refine the campaign preview on brief ${briefId}: ${String(input?.[key] ?? "")}`.trim(),
+              } as never,
+              options as never,
+            );
+          },
+        },
+      ];
+    }),
+  ) as T;
 }

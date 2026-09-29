@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-29T19:24:01.982Z",
+  "generatedAt": "2026-09-29T19:27:08.390Z",
   "status": "passed",
   "fixedDefaults": {
     "workspaceId": "northstar-demo",
@@ -22,7 +22,8 @@
       "save-marketing-brief",
       "create-marketing-campaign",
       "create-review-task",
-      "attach-generated-image"
+      "attach-generated-image",
+      "create-inventory-case"
     ]
   },
   "toolCatalog": {
@@ -114,6 +115,13 @@
         "source": "salesforce-apex",
         "autonomous": false,
         "allowedWrite": "create-review-task"
+      },
+      {
+        "name": "create_inventory_case",
+        "riskClass": "write",
+        "source": "salesforce-apex",
+        "autonomous": false,
+        "allowedWrite": "create-inventory-case"
       },
       {
         "name": "attach_campaign_image",

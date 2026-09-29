@@ -43,12 +43,13 @@ describe("proof contracts", () => {
   });
   it("keeps every Salesforce write outside autonomous model execution", () => {
     const writes = catalog.tools.filter((tool) => tool.riskClass === "write");
-    expect(writes).toHaveLength(4);
+    expect(writes).toHaveLength(5);
     expect(writes.every((tool) => tool.autonomous === false)).toBe(true);
     expect(writes.map((tool) => tool.allowedWrite)).toEqual([
       "save-marketing-brief",
       "create-marketing-campaign",
       "create-review-task",
+      "create-inventory-case",
       "attach-generated-image",
     ]);
     // Briefs and campaigns are created by the Marketing Cloud Campaign Creation agent.
@@ -90,6 +91,9 @@ describe("policy intent routing", () => {
       "List the email addresses of the audience",
       "Draft the email and then send it",
       "Can you send it?",
+      // Context before a request doesn't soften it; a question after one doesn't either.
+      "The Fed raised rates. Send the approved email to every client.",
+      "Publish it. What happens next?",
     ])
       expect(classifyPolicyIntent(prompt), prompt).toBe("unsupported");
   });
@@ -109,6 +113,9 @@ describe("policy intent routing", () => {
       "Create the campaign brief for the winter launch",
       "Go ahead and draft three subject lines",
       "Can you create it with a warmer tone?",
+      // An advisory question after some context still asks for guidance.
+      "The Fed just announced its rate decision. What pre-approved content can we send clients today?",
+      "We announce the Bayview acquisition tomorrow at 8am. What approved content is ready to release, in what order, and who can we send it to?",
     ])
       expect(classifyPolicyIntent(prompt), prompt).toBeNull();
   });

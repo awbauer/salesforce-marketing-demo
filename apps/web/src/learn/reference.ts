@@ -127,6 +127,11 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
     "Confirmed write: creates a Salesforce review task with context and a checklist.",
   ),
   tool(
+    "create_inventory_case",
+    "use-cases",
+    "Confirmed write: opens a Salesforce Case for a store manager listing items that won't cover the forecast.",
+  ),
+  tool(
     "attach_campaign_image",
     "images",
     "Confirmed write: attaches a generated image to a campaign after Salesforce verifies its hash.",
@@ -141,6 +146,32 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
     "get_current_weather",
     "campaign-context",
     "Live weather from Open-Meteo for a California city.",
+  ),
+  tool(
+    "get_weather_forecast",
+    "use-cases",
+    "The daily Open-Meteo forecast for a city, with each day's demand-planning weather.",
+  ),
+  tool(
+    "get_location_inventory",
+    "use-cases",
+    "Stock counts for a Coastline Kitchen restaurant from a randomized store inventory mock.",
+  ),
+  // External-services MCP tools.
+  tool(
+    "get_public_holidays",
+    "use-cases",
+    "Upcoming public holidays for a country from Nager.Date, a free public API.",
+  ),
+  tool(
+    "get_weather_alerts",
+    "use-cases",
+    "Active National Weather Service alerts at a Coastline Kitchen location, most severe first.",
+  ),
+  tool(
+    "get_fed_announcements",
+    "use-cases",
+    "The latest FOMC rate decision from the Federal Reserve's public press feed, and the market event it maps to.",
   ),
   // Knowledge-graph MCP tools.
   tool(
@@ -166,7 +197,37 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   tool(
     "find_similar_past_pushes",
     "graphrag-here",
-    "Past Coastline pushes for a location, daypart, and weather, and which menu items performed best.",
+    "Past Coastline sends on the campaign's channel (emails or pushes) for a location, daypart, and weather, which menu items and content performed best, and the audience's opt-ins for that channel.",
+  ),
+  tool(
+    "plan_account_outreach",
+    "use-cases",
+    "An account's contacts in priority order, their consented channels, and the account's country.",
+  ),
+  tool(
+    "map_weather_demand",
+    "use-cases",
+    "The dishes forecast weather lifts, what they're made with, and the location's store manager.",
+  ),
+  tool(
+    "assess_location_impact",
+    "use-cases",
+    "The app audience near a location, how many can be reached on each channel, and campaigns to pause.",
+  ),
+  tool(
+    "match_news_to_approved_content",
+    "use-cases",
+    "Harborstone's pre-approved content for a market event: what's ready to send, what's blocked and why, reach by consent, and past response speed.",
+  ),
+  tool(
+    "prepare_deal_release",
+    "use-cases",
+    "The embargoed acquisition package in release order, with each piece's audience, consent basis, approval, and blockers.",
+  ),
+  tool(
+    "build_aum_account_plan",
+    "use-cases",
+    "A Harborstone client's signals, ranked plays with peer adoption and approved content, and contacts with consented channels.",
   ),
   tool(
     "trace_content_lineage",
@@ -202,18 +263,29 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
       ],
       ["create-review-task", "Create a Salesforce review task for the open campaign."],
       ["attach-generated-image", "Attach an approved generated image to the open campaign."],
+      [
+        "create-inventory-case",
+        "Open a Salesforce case for a store manager from an inventory check's low items.",
+      ],
     ] as const
   ).map(
     ([name, summary]): ReferenceEntry => ({
       kind: "Write action",
       name,
       summary: `${summary} Needs a permission check and your confirmation.`,
-      section: name.includes("marketing") ? "marketing-cloud" : "governance",
+      section: name.includes("marketing")
+        ? "marketing-cloud"
+        : name === "create-inventory-case"
+          ? "use-cases"
+          : "governance",
     }),
   ),
 
   // Graph nodes: the demo dataset.
-  node("Brand", "Northstar and its restaurant brand, Coastline Kitchen."),
+  node(
+    "Brand",
+    "Northstar and its brands: Coastline Kitchen (restaurants) and Harborstone Wealth (wealth management).",
+  ),
   node("Channel", "Email, SMS, and the mobile app."),
   node("ConsentScope", "A consent a person or segment holds for a channel."),
   node("BrandRule", "A brand rule that content passes or fails."),
@@ -236,7 +308,28 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   node("Menu", "Coastline Kitchen's menu.", "campaign-context"),
   node("MenuItem", "A dish on the menu, with its order rate.", "campaign-context"),
   node("Location", "A Coastline Kitchen restaurant in California.", "campaign-context"),
+  node("InventoryItem", "Stock a restaurant keeps, counted in kitchen units.", "use-cases"),
+  node("StoreManager", "A restaurant's store manager, by name only.", "use-cases"),
   node("PushSend", "One past push notification send and how it performed."),
+  node("EmailSend", "One past Coastline email send: its opens, clicks, and orders."),
+  node(
+    "Approval",
+    "A compliance approval record: approved, expired, or pending, with its dates and any embargo.",
+    "use-cases",
+  ),
+  node("Disclosure", "Required disclosure text a regulated asset must carry.", "use-cases"),
+  node("MarketEvent", "A market event Harborstone prepares approved content for.", "use-cases"),
+  node(
+    "ClientSend",
+    "A past Harborstone response: hours after the news, opens, clicks.",
+    "use-cases",
+  ),
+  node("Deal", "Harborstone's embargoed acquisition.", "use-cases"),
+  node("Firm", "The firm being acquired.", "use-cases"),
+  node("Client", "A Harborstone client: a foundation, business, or family office.", "use-cases"),
+  node("Advisor", "The Harborstone advisor who covers a client.", "use-cases"),
+  node("Product", "A Harborstone product or service a client can hold.", "use-cases"),
+  node("Signal", "Something the relationship team noticed about a client.", "use-cases"),
   // Graph nodes: long-term memory.
   node("Workspace", "The workspace that owns a memory.", "long-term-memory"),
   node(
@@ -265,7 +358,10 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   edge("WORKS_AT", "A persona at its account."),
   edge("ENGAGED_WITH", "A persona that engaged with a content asset."),
   edge("INCLUDES", "A segment including a persona."),
-  edge("HAS_CONSENT", "A persona or segment holding a consent scope."),
+  edge(
+    "HAS_CONSENT",
+    "A persona or segment holding a consent scope; segments carry opt-in counts per channel.",
+  ),
   edge("MENU_OF", "A menu belonging to its brand.", "campaign-context"),
   edge("ON_MENU", "A menu item on the menu.", "campaign-context"),
   edge("AVAILABLE_DURING", "A menu item offered during a daypart.", "campaign-context"),
@@ -273,6 +369,30 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   edge("OPERATES", "A brand operating a location.", "campaign-context"),
   edge("SERVES", "A location serving a menu.", "campaign-context"),
   edge("NEAR", "An app segment near a location."),
+  edge("MADE_WITH", "A menu item made with an inventory item, per serving.", "use-cases"),
+  edge(
+    "LIFTS_DEMAND",
+    "Weather that raises a menu item's orders, learned from past pushes.",
+    "use-cases",
+  ),
+  edge("MANAGED_BY", "A location managed by its store manager.", "use-cases"),
+  edge("APPROVED_UNDER", "Regulated content and the approval it was released under.", "use-cases"),
+  edge("REQUIRES", "Regulated content and a disclosure it must carry.", "use-cases"),
+  edge("APPROVED_FOR", "Regulated content and the channel it's approved for.", "use-cases"),
+  edge("RESPONDS_TO", "Content or a past response prepared for a market event.", "use-cases"),
+  edge("EXPLAINS", "Content explaining a product.", "use-cases"),
+  edge("RELEASED_WITH", "An announcement asset, its release step, and timing.", "use-cases"),
+  edge("ADDRESSED_TO", "An announcement asset and the audience it goes to.", "use-cases"),
+  edge("ANNOUNCED_BY", "A deal announced by its brand.", "use-cases"),
+  edge("ANNOUNCES", "A campaign announcing a deal.", "use-cases"),
+  edge("ACQUIRES", "A deal and the firm it acquires.", "use-cases"),
+  edge("CLIENT_OF", "A client of a brand, or a segment of a firm's clients.", "use-cases"),
+  edge("COVERED_BY", "A client and the advisor who covers it.", "use-cases"),
+  edge("HOLDS", "A client holding a product, with its assets in $ millions.", "use-cases"),
+  edge("HAS_SIGNAL", "A client showing a signal, and when it was detected.", "use-cases"),
+  edge("SUGGESTS", "A signal pointing to a product, with the share it might capture.", "use-cases"),
+  edge("OFFERS", "A brand offering a product.", "use-cases"),
+  edge("ADVISES_FOR", "An advisor at a brand.", "use-cases"),
   edge("USED", "A push send that used a content asset."),
   edge("SENT_TO", "A push send delivered to a segment."),
   edge("SENT_UNDER", "A push send made under a consent scope."),
@@ -319,6 +439,10 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
       [
         "NorthstarCreateCampaignReviewRequest",
         "Apex action behind create_campaign_review_request.",
+      ],
+      [
+        "NorthstarCreateInventoryCase",
+        "Apex action behind create_inventory_case; checks the contents' hash.",
       ],
       [
         "NorthstarAttachCampaignImage",

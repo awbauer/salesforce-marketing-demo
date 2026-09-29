@@ -1,6 +1,7 @@
 import { type TurnRecord, TurnRecordSchema } from "@northstar/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MemoryPanel } from "./MemoryPanel";
+import { turnStats } from "./turn-stats";
 import { readableToolName } from "./turn-trace";
 
 type LoadState =
@@ -44,6 +45,7 @@ export function HistoryView({
   focusTitle,
 }: {
   refreshKey: number;
+  /** Returns to the workspace; after reopening a memory, the chat shows what was reopened. */
   onClose: () => void;
   focusTitle?: string;
 }) {
@@ -112,7 +114,9 @@ export function HistoryView({
         </button>
       </div>
       <div className="evaluations-body">
-        {tab === "memory" && <MemoryPanel refreshKey={refreshKey} focusTitle={focusTitle} />}
+        {tab === "memory" && (
+          <MemoryPanel refreshKey={refreshKey} focusTitle={focusTitle} onReopened={onClose} />
+        )}
         {tab === "turns" && state.status === "loading" && (
           <p role="status">Loading turn history…</p>
         )}
@@ -200,7 +204,12 @@ function TurnCard({ turn }: { turn: TurnRecord }) {
               {OUTCOME_LABELS[turn.outcome]}
               {turn.fallback ? " · recovered" : ""}
             </span>
-            <span>{seconds(turn.durationMs)}</span>
+            <span>
+              {turnStats(seconds(turn.durationMs), {
+                tokens: turn.inputTokens + turn.outputTokens,
+                toolCalls: turn.tools.length,
+              })}
+            </span>
           </span>
         </summary>
         <dl className="evaluation-definitions history-details">

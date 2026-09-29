@@ -42,6 +42,8 @@ private class NorthstarMarketingAgentTest {
         System.assert(results[1].checksJson.contains('Create Campaign'), results[1].checksJson);
         System.assert(results[1].checksJson.contains('Marketing User'), results[1].checksJson);
         System.assert(results[1].checksJson.contains('Edit this brief'), results[1].checksJson);
+        // Stage is platform-managed, so it's never a field the user must be able to write.
+        System.assert(!results[1].checksJson.contains('Stage'), results[1].checksJson);
         System.assertEquals(false, results[2].allowed, 'Retired custom writes are no longer known actions.');
     }
 

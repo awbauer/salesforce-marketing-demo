@@ -1,16 +1,22 @@
 import { runInDurableObject, SELF } from "cloudflare:test";
 import { emptyWorkingSet, type FocusItem, type WorkingSet } from "@northstar/contracts";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { applyFocusUpdate, type FocusInput } from "./focus";
 import {
   agentRequest,
   agentToolInput,
+  briefAnswer,
   briefFocusFromAgent,
   briefFromFocus,
   idsFromAgentReply,
+  localAgentWrite,
+  type MarketingReadBack,
   parseMarketingReadBack,
   parsePermissionReport,
+  pinBriefToRefinement,
   planMarketingWrite,
+  sameBrief,
 } from "./marketing-writes";
 import { agentStubFor } from "./worker.test-helpers";
 
@@ -50,6 +56,16 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
       "Priority",
     ]);
     expect(briefFocusFromAgent("I need more details about the campaign.", "x")).toBeNull();
+  });
+
+  it("answers from the drafted brief when the model wrote nothing", () => {
+    const answer = briefAnswer(
+      focusFrom(briefFocusFromAgent(AGENT_BRIEF, "Drafted") as FocusInput),
+    );
+    expect(answer).toContain("drafted **Rainy Day Lunch Email Campaign**");
+    expect(answer).toContain("- **Target audience:** App users in Los Angeles who order at lunch.");
+    expect(answer).toContain("Nothing is saved in Marketing Cloud until you confirm the save.");
+    expect(briefAnswer(null)).toBeNull();
   });
 
   it("plans the brief save, then the campaign, then nothing once the campaign exists", () => {
@@ -111,7 +127,7 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
     });
   });
 
-  it("asks the agent in one self-contained request and finds the ids it replies with", () => {
+  it("asks the agent in one self-contained request and finds the ids it replies with", async () => {
     const save = agentRequest({
       kind: "brief",
       brief: {
@@ -139,12 +155,43 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
       "701jV00000C76xpQAB",
     );
     expect(
-      agentToolInput(
+      await agentToolInput(
         { inputSchema: { jsonSchema: { properties: { userMessage: { type: "string" } } } } },
         "hi",
       ),
     ).toEqual({ userMessage: "hi" });
-    expect(agentToolInput({}, "hi")).toEqual({ message: "hi" });
+    expect(await agentToolInput({}, "hi")).toEqual({ message: "hi" });
+    // The AI SDK can hold the schema as a promise, and "required" isn't always an array.
+    expect(
+      await agentToolInput(
+        {
+          inputSchema: {
+            jsonSchema: Promise.resolve({
+              type: "object",
+              properties: {
+                sessionId: { type: "string" },
+                inputText: { type: ["string", "null"] },
+              },
+              required: { inputText: true },
+            }),
+          },
+        },
+        "hi",
+      ),
+    ).toEqual({ inputText: "hi" });
+    // The Agents SDK's getAITools() holds a Zod schema, whose .required is a method.
+    expect(
+      await agentToolInput(
+        {
+          inputSchema: z.fromJSONSchema({
+            type: "object",
+            properties: { sessionId: { type: "string" }, userInput: { type: "string" } },
+            required: ["userInput"],
+          }),
+        },
+        "hi",
+      ),
+    ).toEqual({ userInput: "hi" });
   });
 
   it("parses the Salesforce read-back of the brief, preview steps, campaign, and flow", () => {
@@ -287,5 +334,148 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
     );
     // Once the campaign exists there is nothing more to save.
     expect((await prepare("create-marketing-campaign")).status).toBe(400);
+  });
+
+  it("links a brief or campaign an earlier attempt created instead of saving it twice", async () => {
+    await SELF.fetch("https://example.test/agent/working-set/reset", { method: "POST" });
+    const stub = await agentStubFor();
+    type Agent = {
+      updateFocus: (input: FocusInput) => unknown;
+      localMarketing: Map<string, MarketingReadBack>;
+      callMarketingAgent: (...args: unknown[]) => Promise<unknown>;
+      marketingAttemptKey: (write: unknown) => Promise<string>;
+      rememberAttempt: (key: string) => void;
+    };
+    const brief = briefFocusFromAgent(AGENT_BRIEF, "Drafted") as FocusInput;
+    const plannedBrief = planMarketingWrite(focusFrom(brief));
+    if (plannedBrief?.write.kind !== "brief") throw new Error("expected a brief save");
+    expect(
+      sameBrief(plannedBrief.write.brief, {
+        ...plannedBrief.write.brief,
+        name: " rainy day LUNCH email campaign ",
+      }),
+    ).toBe(true);
+    expect(
+      sameBrief(plannedBrief.write.brief, { ...plannedBrief.write.brief, keyMessage: "Other" }),
+    ).toBe(false);
+    const prepare = (action: string) =>
+      SELF.fetch("https://example.test/agent/confirmations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+    const execute = async () =>
+      (await (
+        await SELF.fetch("https://example.test/agent/confirmations/execute", { method: "POST" })
+      ).json()) as {
+        result?: { found?: string; brief?: { id: string }; campaign?: { id: string } };
+        error?: { message: string };
+      };
+    const count = () =>
+      runInDurableObject(stub, (instance) => (instance as unknown as Agent).localMarketing.size);
+
+    // Another chat saved a brief with the same name and key message: it is not linked.
+    await runInDurableObject(stub, (instance) => {
+      const agent = instance as unknown as Agent;
+      agent.localMarketing.clear();
+      localAgentWrite(plannedBrief.write, agent.localMarketing);
+      agent.updateFocus(brief);
+    });
+    expect((await prepare("save-marketing-brief")).status).toBe(201);
+    const fresh = await execute();
+    expect(fresh.result?.found).toBeUndefined();
+    expect(fresh.result?.brief?.id).toBe("21y000000000002");
+    expect(await count()).toBe(2);
+
+    // This chat's own earlier attempt timed out after the agent saved: it is linked.
+    await runInDurableObject(stub, async (instance) => {
+      const agent = instance as unknown as Agent;
+      agent.localMarketing.clear();
+      localAgentWrite(plannedBrief.write, agent.localMarketing);
+      agent.rememberAttempt(await agent.marketingAttemptKey(plannedBrief.write));
+      agent.updateFocus(brief);
+    });
+    expect((await prepare("save-marketing-brief")).status).toBe(201);
+    const reused = await execute();
+    expect(reused.result).toMatchObject({ found: "reused", brief: { id: "21y000000000001" } });
+    expect(await count()).toBe(1);
+
+    // The campaign already exists on the brief: linked, not created again.
+    await runInDurableObject(stub, (instance) => {
+      const agent = instance as unknown as Agent;
+      localAgentWrite(
+        { kind: "campaign", briefId: "21y000000000001", briefName: "x" },
+        agent.localMarketing,
+      );
+    });
+    expect((await prepare("create-marketing-campaign")).status).toBe(201);
+    expect((await execute()).result).toMatchObject({
+      found: "reused",
+      campaign: { id: "701000000000001" },
+    });
+  });
+
+  it("recovers a save that timed out after the agent saved, and asks to retry when it didn't", async () => {
+    await SELF.fetch("https://example.test/agent/working-set/reset", { method: "POST" });
+    const stub = await agentStubFor();
+    type Agent = {
+      updateFocus: (input: FocusInput) => unknown;
+      localMarketing: Map<string, MarketingReadBack>;
+      callMarketingAgent: (...args: unknown[]) => Promise<unknown>;
+    };
+    const prepareAndExecute = async (saveBeforeFailing: boolean, keyMessage: string) => {
+      await runInDurableObject(stub, (instance) => {
+        const agent = instance as unknown as Agent;
+        agent.localMarketing.clear();
+        const input = briefFocusFromAgent(
+          AGENT_BRIEF.replace(/Key Message: .*/, `Key Message: ${keyMessage}`),
+          "Drafted",
+        ) as FocusInput;
+        agent.updateFocus(input);
+        agent.callMarketingAgent = async (_current, write) => {
+          if (saveBeforeFailing) localAgentWrite(write as never, agent.localMarketing);
+          throw new Error("The operation timed out");
+        };
+      });
+      await SELF.fetch("https://example.test/agent/confirmations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "save-marketing-brief" }),
+      });
+      return SELF.fetch("https://example.test/agent/confirmations/execute", { method: "POST" });
+    };
+    const recovered = await prepareAndExecute(true, "Soup first.");
+    expect(recovered.status).toBe(200);
+    await expect(recovered.json()).resolves.toMatchObject({ result: { found: "recovered" } });
+
+    const failed = await prepareAndExecute(false, "Soup second.");
+    expect(failed.status).toBe(502);
+    const body = (await failed.json()) as { error: { message: string } };
+    expect(body.error.message).toContain("may still be saving");
+    expect(body.error.message).toContain("links what it finds instead of saving twice");
+  });
+
+  it("names the saved brief in every refinement request, whatever the model wrote", async () => {
+    const seen: unknown[] = [];
+    const record = { execute: async (input: unknown) => seen.push(input) };
+    const tools = pinBriefToRefinement(
+      { tool_salesforce_ns_refine_campaign_preview: record, graph_get_graph_overview: record },
+      "21yjV0000002NIHQA2",
+    );
+    const refine = tools.tool_salesforce_ns_refine_campaign_preview as typeof record;
+    await refine.execute({ message: "Make the second email shorter" });
+    await refine.execute({ message: "On brief 21yjV0000002NIHQA2, shorten email 2" });
+    await (tools.graph_get_graph_overview as typeof record).execute({});
+    expect(seen).toEqual([
+      {
+        message:
+          "Refine the campaign preview on brief 21yjV0000002NIHQA2: Make the second email shorter",
+      },
+      { message: "On brief 21yjV0000002NIHQA2, shorten email 2" },
+      {},
+    ]);
+    // Without a saved brief there is nothing to pin.
+    const unpinned = { tool_salesforce_ns_refine_campaign_preview: record };
+    expect(pinBriefToRefinement(unpinned, undefined)).toBe(unpinned);
   });
 });

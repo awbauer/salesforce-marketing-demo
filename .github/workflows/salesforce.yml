@@ -72,6 +72,9 @@ jobs:
           ACTUAL_ORG_ID=$(sf data query --target-org "$SF_TARGET_ORG" --query "SELECT Id FROM Organization LIMIT 1" --json | jq -r '.result.records[0].Id')
           test "$ACTUAL_ORG_ID" = "$SF_APPROVED_PROOF_ORG_ID"
 
+      - name: Fail if retired metadata exists in the org
+        run: pnpm sf:retired:check
+
       - name: Validate Salesforce metadata
         if: github.event_name == 'pull_request'
         run: >-
@@ -99,6 +102,21 @@ jobs:
           --tests NorthstarMarketingAgentTest
           --target-org "$SF_TARGET_ORG"
           --wait 30
+
+      # This org skips RunSpecifiedTests during deploys ("Running Tests - Skipped"), so the Apex
+      # tests run explicitly after deployment and the step fails unless they all ran and passed.
+      - name: Run Apex tests against the deployed code
+        if: github.event_name != 'pull_request'
+        run: |
+          sf apex run test --class-names NorthstarCampaignActionsTest --class-names NorthstarMarketingAgentTest \
+            --target-org "$SF_TARGET_ORG" --wait 20 --result-format json --json > apex-tests.json || true
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync("apex-tests.json", "utf8")).result ?? {};
+            const s = r.summary ?? {};
+            console.log(`Apex tests: ${s.testsRan ?? 0} ran, ${s.passing ?? 0} passed, ${s.failing ?? 0} failed`);
+            for (const t of r.tests ?? []) if (t.Outcome !== "Pass") console.log(`FAIL ${t.FullName}: ${t.Message}`);
+            if (!(Number(s.testsRan) > 0) || Number(s.failing) > 0 || s.outcome !== "Passed") process.exit(1);
+          '
 
       - name: Read back governed MCP definition
         if: github.event_name != 'pull_request'

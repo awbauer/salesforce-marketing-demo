@@ -46,7 +46,8 @@ export const DOMAINS: Domain[] = [
   {
     id: "marketing",
     title: "Brands, campaigns, and content",
-    blurb: "Northstar and its Coastline Kitchen brand: what they plan, write, and check.",
+    blurb:
+      "Northstar and its Coastline Kitchen and Harborstone Wealth brands: what they plan, write, and check.",
     labels: ["Brand", "Campaign", "Brief", "ContentAsset", "BrandRule"],
   },
   {
@@ -58,8 +59,37 @@ export const DOMAINS: Domain[] = [
   {
     id: "restaurant",
     title: "Coastline Kitchen restaurants",
-    blurb: "Locations, the menu, and past mobile app pushes with their context.",
-    labels: ["Location", "Menu", "MenuItem", "Daypart", "WeatherCondition", "PushSend"],
+    blurb:
+      "Locations and their managers, the menu and what it's made with, and past pushes and emails with their context.",
+    labels: [
+      "Location",
+      "StoreManager",
+      "Menu",
+      "MenuItem",
+      "InventoryItem",
+      "Daypart",
+      "WeatherCondition",
+      "PushSend",
+      "EmailSend",
+    ],
+  },
+  {
+    id: "wealth",
+    title: "Harborstone Wealth",
+    blurb:
+      "Regulated content with its approvals and disclosures, an embargoed acquisition, and clients with their holdings and signals.",
+    labels: [
+      "Approval",
+      "Disclosure",
+      "MarketEvent",
+      "ClientSend",
+      "Deal",
+      "Firm",
+      "Client",
+      "Advisor",
+      "Product",
+      "Signal",
+    ],
   },
 ];
 
@@ -80,6 +110,19 @@ export const LABEL_COLORS: Record<string, string> = {
   Daypart: "#5b6fb3",
   WeatherCondition: "#3fa3a0",
   PushSend: "#9fb0bd",
+  EmailSend: "#b3a3c7",
+  InventoryItem: "#b0763f",
+  StoreManager: "#4f6f8f",
+  Approval: "#2e6f5e",
+  Disclosure: "#8c4a6b",
+  MarketEvent: "#a33c2f",
+  ClientSend: "#a8b6a0",
+  Deal: "#3d3a78",
+  Firm: "#6a67b0",
+  Client: "#9a5a14",
+  Advisor: "#46607a",
+  Product: "#3b7a8c",
+  Signal: "#d4a017",
 };
 
 export const LABEL_NAMES: Record<string, string> = {
@@ -89,6 +132,11 @@ export const LABEL_NAMES: Record<string, string> = {
   MenuItem: "Menu item",
   WeatherCondition: "Weather",
   PushSend: "Push send",
+  EmailSend: "Email send",
+  InventoryItem: "Inventory item",
+  StoreManager: "Store manager",
+  MarketEvent: "Market event",
+  ClientSend: "Client send",
 };
 
 export const labelName = (label: string) => LABEL_NAMES[label] ?? label;
@@ -123,6 +171,26 @@ export const RELATIONSHIP_PHRASES: Record<string, string> = {
   FEATURED: "featured",
   SENT_DURING: "was sent during",
   UNDER: "was sent under",
+  MADE_WITH: "is made with",
+  LIFTS_DEMAND: "lifts demand for",
+  MANAGED_BY: "is managed by",
+  APPROVED_UNDER: "is approved under",
+  REQUIRES: "requires disclosure",
+  APPROVED_FOR: "is approved for",
+  RESPONDS_TO: "responds to",
+  EXPLAINS: "explains",
+  RELEASED_WITH: "is released with",
+  ADDRESSED_TO: "is addressed to",
+  ANNOUNCED_BY: "is announced by",
+  ANNOUNCES: "announces",
+  ACQUIRES: "acquires",
+  CLIENT_OF: "is a client of",
+  COVERED_BY: "is covered by",
+  HOLDS: "holds",
+  HAS_SIGNAL: "shows the signal",
+  SUGGESTS: "suggests",
+  OFFERS: "offers",
+  ADVISES_FOR: "advises for",
 };
 
 export const relationshipPhrase = (type: string) =>
@@ -178,7 +246,9 @@ export function mergeGraph(
 }
 
 export const nodeRadius = (node: Pick<SimNode, "degree" | "label">) =>
-  node.label === "PushSend" ? 3.5 : Math.min(18, 5 + Math.sqrt(node.degree) * 1.6);
+  node.label === "PushSend" || node.label === "EmailSend"
+    ? 3.5
+    : Math.min(18, 5 + Math.sqrt(node.degree) * 1.6);
 
 export type ConnectionGroup = {
   key: string;
@@ -269,4 +339,40 @@ export function pushInsight(state: GraphState, nodeId: string, limit = 5): Insig
   return rows.length
     ? { groupedBy: groupType === "UNDER" ? "weather" : "menu item", pushes: pushes.size, rows }
     : null;
+}
+
+/**
+ * The nodes that belong with a brand: those at least as close to it as to any other brand,
+ * counting hops over loaded relationships in either direction and never walking through another
+ * brand. So a sub-brand keeps its own campaigns, locations, menu, and the channels and consent it
+ * shares, but not what's reached through its parent brand (the parent's rules, B2B accounts).
+ */
+export function brandScope(state: GraphState, brandId: string): Set<string> {
+  const brands = new Set(state.nodes.filter((node) => node.label === "Brand").map((n) => n.id));
+  const neighbors = new Map<string, string[]>();
+  const connect = (a: string, b: string) => neighbors.set(a, [...(neighbors.get(a) ?? []), b]);
+  for (const link of state.links) {
+    connect(link.from, link.to);
+    connect(link.to, link.from);
+  }
+  const distancesFrom = (start: string) => {
+    const distance = new Map([[start, 0]]);
+    const queue = [start];
+    for (let head = 0; head < queue.length; head += 1) {
+      const id = queue[head] as string;
+      for (const next of neighbors.get(id) ?? []) {
+        if (distance.has(next) || brands.has(next)) continue;
+        distance.set(next, (distance.get(id) ?? 0) + 1);
+        queue.push(next);
+      }
+    }
+    return distance;
+  };
+  const own = distancesFrom(brandId);
+  const others = [...brands].filter((id) => id !== brandId).map(distancesFrom);
+  const scope = new Set<string>();
+  for (const [id, distance] of own)
+    if (others.every((other) => distance <= (other.get(id) ?? Number.POSITIVE_INFINITY)))
+      scope.add(id);
+  return scope;
 }

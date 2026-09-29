@@ -1,6 +1,10 @@
 import {
   CAMPAIGN_CONTEXT_TOOLS,
+  EXTERNAL_SERVICE_TOOLS,
+  type FocusItem,
+  FocusKindSchema,
   type InsightTile,
+  type InventoryRisk,
   KNOWLEDGE_GRAPH_TOOLS,
   MEMORY_TOOLS,
   ORCHESTRATOR_TOOLS,
@@ -12,6 +16,7 @@ import {
   type WorkingRecord,
   type WorkingSet,
 } from "../../../packages/contracts/src/index.ts";
+import type { MemoryView } from "../../../packages/knowledge-graph/src/index.ts";
 import { focusPrompt } from "./focus.ts";
 
 /**
@@ -62,7 +67,7 @@ export function toolPayload(output: unknown): Payload {
   return { data: structured ?? parseJson(text), text };
 }
 
-const isFailure = (output: unknown) =>
+export const isFailure = (output: unknown) =>
   Boolean(
     output &&
       typeof output === "object" &&
@@ -198,6 +203,186 @@ function weatherCard(data: Record<string, unknown>, tool: string, at: Date): Ing
   };
 }
 
+/** Public holidays (Nager.Date) or weather alerts (National Weather Service) as a context card. */
+function forecastCard(data: Record<string, unknown>, tool: string, at: Date): Ingested {
+  const city = str(data.city) ?? "California";
+  const days = list(data.days).map((day) => day as Record<string, unknown>);
+  return {
+    cards: [
+      {
+        id: `forecast:${city.toLowerCase().replace(/\W+/g, "-")}`,
+        kind: "weather",
+        eyebrow: "Forecast",
+        title: city,
+        summary: days
+          .map(
+            (day) =>
+              `${str(day.date)?.slice(5)}: ${str(day.demandCondition)}, high ${num(day.highF)}°F`,
+          )
+          .join(" · "),
+        metric: String(days.length),
+        trend: "days",
+        state: "ready",
+        source: {
+          system: "open-meteo",
+          label: "Open-Meteo · forecast",
+          freshness: "just now",
+          status: "ready",
+        },
+        details: list(data.demandConditions).map(
+          (condition) => `Demand planning: ${String(condition)}`,
+        ),
+        updatedAt: at.toISOString(),
+        toolName: tool,
+      },
+    ],
+    records: [],
+  };
+}
+
+function inventoryCard(data: Record<string, unknown>, tool: string, at: Date): Ingested {
+  const city = str(data.city) ?? "Location";
+  const items = list(data.items).map((item) => item as Record<string, unknown>);
+  const thin = items
+    .filter((item) => (num(item.daysOfCover) ?? 99) < 1.5)
+    .map((item) => `${str(item.name)}: ${num(item.daysOfCover)} days of cover`);
+  return {
+    cards: [
+      {
+        id: `inventory:${str(data.location) ?? city}`,
+        kind: "context",
+        eyebrow: "Store inventory",
+        title: `Coastline Kitchen ${city}`,
+        summary: `${items.length} items counted ${str(data.countedAt) ?? "today"}; ${thin.length} under a day and a half of typical use.`,
+        metric: String(items.length),
+        trend: "items",
+        state: "ready",
+        source: {
+          system: "store-inventory",
+          label: "Store inventory · randomized mock",
+          freshness: "just now",
+          status: "ready",
+        },
+        details: thin.slice(0, 6),
+        updatedAt: at.toISOString(),
+        toolName: tool,
+      },
+    ],
+    records: [],
+  };
+}
+
+function externalCard(data: Record<string, unknown>, tool: string, at: Date): Ingested {
+  if (tool === "get_fed_announcements") {
+    const decision = (data.latestDecision ?? null) as Record<string, unknown> | null;
+    const releases = list(data.recentReleases).map((item) => item as Record<string, unknown>);
+    const verb = { raise: "raised", lower: "lowered", maintain: "held" }[
+      str(decision?.action) ?? ""
+    ];
+    return {
+      cards: [
+        {
+          id: "fed:latest",
+          kind: "context",
+          eyebrow: "Federal Reserve",
+          title: decision
+            ? `Fed ${verb ?? "announced"} rates${str(decision.targetRange) ? ` to ${decision.targetRange}` : ""}`
+            : "No rate decision in the latest releases",
+          summary: decision
+            ? `${str(decision.publishedAt)?.slice(0, 10) ?? "?"} FOMC statement, ${num(decision.hoursAgo) ?? "?"} hours ago. Event: ${str(decision.event) ?? "?"}.`
+            : `${releases.length} recent monetary policy release${releases.length === 1 ? "" : "s"}.`,
+          metric: decision ? (str(decision.change) ?? "no change") : undefined,
+          trend: decision ? "rate move" : undefined,
+          state: "ready",
+          source: {
+            system: "federal-reserve",
+            label: "Federal Reserve · live",
+            freshness: "just now",
+            status: "ready",
+          },
+          details: releases
+            .slice(0, 4)
+            .map((release) => `${str(release.publishedAt)?.slice(0, 10)} · ${str(release.title)}`),
+          updatedAt: at.toISOString(),
+          toolName: tool,
+        },
+      ],
+      records: [],
+    };
+  }
+  if (tool === "get_public_holidays") {
+    const country = str(data.country) ?? "?";
+    const holidays = list(data.holidays).map((item) => item as Record<string, unknown>);
+    return {
+      cards: [
+        {
+          id: `holidays:${country.toLowerCase()}`,
+          kind: "context",
+          eyebrow: "Public holidays",
+          title: `${holidays.length} holiday${holidays.length === 1 ? "" : "s"} in ${country}, next ${num(data.days) ?? 60} days`,
+          summary: holidays.length
+            ? `Next: ${str(holidays[0]?.name)} on ${str(holidays[0]?.date)}.`
+            : "No public holidays in this window.",
+          metric: String(holidays.length),
+          trend: "holidays",
+          state: "ready",
+          source: {
+            system: "nager-date",
+            label: "Nager.Date · live",
+            freshness: "just now",
+            status: "ready",
+          },
+          details: holidays
+            .slice(0, 4)
+            .map(
+              (holiday) =>
+                `${str(holiday.date)} · ${str(holiday.name)}${holiday.scope === "regional" ? " (regional)" : ""}`,
+            ),
+          updatedAt: at.toISOString(),
+          toolName: tool,
+        },
+      ],
+      records: [],
+    };
+  }
+  const city = str(data.city) ?? "California";
+  const alerts = list(data.alerts).map((item) => item as Record<string, unknown>);
+  return {
+    cards: [
+      {
+        id: `alerts:${city.toLowerCase().replace(/\W+/g, "-")}`,
+        kind: "weather",
+        eyebrow: "Weather alerts",
+        title: alerts.length
+          ? `${str(alerts[0]?.event)} near ${city}`
+          : `No active weather alerts near ${city}`,
+        summary: alerts.length
+          ? (str(alerts[0]?.headline) ??
+            `${alerts.length} active alert${alerts.length === 1 ? "" : "s"}.`)
+          : `${list(data.elsewhereInCalifornia).length} other active alert${list(data.elsewhereInCalifornia).length === 1 ? "" : "s"} in California.`,
+        metric: String(alerts.length),
+        trend: "active alerts",
+        state: "ready",
+        source: {
+          system: "nws",
+          label: "National Weather Service · live",
+          freshness: "just now",
+          status: "ready",
+        },
+        details: [
+          ...alerts.slice(0, 3).map((alert) => `${str(alert.event)} · ${str(alert.severity)}`),
+          ...list(data.elsewhereInCalifornia)
+            .slice(0, alerts.length ? 1 : 3)
+            .map((item) => `Elsewhere: ${String(item)}`),
+        ].slice(0, 4),
+        updatedAt: at.toISOString(),
+        toolName: tool,
+      },
+    ],
+    records: [],
+  };
+}
+
 function restaurantCard(data: Record<string, unknown>, tool: string, at: Date): Ingested {
   const name = str(data.name) ?? "Restaurant";
   const id = str(data.id) ?? name.toLowerCase().replace(/\W+/g, "-");
@@ -248,8 +433,14 @@ const GRAPH_TITLES: Record<string, string> = {
   explain_buyer_group: "Buyer group evidence",
   find_audience_overlap: "Audience overlap",
   check_consent_coverage: "Consent coverage",
-  find_similar_past_pushes: "Similar past pushes",
+  find_similar_past_pushes: "Similar past sends",
   trace_content_lineage: "Content lineage",
+  plan_account_outreach: "Outreach plan",
+  assess_location_impact: "Location impact",
+  map_weather_demand: "Weather demand map",
+  match_news_to_approved_content: "Approved content",
+  prepare_deal_release: "Announcement release",
+  build_aum_account_plan: "Account plan",
   recall_decisions: "Remembered",
   recall_recent_work: "Recent work",
   explain_memory: "Memory provenance",
@@ -268,8 +459,14 @@ function graphSummary(tool: string, data: Record<string, unknown>, count: number
       return data.found === false
         ? "No memory with that id in this workspace."
         : "Where a remembered item came from: its record, draft versions, and subjects.";
-    case "find_similar_past_pushes":
-      return `${num(data.totalSends) ?? 0} past sends in ${[data.location, data.daypart, data.condition].filter(Boolean).join(", ")}${str(data.bestAngle) ? `; best angle: ${data.bestAngle}` : ""}.`;
+    case "find_similar_past_pushes": {
+      const audience = (data.audience ?? {}) as Record<string, unknown>;
+      const reach =
+        num(audience.optedIn) !== undefined
+          ? `; ${num(audience.optedIn)?.toLocaleString("en-US")} opted in to ${str(audience.channel) ?? "push"}`
+          : "";
+      return `${num(data.totalSends) ?? 0} past ${str(data.history) === "email" ? "emails" : "pushes"} in ${[data.location, data.daypart, data.condition].filter(Boolean).join(", ")}${str(data.bestAngle) ? `; best angle: ${data.bestAngle}` : ""}${reach}.`;
+    }
     case "check_consent_coverage":
       return `${num(data.covered) ?? 0} of ${num(data.audience) ?? 0} audience members covered for ${str(data.channel) ?? "the channel"} (${pct(data.coverageRate)}).`;
     case "explain_buyer_group":
@@ -278,6 +475,23 @@ function graphSummary(tool: string, data: Record<string, unknown>, count: number
       return `${count} other campaigns share members with this audience.`;
     case "trace_content_lineage":
       return `${count} content assets built from ${str(data.brief) ?? "the brief"}.`;
+    case "plan_account_outreach":
+      return `${list(data.contacts).length} contacts at ${str(data.account) ?? "the account"} (${str(data.countryName) ?? str(data.country) ?? "?"}), with the channels each has consented to.`;
+    case "map_weather_demand":
+      return `${list(data.menuItems).length} dishes lifted by ${list(data.conditions).join(", ") || "the forecast"} at ${str(data.city) ?? "the location"}, made with ${list(data.inventoryItems).length} inventory items.`;
+    case "match_news_to_approved_content":
+      return `${list(data.readyToSend).length} approved asset${list(data.readyToSend).length === 1 ? "" : "s"} ready for "${str(data.eventName) ?? "the event"}"; ${list(data.blocked).length} blocked (expired, pending, or failed compliance).`;
+    case "prepare_deal_release":
+      return `${num(data.readyCount) ?? 0} of ${list(data.steps).length} announcement assets approved and ready to release in order; ${num(data.blockedCount) ?? 0} blocked.`;
+    case "build_aum_account_plan":
+      return `${list(data.plays).length} plays worth about $${num(data.totalOpportunityMillions) ?? 0}M on $${num(data.aumWithHarborstoneMillions) ?? 0}M with Harborstone (wallet share ${pct(data.walletShare)}).`;
+    case "assess_location_impact": {
+      const reach = list(data.reachableByChannel)
+        .map((entry) => entry as Record<string, unknown>)
+        .map((entry) => `${num(entry.optedIn) ?? 0} by ${str(entry.channel) ?? "?"}`)
+        .join(", ");
+      return `${num(data.affectedAppUsers) ?? 0} app users near ${str(data.city) ?? "the location"}; reachable ${reach || "by no channel"}; ${list(data.campaignsToReview).length} active campaigns target them.`;
+    }
     default:
       return str(data.answer) ?? str(data.summary) ?? `${count} results`;
   }
@@ -291,12 +505,26 @@ function graphCard(
 ): Ingested {
   const paths = list(data.paths).length;
   const subject =
+    str(data.client) ??
+    str(data.acquiredFirm) ??
+    str(data.eventName) ??
     str(data.account) ??
     str(data.campaign) ??
     str(data.subject) ??
     str((input as Record<string, unknown>)?.account);
   const memory = (MEMORY_TOOLS as readonly string[]).includes(tool);
+  const row = (item: unknown) => (item ?? {}) as Record<string, unknown>;
   const items = [
+    ...list(data.readyToSend).map(
+      (item) => `${str(row(item).asset)} · ${str(row(row(item).approval).id)}`,
+    ),
+    ...list(data.plays).map(
+      (item) => `${str(row(item).product)} · ~$${num(row(item).estimatedOpportunityMillions)}M`,
+    ),
+    ...list(data.steps).map(
+      (item) =>
+        `${num(row(item).step)}. ${str(row(item).asset)}${row(item).ready ? "" : " (blocked)"}`,
+    ),
     ...list(data.items),
     ...(data.item ? [data.item] : []),
     ...list(data.candidates),
@@ -305,6 +533,8 @@ function graphCard(
     ...list(data.assets),
     ...list(data.uncoveredExamples),
     ...list(data.topItems),
+    ...list(data.contacts),
+    ...list(data.campaignsToReview),
   ]
     .map((item) => {
       if (typeof item === "string") return item;
@@ -469,10 +699,13 @@ export function ingestionFor(event: ToolResultEvent): Ingested {
   const payload = toolPayload(event.output);
   if ((CAMPAIGN_CONTEXT_TOOLS as readonly string[]).includes(tool)) {
     if (!payload.data) return { cards: [], records: [] };
-    return tool === "get_current_weather"
-      ? weatherCard(payload.data, tool, event.at)
-      : restaurantCard(payload.data, tool, event.at);
+    if (tool === "get_current_weather") return weatherCard(payload.data, tool, event.at);
+    if (tool === "get_weather_forecast") return forecastCard(payload.data, tool, event.at);
+    if (tool === "get_location_inventory") return inventoryCard(payload.data, tool, event.at);
+    return restaurantCard(payload.data, tool, event.at);
   }
+  if ((EXTERNAL_SERVICE_TOOLS as readonly string[]).includes(tool))
+    return payload.data ? externalCard(payload.data, tool, event.at) : { cards: [], records: [] };
   if ([...KNOWLEDGE_GRAPH_TOOLS, ...MEMORY_TOOLS].includes(tool as never))
     return payload.data
       ? graphCard(payload.data, tool, event.input, event.at)
@@ -493,8 +726,11 @@ export function mergeIntoWorkingSet(set: WorkingSet, added: Ingested, at: Date):
   for (const next of added.records) {
     const index = records.findIndex((existing) => existing.key === next.key);
     if (index === -1) records.unshift(next);
-    // A write this chat made (created or updated) outranks a later read of the same record.
-    else if (next.relation !== "read")
+    // A write this chat made (created or updated) outranks a later read of the same record, and
+    // anything this chat opened outranks a record reopened from memory.
+    else if (next.relation === "created" || next.relation === "updated")
+      records[index] = { ...next, addedAt: records[index]?.addedAt ?? next.addedAt };
+    else if (next.relation === "read" && records[index]?.relation === "remembered")
       records[index] = { ...next, addedAt: records[index]?.addedAt ?? next.addedAt };
   }
   return {
@@ -508,6 +744,35 @@ export function mergeIntoWorkingSet(set: WorkingSet, added: Ingested, at: Date):
 export const ingestToolResult = (set: WorkingSet, event: ToolResultEvent) =>
   mergeIntoWorkingSet(set, ingestionFor(event), event.at);
 
+/** A context card for a weather-driven inventory check: which items won't cover the forecast. */
+export function inventoryRiskCard(risk: InventoryRisk, at: Date): InsightTile {
+  const low = risk.lowItems.length;
+  return {
+    id: `inventory-risk:${risk.locationId}`,
+    kind: "context",
+    eyebrow: "Inventory risk",
+    title: `Coastline Kitchen ${risk.city}`,
+    summary: low
+      ? `${low} of ${risk.checkedItems} weather-driven items won't cover the ${risk.window.days}-day forecast (${risk.conditions.join(", ")}). Store manager: ${risk.manager.name}.`
+      : `All ${risk.checkedItems} weather-driven items cover the ${risk.window.days}-day forecast (${risk.conditions.join(", ")}).`,
+    metric: String(low),
+    trend: low === 1 ? "item low" : "items low",
+    state: "ready",
+    source: {
+      system: "store-inventory",
+      label: "Forecast · graph · store inventory (mock)",
+      freshness: "just now",
+      status: "ready",
+    },
+    details: risk.lowItems.map(
+      (item) =>
+        `${item.name}: ${item.onHand} ${item.unit} on hand + ${item.onOrder} on order, ${item.projectedNeed} needed (${item.menuItems.join(", ")})`,
+    ),
+    updatedAt: at.toISOString(),
+    toolName: "map_weather_demand",
+  };
+}
+
 /** Adds a record the chat created or updated through a confirmed write. */
 export function addCreatedRecord(
   set: WorkingSet,
@@ -519,15 +784,74 @@ export function addCreatedRecord(
   return mergeIntoWorkingSet(set, { cards: [], records: [record(ref, via, at, relation)] }, at);
 }
 
-/** The Salesforce campaign the chat has open, most recent first: the target for writes. */
+/**
+ * The Salesforce campaign the chat has open, most recent first: the target for writes. A
+ * campaign reopened from memory isn't a target until the chat reads it again.
+ */
 export const openCampaign = (set: WorkingSet) =>
-  set.records.find((entry) => entry.system === "salesforce" && entry.objectType === "Campaign");
+  set.records.find(
+    (entry) =>
+      entry.system === "salesforce" &&
+      entry.objectType === "Campaign" &&
+      entry.relation !== "remembered",
+  );
+
+const RELATION_PROMPTS: Record<WorkingRecord["relation"], string> = {
+  read: "opened in this chat",
+  created: "created in this chat",
+  updated: "updated in this chat",
+  remembered: "reopened from memory, not re-read; read it again before acting on it",
+};
+
+/**
+ * Reopens remembered work in this chat: a remembered draft becomes the focus again, and the
+ * records a memory links to join the working set as remembered, not as read. Memory is dated
+ * and may be stale, so nothing is marked saved and no remembered campaign becomes a write target.
+ * `draft` is the remembered draft itself: the item, or for a decision, the draft it came from.
+ */
+export function reopenFromMemory(
+  set: WorkingSet,
+  item: MemoryView,
+  draft: MemoryView | undefined,
+  at: Date,
+): WorkingSet {
+  const records = [item, ...(draft && draft !== item ? [draft] : [])].flatMap((memory) =>
+    memory.records.map((ref) => record(ref, "memory", at, "remembered")),
+  );
+  let next = mergeIntoWorkingSet(set, { cards: [], records }, at);
+  const kind = FocusKindSchema.safeParse(draft?.kind);
+  const fields = (draft?.fields ?? []).filter((field) => field.label.trim() && field.value.trim());
+  if (draft && kind.success && fields.length) {
+    const focus: FocusItem = {
+      id: draft.focusId ?? draft.id,
+      kind: kind.data,
+      current: draft.version ?? 1,
+      versions: [
+        {
+          version: draft.version ?? 1,
+          title: draft.title.slice(0, 160),
+          summary: draft.summary.slice(0, 600),
+          fields: fields.slice(0, 16),
+          changeNote:
+            `Reopened from memory (${draft.source.toLowerCase()}, ${draft.at.slice(0, 10)})`.slice(
+              0,
+              240,
+            ),
+          basedOn: [],
+          createdAt: at.toISOString(),
+        },
+      ],
+    };
+    next = { ...next, startedAt: next.startedAt ?? at.toISOString(), focus };
+  }
+  return next;
+}
 
 /** Prompt lines describing what's open in this chat and, separately, the catalog. */
 export function workingSetPrompt(set: WorkingSet) {
   const open = set.records.map(
     (entry) =>
-      `${entry.title} (${entry.systemLabel} ${entry.objectType} ${entry.recordId}, ${entry.relation === "created" ? "created in this chat" : "opened in this chat"})`,
+      `${entry.title} (${entry.systemLabel} ${entry.objectType} ${entry.recordId}, ${RELATION_PROMPTS[entry.relation]})`,
   );
   const context = set.cards.map((card) => `${card.eyebrow}: ${card.title} [${card.source.label}]`);
   const openKeys = new Set(set.records.map((entry) => entry.key));

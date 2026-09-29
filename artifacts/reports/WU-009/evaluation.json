@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-09-29T19:24:01.431Z",
+  "generatedAt": "2026-09-29T19:27:08.116Z",
   "status": "passed",
   "score": 1,
   "threshold": 0.9,
-  "total": 22,
+  "total": 28,
   "mode": "production-policy-and-intent-routers",
   "results": [
     {
@@ -158,6 +158,48 @@
       "prompt": "What have we worked on recently?",
       "expected": "recall_recent_work",
       "actual": "recall_recent_work",
+      "passed": true
+    },
+    {
+      "id": "routing-23",
+      "prompt": "Plan outreach to the Harbor Point Sports buyer group over the next month",
+      "expected": "plan_account_outreach",
+      "actual": "plan_account_outreach",
+      "passed": true
+    },
+    {
+      "id": "routing-24",
+      "prompt": "Is there severe weather near our Sacramento location that affects customers?",
+      "expected": "get_weather_alerts",
+      "actual": "get_weather_alerts",
+      "passed": true
+    },
+    {
+      "id": "routing-25",
+      "prompt": "Are any ingredients running low at our Fresno location for this week's weather?",
+      "expected": "get_weather_forecast",
+      "actual": "get_weather_forecast",
+      "passed": true
+    },
+    {
+      "id": "routing-26",
+      "prompt": "What approved content can we send clients now that the Fed has moved rates?",
+      "expected": "get_fed_announcements",
+      "actual": "get_fed_announcements",
+      "passed": true
+    },
+    {
+      "id": "routing-27",
+      "prompt": "What's ready to go out when we announce the Bayview acquisition?",
+      "expected": "prepare_deal_release",
+      "actual": "prepare_deal_release",
+      "passed": true
+    },
+    {
+      "id": "routing-28",
+      "prompt": "What are the best plays to grow the Marin Family Office relationship?",
+      "expected": "build_aum_account_plan",
+      "actual": "build_aum_account_plan",
       "passed": true
     }
   ]

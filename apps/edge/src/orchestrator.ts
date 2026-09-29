@@ -12,6 +12,7 @@ import {
   type FocusItem,
   GeneratedCampaignImageSchema,
   initialOrchestratorState,
+  type MarketingWrite,
   MEMORY_RETENTION_DAYS,
   MEMORY_TOOLS,
   type OrchestratorState,
@@ -20,11 +21,10 @@ import {
   PHASE_2_CURATED_TOOLS,
   PROOF_DEFAULTS,
   parseOperationControls,
+  policyResponse,
+  referentFromReply,
   SALESFORCE_AGENTS,
   SALESFORCE_TOOL_DETAILS,
-  policyResponse,
-  type MarketingWrite,
-  referentFromReply,
   type SuggestedAction,
   type TurnRecord,
   TurnRecordSchema,
@@ -44,35 +44,44 @@ import {
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import {
-  CAMPAIGN_CONTEXT_TOOL_PREFIX,
-  connectCampaignContextTools,
-} from "./campaign-context/server";
-import { applyFocusUpdate, type FocusInput, focusFromAnswer } from "./focus";
-import { forcedToolCallMiddleware } from "./forced-tool-middleware";
-import {
   forgetMemory,
   type GraphBackend,
+  KNOWLEDGE_GRAPH_TOOL_SPECS,
   listMemory,
   type MemoryRecordRef,
   recordDecision,
   rememberDraft,
 } from "../../../packages/knowledge-graph/src/index.ts";
+import { LOCATIONS } from "./campaign-context/open-meteo";
+import {
+  CAMPAIGN_CONTEXT_TOOL_PREFIX,
+  connectCampaignContextTools,
+} from "./campaign-context/server";
+import { locationInventory } from "./campaign-context/store-inventory";
+import {
+  connectExternalServiceTools,
+  EXTERNAL_SERVICES_TOOL_PREFIX,
+} from "./external-services/server";
+import { applyFocusUpdate, type FocusInput, focusFromAnswer } from "./focus";
+import { forcedToolCallMiddleware } from "./forced-tool-middleware";
+import {
+  assessInventoryRisk,
+  type DemandResult,
+  type ForecastResult,
+  type InventoryResult,
+  inventoryCaseDetails,
+  inventoryRiskPrompt,
+} from "./inventory-risk";
 import {
   connectKnowledgeGraphTools,
   KNOWLEDGE_GRAPH_TOOL_PREFIX,
   knowledgeGraphBackend,
 } from "./knowledge-graph/server";
 import {
-  focusMemoryDraft,
-  localRecallAnswer,
-  memoryActorHash,
-  memoryStamp,
-  memorySubjects,
-} from "./memory";
-import {
   agentRequest,
   agentToolInput,
   applyMarketingWrite,
+  briefAnswer,
   briefFocusFromAgent,
   fixturePermissionReport,
   idsFromAgentReply,
@@ -80,14 +89,24 @@ import {
   type MarketingReadBack,
   parseMarketingReadBack,
   parsePermissionReport,
+  pinBriefToRefinement,
   planMarketingWrite,
+  sameBrief,
   toolText,
   withRefreshedPreview,
 } from "./marketing-writes";
+import {
+  focusMemoryDraft,
+  localRecallAnswer,
+  memoryActorHash,
+  memoryStamp,
+  memorySubjects,
+} from "./memory";
 import { buildTurnRecord } from "./turn-history";
 import {
   type DraftIntent,
   draftIntent,
+  isInventoryCheck,
   isRecallRequest,
   isRememberRequest,
   isRevisionRequest,
@@ -95,6 +114,8 @@ import {
   MAX_TURN_STEPS,
   missingPlannedTool,
   orchestratorSystemPrompt,
+  pinCampaignChannel,
+  requestedChannel,
   selectToolPlan,
   stepToolChoice,
   TURN_TIMEOUT,
@@ -105,7 +126,12 @@ import {
   addCreatedRecord,
   baseToolName,
   ingestToolResult,
+  inventoryRiskCard,
+  isFailure as isToolFailure,
+  mergeIntoWorkingSet,
   openCampaign,
+  reopenFromMemory,
+  toolPayload,
   workingSetPrompt,
 } from "./working-set";
 
@@ -130,6 +156,8 @@ type OrchestratorBindings = CloudflareBindings & {
   NEO4J_PASSWORD?: string;
 };
 
+/** The store inventory mock's count date in local development. */
+const LOCAL_FIXTURE_COUNT_DATE = "2026-09-27";
 const IMAGE_PROMPT_VERSION = "campaign-image-v1";
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 // Matches the Apex attachment limit, which keeps the decoded image inside the synchronous heap.
@@ -139,6 +167,20 @@ const ACTIVITY_LABELS = {
   "create-marketing-campaign": "Campaign and flow created in Marketing Cloud",
   "create-review-task": "Review request created",
   "attach-generated-image": "Campaign image attached",
+  "create-inventory-case": "Inventory case opened for the store manager",
+} as const;
+/** What a confirmation being prepared is for. */
+const CONFIRMATION_TITLES = {
+  "save-marketing-brief": "save the brief in Marketing Cloud",
+  "create-marketing-campaign": "create the campaign in Marketing Cloud",
+  "create-review-task": "request a review",
+  "attach-generated-image": "attach the campaign image",
+  "create-inventory-case": "open an inventory case",
+} as const;
+/** Why a write was linked to records Marketing Cloud already had, instead of saved again. */
+const FOUND_NOTES = {
+  reused: "already in Marketing Cloud from an earlier attempt; linked, not saved again",
+  recovered: "the agent didn't answer in time, but Salesforce shows it was saved",
 } as const;
 /** The Marketing Cloud agent the workbench asks to save briefs and create campaigns. */
 const CAMPAIGN_AGENT = "Northstar_Campaign_Creation";
@@ -427,7 +469,7 @@ export function connectorFromMcp(
       state: "error",
       toolCount,
       errorCode: "UPSTREAM_UNAVAILABLE",
-      message: `${toolCount} of ${PHASE_2_CURATED_TOOLS.length} governed Salesforce tools are available. An administrator must refresh the active Salesforce MCP server and synchronize the portal.`,
+      message: `${toolCount} of ${PHASE_2_CURATED_TOOLS.length} governed Salesforce tools are available. Missing: ${PHASE_2_CURATED_TOOLS.filter((name) => !discoveredTools.has(name)).join(", ")}. An administrator must synchronize the portal and enable these tools on its Salesforce server.`,
     };
   if (server.state === "ready")
     return {
@@ -499,6 +541,34 @@ export function classifyMcpFailure(
   };
 }
 
+/**
+ * The signed confirmation token Apex verifies: the action, the record or subject it's bound to,
+ * the request hash, the idempotency key, the expiry, and the user, under the shared HMAC key.
+ */
+async function signConfirmation(current: Confirmation, signingKey: string) {
+  const confirmationExpiresAt = Math.floor(Date.parse(current.expiresAt) / 1000);
+  const canonicalConfirmation = [
+    current.action,
+    current.recordId,
+    current.id,
+    current.requestHash,
+    current.idempotencyKey,
+    String(confirmationExpiresAt),
+    current.principalSubject,
+  ].join("\n");
+  const confirmationSignature = await hmacSha256Hex(signingKey, canonicalConfirmation);
+  const principalHex = [...new TextEncoder().encode(current.principalSubject)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  return [
+    "v1",
+    current.id,
+    String(confirmationExpiresAt),
+    principalHex,
+    confirmationSignature,
+  ].join(".");
+}
+
 async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -529,6 +599,19 @@ function findToolField(value: unknown, field: string): unknown {
     if (found !== undefined) return found;
   }
   return undefined;
+}
+
+/**
+ * Logs a Salesforce or agent call that failed and was turned into a user-facing message, so
+ * the error and where it was thrown reach Workers Logs. Only the error, never request content.
+ */
+function logUpstreamFailure(call: string, error: unknown, confirmationId?: string) {
+  console.error(`[salesforce] ${call} failed`, {
+    call,
+    ...(confirmationId ? { confirmationId } : {}),
+    error: error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500),
+    stack: error instanceof Error ? error.stack?.split("\n").slice(0, 8).join("\n") : undefined,
+  });
 }
 
 async function resolveToolResult(value: unknown) {
@@ -632,6 +715,12 @@ export class MarketingOrchestrator extends AIChatAgent<
   private imageGenerationInFlight = false;
   /** Set when the Campaign Creation agent drafted the brief in focus during this turn. */
   private agentBriefThisTurn = false;
+  /** This chat's latest forecast, weather-demand map, and stock counts, for the inventory check. */
+  private inventoryInputs: {
+    forecast?: ForecastResult;
+    demand?: DemandResult;
+    inventory?: InventoryResult;
+  } = {};
   /** Local development's Marketing Cloud records, created by the local agent stand-in. */
   private localMarketing = new Map<string, MarketingReadBack>();
 
@@ -650,6 +739,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       : [...controls.disabledTools, ...MEMORY_TOOLS];
     // The campaign-context and knowledge-graph MCPs run in-process; both close when the turn ends.
     const context = await connectCampaignContextTools();
+    const external = await connectExternalServiceTools();
     const graph = await connectKnowledgeGraphTools(
       memory ?? knowledgeGraphBackend(this.env),
       memory ? { workspaceId: this.state.workspaceId, now: () => new Date() } : undefined,
@@ -679,8 +769,22 @@ export class MarketingOrchestrator extends AIChatAgent<
               ),
           ),
         ),
+        ...Object.fromEntries(
+          Object.entries(external.tools).filter(
+            ([key]) =>
+              !(disabledTools as readonly string[]).includes(
+                key.slice(EXTERNAL_SERVICES_TOOL_PREFIX.length),
+              ),
+          ),
+        ),
       },
       (name, input, output) => this.ingestToolResult(name, input, output),
+    );
+    // Refinements of a saved brief always name it, whatever the model wrote.
+    const savedBrief = this.state.workingSet.focus?.saved;
+    const briefTools = pinBriefToRefinement(
+      tools,
+      savedBrief?.objectType === "Brief" ? savedBrief.recordId : undefined,
     );
     const planContext = {
       hasFocus: Boolean(this.state.workingSet.focus),
@@ -694,7 +798,18 @@ export class MarketingOrchestrator extends AIChatAgent<
     });
     const workspace = workingSetPrompt(this.state.workingSet);
     const prompt = latestUserText(turnMessages);
+    const focus = this.state.workingSet.focus;
+    const pinnedTools = pinCampaignChannel(
+      briefTools,
+      requestedChannel(
+        prompt,
+        focus
+          ? currentFocusVersion(focus).fields.find((field) => /^channel$/i.test(field.label))?.value
+          : undefined,
+      ),
+    );
     const toolPlan = selectToolPlan(prompt, Object.keys(tools), planContext);
+    const inventoryPlan = toolPlan?.some((name) => name.endsWith("map_weather_demand"));
     // A drafting or revision turn's answer is saved as the workspace focus when it completes.
     const drafting = draftIntent(prompt, planContext);
     // Readable plan for the trace and history, such as "a → b → c".
@@ -702,6 +817,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     const missingTool = missingPlannedTool(prompt, Object.keys(tools), planContext);
     if (missingTool) {
       await context.close();
+      await external.close();
       await graph.close();
       return scriptedResponse(
         [
@@ -727,6 +843,8 @@ export class MarketingOrchestrator extends AIChatAgent<
           route: "model",
           timeoutSeconds: TURN_TIMEOUT.totalMs / 1000,
           userAbortSignal: abortSignal,
+          composeEmptyAnswer: () =>
+            this.agentBriefThisTurn ? briefAnswer(this.state.workingSet.focus) : null,
         });
         try {
           const result = streamText({
@@ -736,13 +854,28 @@ export class MarketingOrchestrator extends AIChatAgent<
             }),
             system: orchestratorSystemPrompt(workspace, toolPlan),
             messages: await convertToModelMessages(turnMessages),
-            tools,
+            tools: pinnedTools,
             // A revision with no agent to ask rewrites the draft in focus without tools; a brief's
             // revision goes back to the Marketing Cloud agent through its plan.
-            prepareStep: ({ stepNumber }: { stepNumber: number }) =>
-              drafting?.mode === "revise" && !toolPlan
-                ? { toolChoice: "none" as const, activeTools: [] as string[] }
-                : stepToolChoice(toolPlan, stepNumber),
+            prepareStep: ({ stepNumber }: { stepNumber: number }) => {
+              if (drafting?.mode === "revise" && !toolPlan)
+                return { toolChoice: "none" as const, activeTools: [] as string[] };
+              const choice = stepToolChoice(toolPlan, stepNumber);
+              // The inventory check is computed by code after the plan's tools run, so the answer
+              // step sees the workspace as it is now, including exactly which items are low.
+              return inventoryPlan && stepNumber >= (toolPlan?.length ?? 0)
+                ? {
+                    ...choice,
+                    system: orchestratorSystemPrompt(
+                      [
+                        workingSetPrompt(this.state.workingSet),
+                        inventoryRiskPrompt(this.state.inventoryRisk),
+                      ].join(" "),
+                      toolPlan,
+                    ),
+                  }
+                : choice;
+            },
             stopWhen: stepCountIs(MAX_TURN_STEPS),
             maxOutputTokens: MAX_OUTPUT_TOKENS,
             timeout: TURN_TIMEOUT,
@@ -783,6 +916,7 @@ export class MarketingOrchestrator extends AIChatAgent<
           );
         } finally {
           await context.close();
+          await external.close();
           await graph.close();
         }
       },
@@ -1240,13 +1374,42 @@ export class MarketingOrchestrator extends AIChatAgent<
    * checks the user's Salesforce permissions, and binds everything into one pending confirmation.
    * The HTTP route, the chat's policy router, and the model's proposal tool all come through here.
    */
+  /**
+   * Prepares a confirmation and publishes its progress as it goes (the plan, Salesforce's
+   * permission check, the one-time confirmation), so the person sees the work while it runs.
+   */
   private async prepareConfirmation(body: {
     action?: unknown;
     recordId?: unknown;
     summary?: unknown;
     imageId?: unknown;
   }): Promise<Response> {
+    const action = PROOF_DEFAULTS.allowedWrites.find((write) => write === body.action);
+    if (!action) return this.buildConfirmation(body);
+    this.beginPrepareProgress(action);
+    let response: Response;
+    try {
+      response = await this.buildConfirmation(body);
+    } catch (error) {
+      this.finishProgress(false, error instanceof Error ? error.message : "Preparing failed.");
+      throw error;
+    }
+    const result = (await response
+      .clone()
+      .json()
+      .catch(() => null)) as { error?: { message?: string } } | null;
+    this.finishProgress(response.ok, result?.error?.message);
+    return response;
+  }
+
+  private async buildConfirmation(body: {
+    action?: unknown;
+    recordId?: unknown;
+    summary?: unknown;
+    imageId?: unknown;
+  }): Promise<Response> {
     const action = body.action;
+    if (action === "create-inventory-case") return this.prepareInventoryCase();
     const marketingAction =
       action === "save-marketing-brief" || action === "create-marketing-campaign";
     if (
@@ -1292,6 +1455,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         { status: 409 },
       );
     // Salesforce decides whether this user may write; the card shows each check it ran.
+    this.stepProgress("permissions");
     const permissionCheck = await this.checkWriteAccess(action as Confirmation["action"], recordId);
     if (!permissionCheck.permissions)
       return json(
@@ -1321,6 +1485,8 @@ export class MarketingOrchestrator extends AIChatAgent<
         },
         { status: 403 },
       );
+    this.notePermissions(permissions);
+    this.stepProgress("confirm");
     let summary = plan?.summary ?? (typeof body.summary === "string" ? body.summary.trim() : "");
     let image: { imageId: string; contentHash: string } | undefined;
     if (action === "attach-generated-image") {
@@ -1406,6 +1572,777 @@ export class MarketingOrchestrator extends AIChatAgent<
   }
 
   /**
+   * Runs a confirmed write and publishes its progress as it goes, so the person who confirmed it
+   * sees each step (checks, the Salesforce call, the read-back) while it runs, not only the end.
+   */
+  private async runConfirmedWrite(current: Confirmation): Promise<Response> {
+    this.beginProgress(current);
+    let response: Response;
+    try {
+      // Briefs and campaigns are created by the Marketing Cloud Campaign Creation agent.
+      response = current.write
+        ? await this.executeMarketingWrite(current)
+        : current.action === "create-inventory-case"
+          ? await this.executeInventoryCase(current)
+          : await this.executeApexWrite(current);
+    } catch (error) {
+      this.finishProgress(false, error instanceof Error ? error.message : "The write failed.");
+      throw error;
+    }
+    const body = (await response
+      .clone()
+      .json()
+      .catch(() => null)) as { error?: { message?: string } } | null;
+    this.finishProgress(response.ok, body?.error?.message);
+    // A failed Marketing Cloud write spent its confirmation, so offer the save again.
+    if (!response.ok && current.write) this.suggestFocusSave();
+    return response;
+  }
+
+  /** The steps preparing a confirmation goes through, in order, for its live progress. */
+  private preparePlan(action: Confirmation["action"]): Array<{ id: string; label: string }> {
+    const plan =
+      action === "save-marketing-brief" || action === "create-marketing-campaign"
+        ? "Planning the save from the workspace draft"
+        : action === "create-inventory-case"
+          ? "Writing the case from the inventory check"
+          : "Checking the campaign open in this chat";
+    return [
+      { id: "plan", label: plan },
+      {
+        id: "permissions",
+        label: "Salesforce checks your permissions as you (NorthstarCheckWriteAccess)",
+      },
+      { id: "confirm", label: "Binding exactly what will be written to a one-time confirmation" },
+    ];
+  }
+
+  /** Starts a confirmation's live progress; nothing is written while it's prepared. */
+  private beginPrepareProgress(action: Confirmation["action"]) {
+    const now = new Date().toISOString();
+    this.setState({
+      ...this.state,
+      writeProgress: {
+        phase: "prepare",
+        action,
+        title: `Preparing to ${CONFIRMATION_TITLES[action]}`,
+        startedAt: now,
+        steps: this.preparePlan(action).map((step, index) => ({
+          ...step,
+          status: index === 0 ? ("active" as const) : ("pending" as const),
+          ...(index === 0 ? { startedAt: now } : {}),
+        })),
+      },
+    });
+  }
+
+  /** Adds what Salesforce's permission check found to the prepare progress. */
+  private notePermissions(permissions: PermissionReport) {
+    this.noteProgress(
+      "permissions",
+      `${permissions.checks.filter((check) => check.passed).length} of ${permissions.checks.length} checks passed${permissions.source === "salesforce" ? ` as ${permissions.user}` : " (local fixture)"}.`,
+    );
+  }
+
+  /** The steps a confirmed write goes through, in order, for its live progress. */
+  private progressPlan(current: Confirmation): Array<{ id: string; label: string }> {
+    const agent = SALESFORCE_AGENTS[CAMPAIGN_AGENT].label;
+    const signed = (apex: string, does: string, record: string) => [
+      { id: "confirm", label: "Checked your confirmation: same user, unexpired, used once" },
+      { id: "sign", label: "Signing the confirmation for Salesforce (HMAC)" },
+      { id: "call", label: `Salesforce runs ${apex} as you: ${does}` },
+      { id: "readback", label: `Reading back the ${record} from Salesforce` },
+      { id: "remember", label: "Recording the decision in long-term memory" },
+    ];
+    if (current.write?.kind === "brief")
+      return [
+        { id: "confirm", label: "Checked your confirmation: same user, unexpired, used once" },
+        { id: "lookup", label: "Checking Marketing Cloud for an earlier attempt at this save" },
+        {
+          id: "call",
+          label: `${agent} agent: Save Campaign Brief, then Draft a Campaign Preview`,
+        },
+        { id: "readback", label: "Reading back the Brief and its preview steps from Salesforce" },
+        { id: "remember", label: "Recording the decision in long-term memory" },
+      ];
+    if (current.write?.kind === "campaign")
+      return [
+        { id: "confirm", label: "Checked your confirmation: same user, unexpired, used once" },
+        { id: "lookup", label: "Checking whether the brief already has a campaign" },
+        { id: "call", label: `${agent} agent: Create Campaign, then Save Campaign` },
+        { id: "readback", label: "Reading back the Campaign and its flow from Salesforce" },
+        { id: "remember", label: "Recording the decision in long-term memory" },
+      ];
+    if (current.action === "create-inventory-case")
+      return signed(
+        "NorthstarCreateInventoryCase",
+        `verifies the signature and the case contents, then opens the Case for ${current.inventoryCase?.manager.name ?? "the store manager"}`,
+        "Case",
+      );
+    if (current.action === "attach-generated-image")
+      return signed(
+        "NorthstarAttachCampaignImage",
+        "verifies the signature and the image hash, then attaches the file",
+        "file and its campaign link",
+      );
+    return signed(
+      "NorthstarCreateCampaignReviewRequest",
+      "verifies the signature, then creates the review Task",
+      "Task",
+    );
+  }
+
+  /** Starts a confirmed write's live progress; the confirmation checks already passed. */
+  private beginProgress(current: Confirmation) {
+    const now = new Date().toISOString();
+    this.setState({
+      ...this.state,
+      writeProgress: {
+        phase: "execute",
+        confirmationId: current.id,
+        action: current.action,
+        title: ACTIVITY_LABELS[current.action],
+        startedAt: now,
+        steps: this.progressPlan(current).map((step) => ({
+          ...step,
+          status: step.id === "confirm" ? ("done" as const) : ("pending" as const),
+          ...(step.id === "confirm" ? { startedAt: now, endedAt: now } : {}),
+        })),
+      },
+    });
+  }
+
+  /**
+   * Moves a write's progress to a step: earlier unfinished steps are done (or skipped, when
+   * `skipTo` is set), and this one is active, with an optional detail.
+   */
+  private stepProgress(id: string, detail?: string, skipTo = false) {
+    const progress = this.state.writeProgress;
+    if (!progress || progress.finishedAt) return;
+    const index = progress.steps.findIndex((step) => step.id === id);
+    if (index < 0) return;
+    const now = new Date().toISOString();
+    const steps = progress.steps.map((step, position) => {
+      if (position < index && (step.status === "active" || step.status === "pending"))
+        return {
+          ...step,
+          status: skipTo && step.status === "pending" ? ("skipped" as const) : ("done" as const),
+          endedAt: now,
+        };
+      if (position === index)
+        return {
+          ...step,
+          status: "active" as const,
+          startedAt: now,
+          ...(detail ? { detail } : {}),
+        };
+      return step;
+    });
+    this.setState({ ...this.state, writeProgress: { ...progress, steps } });
+  }
+
+  /** Adds a detail to a step without moving the progress. */
+  private noteProgress(id: string, detail: string) {
+    const progress = this.state.writeProgress;
+    if (!progress || progress.finishedAt) return;
+    this.setState({
+      ...this.state,
+      writeProgress: {
+        ...progress,
+        steps: progress.steps.map((step) => (step.id === id ? { ...step, detail } : step)),
+      },
+    });
+  }
+
+  /** Ends a write's progress: every open step done, or the active step failed with why. */
+  private finishProgress(ok: boolean, message?: string) {
+    const progress = this.state.writeProgress;
+    if (!progress || progress.finishedAt) return;
+    if (!ok)
+      console.warn(`[write] ${progress.phase} ${progress.action} failed`, {
+        phase: progress.phase,
+        action: progress.action,
+        step:
+          progress.steps.find((step) => step.status === "active")?.id ??
+          progress.steps.find((step) => step.status === "pending")?.id,
+        confirmationId: progress.confirmationId,
+        message: message?.slice(0, 300),
+        ms: Date.now() - Date.parse(progress.startedAt),
+      });
+    const now = new Date().toISOString();
+    const failedAt = ok
+      ? -1
+      : Math.max(
+          0,
+          progress.steps.findIndex((step) => step.status === "active"),
+          progress.steps.findIndex((step) => step.status === "pending"),
+        );
+    const steps = progress.steps.map((step, position) => {
+      if (ok)
+        return step.status === "active" || step.status === "pending"
+          ? { ...step, status: "done" as const, endedAt: now }
+          : step;
+      if (position === failedAt)
+        return {
+          ...step,
+          status: "failed" as const,
+          endedAt: now,
+          detail: message?.slice(0, 300) ?? "This step failed.",
+        };
+      return step.status === "active" ? { ...step, status: "done" as const, endedAt: now } : step;
+    });
+    this.setState({
+      ...this.state,
+      writeProgress: {
+        ...progress,
+        steps,
+        finishedAt: now,
+        outcome: ok ? "succeeded" : "failed",
+      },
+    });
+  }
+
+  /** A review task or image attachment: a signed confirmation run by Apex as the user. */
+  private async executeApexWrite(current: Confirmation): Promise<Response> {
+    if ((this.env.ENVIRONMENT as string) !== "local") {
+      const signingKey = this.env.CONFIRMATION_SIGNING_KEY;
+      if (!signingKey)
+        return json(
+          {
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message: "Signed confirmation execution is not configured.",
+            },
+          },
+          { status: 503 },
+        );
+      await this.mcp.waitForConnections({ timeout: 5_000 });
+      const tools = this.mcp.getAITools();
+      const toolName = WRITE_TOOL_BY_ACTION[current.action];
+      const entry = Object.entries(tools).find(([key]) => key.endsWith(`_${toolName}`));
+      const tool = entry?.[1];
+      if (!tool || !("execute" in tool) || typeof tool.execute !== "function")
+        return json(
+          {
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message: "The confirmed Salesforce write tool is unavailable. Reconnect and retry.",
+            },
+          },
+          { status: 503 },
+        );
+      this.stepProgress("sign");
+      const signedConfirmation = await signConfirmation(current, signingKey);
+      const imagePayload =
+        current.action === "attach-generated-image"
+          ? await this.loadConfirmedImage(current)
+          : undefined;
+      if (imagePayload && "error" in imagePayload)
+        return json({ error: { code: "CONFLICT", message: imagePayload.error } }, { status: 409 });
+      this.stepProgress("call");
+      let upstream: unknown;
+      try {
+        upstream = await resolveToolResult(
+          tool.execute(
+            {
+              inputs: [
+                {
+                  campaignId: current.recordId,
+                  ...(imagePayload ?? {}),
+                  confirmationId: signedConfirmation,
+                  requestHash: current.requestHash,
+                  idempotencyKey: current.idempotencyKey,
+                },
+              ],
+            },
+            { toolCallId: current.id, messages: [], context: undefined },
+          ),
+        );
+      } catch (error) {
+        logUpstreamFailure(`${current.action} call`, error, current.id);
+        return json(
+          {
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message:
+                "Salesforce rejected the confirmed write. The request was not recorded as executed; reconnect or ask an administrator to verify the confirmation configuration, then retry.",
+            },
+          },
+          { status: 502 },
+        );
+      }
+      this.stepProgress("readback");
+      const campaignId = findToolField(upstream, "campaignId");
+      const readBack = findToolField(upstream, "readBack");
+      const sourceRecordId =
+        current.action === "create-review-task"
+          ? findToolField(upstream, "taskId")
+          : current.action === "attach-generated-image"
+            ? findToolField(upstream, "contentDocumentId")
+            : campaignId;
+      const imageDetails =
+        current.action === "attach-generated-image"
+          ? {
+              contentVersionId: findToolField(upstream, "contentVersionId"),
+              title: findToolField(upstream, "title"),
+              contentSize: findToolField(upstream, "contentSize"),
+              contentHash: findToolField(upstream, "contentHash"),
+            }
+          : {};
+      const taskDetails =
+        current.action === "create-review-task"
+          ? {
+              subject: findToolField(upstream, "subject"),
+              priority: findToolField(upstream, "priority"),
+              dueDate: findToolField(upstream, "dueDate"),
+              description: findToolField(upstream, "description"),
+            }
+          : {};
+      if (
+        typeof sourceRecordId !== "string" ||
+        campaignId !== current.recordId ||
+        readBack !== true ||
+        (current.action === "create-review-task" &&
+          (typeof taskDetails.subject !== "string" ||
+            typeof taskDetails.priority !== "string" ||
+            typeof taskDetails.dueDate !== "string" ||
+            typeof taskDetails.description !== "string")) ||
+        (current.action === "attach-generated-image" &&
+          (typeof imageDetails.contentVersionId !== "string" ||
+            typeof imageDetails.title !== "string" ||
+            typeof imageDetails.contentSize !== "number" ||
+            imageDetails.contentHash !== current.contentHash))
+      )
+        return json(
+          {
+            error: {
+              code: "CONFLICT",
+              message: "Salesforce did not return the required authoritative read-back.",
+            },
+          },
+          { status: 409 },
+        );
+      const executed = { ...current, status: "executed" as const };
+      await this.recordConfirmationAudit(current, "executed", sourceRecordId);
+      if (current.imageId) await this.markImageAttached(current.imageId);
+      this.setState({
+        ...this.state,
+        pendingConfirmation: null,
+        workingSet: this.withCreatedRecord(
+          current.action,
+          sourceRecordId,
+          typeof taskDetails.subject === "string"
+            ? taskDetails.subject
+            : typeof imageDetails.title === "string"
+              ? imageDetails.title
+              : undefined,
+        ),
+        activity: [
+          {
+            id: `${current.action}-${sourceRecordId}`,
+            label: ACTIVITY_LABELS[current.action],
+            detail: `Salesforce read-back · ${sourceRecordId}`,
+            occurredAt: "Now",
+            status: "complete",
+          },
+          ...this.state.activity,
+        ],
+      });
+      await this.rememberConfirmedWrite(
+        current,
+        {
+          system: "salesforce",
+          objectType:
+            current.action === "create-review-task"
+              ? "Task"
+              : current.action === "attach-generated-image"
+                ? "ContentDocument"
+                : "Campaign",
+          recordId: sourceRecordId,
+          title:
+            typeof taskDetails.subject === "string"
+              ? taskDetails.subject
+              : typeof imageDetails.title === "string"
+                ? imageDetails.title
+                : ACTIVITY_LABELS[current.action],
+        },
+        {
+          outcome: `${ACTIVITY_LABELS[current.action]} (${sourceRecordId}), confirmed and read back from Salesforce.`,
+          note:
+            typeof taskDetails.dueDate === "string"
+              ? `Due ${taskDetails.dueDate}.`
+              : current.summary,
+          campaignId: typeof campaignId === "string" ? campaignId : undefined,
+        },
+      );
+      return json({
+        confirmation: executed,
+        result: {
+          source: "salesforce",
+          recordId: sourceRecordId,
+          campaignId,
+          status: findToolField(upstream, "status"),
+          ...taskDetails,
+          ...imageDetails,
+          idempotencyKey: current.idempotencyKey,
+          readBack: true,
+        },
+      });
+    }
+    this.noteProgress("sign", "Local development has no Salesforce; a fixture stands in.");
+    this.stepProgress("readback", "Local fixture read-back", true);
+    const executed = { ...current, status: "executed" as const };
+    // The local fixture still verifies the confirmed image bytes so the flow is exercised end to end.
+    const fixtureImage =
+      current.action === "attach-generated-image"
+        ? await this.loadConfirmedImage(current)
+        : undefined;
+    if (fixtureImage && "error" in fixtureImage)
+      return json({ error: { code: "CONFLICT", message: fixtureImage.error } }, { status: 409 });
+    const fixtureRecordId =
+      current.action === "create-review-task"
+        ? "00T000000000001"
+        : current.action === "attach-generated-image"
+          ? "069000000000001"
+          : current.recordId;
+    await this.recordConfirmationAudit(current, "executed", fixtureRecordId);
+    if (current.imageId) await this.markImageAttached(current.imageId);
+    this.setState({
+      ...this.state,
+      pendingConfirmation: null,
+      workingSet: this.withCreatedRecord(
+        current.action,
+        fixtureRecordId,
+        current.action === "create-review-task"
+          ? "Review campaign readiness: VERO Phase 1 Launch"
+          : fixtureImage?.title,
+      ),
+      activity: [
+        {
+          id: `${current.action}-${current.id}`,
+          label: ACTIVITY_LABELS[current.action],
+          detail: `Local fixture read-back · ${current.recordId}`,
+          occurredAt: "Now",
+          status: "complete",
+        },
+        ...this.state.activity,
+      ],
+    });
+    await this.rememberConfirmedWrite(
+      current,
+      {
+        system: "salesforce",
+        objectType:
+          current.action === "create-review-task"
+            ? "Task"
+            : current.action === "attach-generated-image"
+              ? "ContentDocument"
+              : "Campaign",
+        recordId: fixtureRecordId,
+        title:
+          current.action === "create-review-task"
+            ? "Review campaign readiness: VERO Phase 1 Launch"
+            : (fixtureImage?.title ?? ACTIVITY_LABELS[current.action]),
+      },
+      {
+        outcome: `${ACTIVITY_LABELS[current.action]} (${fixtureRecordId}), confirmed and read back from the local fixture.`,
+        note: current.summary,
+        campaignId: current.recordId,
+      },
+    );
+    return json({
+      confirmation: executed,
+      result: {
+        source: "local-fixture",
+        recordId: fixtureRecordId,
+        campaignId: current.recordId,
+        status: "Open",
+        ...(current.action === "create-review-task"
+          ? {
+              subject: "Review campaign readiness: VERO Phase 1 Launch",
+              priority: "High",
+              dueDate: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10),
+              description:
+                "Campaign context, readiness findings, and a human review checklist were recorded in Salesforce.",
+            }
+          : {}),
+        ...(fixtureImage
+          ? {
+              contentVersionId: "068000000000001",
+              title: fixtureImage.title,
+              contentSize: Math.floor((fixtureImage.imageBase64.length * 3) / 4),
+              contentHash: fixtureImage.contentHash,
+            }
+          : {}),
+        idempotencyKey: current.idempotencyKey,
+        readBack: true,
+      },
+    });
+  }
+
+  /**
+   * Prepares a case for the store manager from this chat's inventory check. The server writes
+   * the case contents from the computed low-stock list, and the request hash is the SHA-256 of
+   * exactly those contents, so Salesforce can verify it received what the user confirmed.
+   */
+  private async prepareInventoryCase(): Promise<Response> {
+    const blocked = this.writeBlocked("create-inventory-case");
+    if (blocked) return blocked;
+    const risk = this.state.inventoryRisk;
+    if (!risk?.lowItems.length)
+      return json(
+        {
+          error: {
+            code: "VALIDATION_FAILED",
+            message:
+              "Run an inventory check in the chat first; a case is opened only for items the check found low.",
+          },
+        },
+        { status: 400 },
+      );
+    this.stepProgress("permissions");
+    const permissionCheck = await this.checkWriteAccess("create-inventory-case", "new");
+    if (!permissionCheck.permissions)
+      return json(
+        {
+          error: {
+            code: "UPSTREAM_UNAVAILABLE",
+            message:
+              permissionCheck.failure === "catalog-incomplete"
+                ? "Salesforce is connected, but its governed tool catalog is incomplete: the permission check is not available. Nothing was prepared."
+                : "Salesforce could not complete the permission check, so nothing was prepared. Reconnect Salesforce and retry.",
+          },
+        },
+        { status: 503 },
+      );
+    const permissions = permissionCheck.permissions;
+    if (!permissions.allowed)
+      return json(
+        {
+          error: {
+            code: "PERMISSION_DENIED",
+            message: `Your Salesforce permissions don't allow this: ${permissions.checks
+              .filter((check) => !check.passed)
+              .map((check) => `${check.label} (${check.detail})`)
+              .join("; ")}`,
+          },
+          permissions,
+        },
+        { status: 403 },
+      );
+    this.notePermissions(permissions);
+    this.stepProgress("confirm");
+    const detailsJson = inventoryCaseDetails(risk);
+    const count = risk.lowItems.length;
+    const confirmation = ConfirmationSchema.parse({
+      id: crypto.randomUUID(),
+      action: "create-inventory-case",
+      recordId: `location:${risk.locationId}`,
+      principalSubject: this.principalSubject,
+      requestHash: await sha256(detailsJson),
+      idempotencyKey: crypto.randomUUID(),
+      summary:
+        `Open a Salesforce case for ${risk.manager.name}, the ${risk.city} store manager: ${count} item${count === 1 ? "" : "s"} won't cover the ${risk.window.days}-day forecast (${risk.conditions.join(", ")}). Nothing is ordered.`.slice(
+          0,
+          500,
+        ),
+      expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+      status: "pending",
+      permissions,
+      inventoryCase: {
+        locationId: risk.locationId,
+        city: risk.city,
+        manager: risk.manager,
+        conditions: risk.conditions,
+        items: risk.lowItems,
+        detailsJson,
+      },
+    });
+    await this.recordConfirmationAudit(confirmation, "pending");
+    this.setState({
+      ...this.state,
+      pendingConfirmation: confirmation,
+      suggestions: (this.state.suggestions ?? []).filter(
+        (item) => item.action !== "create-inventory-case",
+      ),
+    });
+    return json(confirmation, { status: 201 });
+  }
+
+  /**
+   * Opens the confirmed case: Apex verifies the signed confirmation and that the contents hash to
+   * the confirmed request hash, finds the store manager's contact, creates the Case as the user,
+   * and reads it back. Local development uses a fixture read-back.
+   */
+  private async executeInventoryCase(current: Confirmation): Promise<Response> {
+    const details = current.inventoryCase;
+    if (!details)
+      return json(
+        { error: { code: "CONFLICT", message: "The confirmation has no case contents." } },
+        { status: 409 },
+      );
+    const subject = `Low stock before forecast weather: Coastline Kitchen ${details.city}`;
+    let result: {
+      source: "salesforce" | "local-fixture";
+      caseId: string;
+      caseNumber: string;
+      subject: string;
+      priority: string;
+      status: string;
+      contactName: string;
+    };
+    if ((this.env.ENVIRONMENT as string) === "local") {
+      this.noteProgress("sign", "Local development has no Salesforce; a fixture stands in.");
+      this.stepProgress("readback", "Local fixture read-back", true);
+      result = {
+        source: "local-fixture",
+        caseId: "500000000000001",
+        caseNumber: "00001001",
+        subject,
+        priority: "High",
+        status: "New",
+        contactName: details.manager.name,
+      };
+    } else {
+      const signingKey = this.env.CONFIRMATION_SIGNING_KEY;
+      if (!signingKey)
+        return json(
+          {
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message: "Signed confirmation execution is not configured.",
+            },
+          },
+          { status: 503 },
+        );
+      await this.mcp.waitForConnections({ timeout: 5_000 });
+      const tool = this.salesforceTool(WRITE_TOOL_BY_ACTION[current.action]);
+      if (!tool)
+        return json(
+          {
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message:
+                "The Salesforce case tool isn't in the catalog. An administrator must enable create_inventory_case on the portal's Salesforce server. Nothing was created.",
+            },
+          },
+          { status: 503 },
+        );
+      this.stepProgress("sign");
+      const signedCase = await signConfirmation(current, signingKey);
+      this.stepProgress("call");
+      let upstream: unknown;
+      try {
+        upstream = await resolveToolResult(
+          tool.execute(
+            {
+              inputs: [
+                {
+                  locationKey: current.recordId,
+                  caseDetailsJson: details.detailsJson,
+                  confirmationId: signedCase,
+                  requestHash: current.requestHash,
+                  idempotencyKey: current.idempotencyKey,
+                },
+              ],
+            },
+            { toolCallId: current.id, messages: [], context: undefined },
+          ),
+        );
+      } catch (error) {
+        logUpstreamFailure(`${current.action} call`, error, current.id);
+        return json(
+          {
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message:
+                "Salesforce rejected the confirmed case. It was not recorded as created; reconnect and retry.",
+            },
+          },
+          { status: 502 },
+        );
+      }
+      this.stepProgress("readback");
+      const field = (name: string) => findToolField(upstream, name);
+      if (
+        field("readBack") !== true ||
+        typeof field("caseId") !== "string" ||
+        typeof field("caseNumber") !== "string" ||
+        field("locationKey") !== current.recordId
+      )
+        return json(
+          {
+            error: {
+              code: "CONFLICT",
+              message: "Salesforce did not return the required authoritative read-back.",
+            },
+          },
+          { status: 409 },
+        );
+      result = {
+        source: "salesforce",
+        caseId: field("caseId") as string,
+        caseNumber: field("caseNumber") as string,
+        subject: String(field("subject") ?? subject),
+        priority: String(field("priority") ?? ""),
+        status: String(field("status") ?? ""),
+        contactName: String(field("contactName") ?? details.manager.name),
+      };
+    }
+    const executed = { ...current, status: "executed" as const };
+    await this.recordConfirmationAudit(current, "executed", result.caseId);
+    const title = `Case ${result.caseNumber}: ${result.subject}`;
+    this.setState({
+      ...this.state,
+      pendingConfirmation: null,
+      workingSet: addCreatedRecord(
+        this.state.workingSet,
+        { system: "salesforce", objectType: "Case", recordId: result.caseId, title },
+        "create_inventory_case",
+        new Date(),
+      ),
+      activity: [
+        {
+          id: `create-inventory-case-${result.caseId}`,
+          label: ACTIVITY_LABELS["create-inventory-case"],
+          detail: `${result.source === "salesforce" ? "Salesforce" : "Local fixture"} read-back · Case ${result.caseNumber} for ${result.contactName}`,
+          occurredAt: "Now",
+          status: "complete",
+        },
+        ...this.state.activity,
+      ],
+    });
+    await this.rememberConfirmedWrite(
+      current,
+      { system: "salesforce", objectType: "Case", recordId: result.caseId, title },
+      {
+        outcome: `Case ${result.caseNumber} opened for ${result.contactName} (${details.city}), confirmed and read back.`,
+        note: details.items
+          .map(
+            (item) =>
+              `${item.name}: ${item.onHand} + ${item.onOrder} on order of ${item.projectedNeed} ${item.unit}`,
+          )
+          .join("; ")
+          .slice(0, 400),
+      },
+    );
+    return json({
+      confirmation: executed,
+      result: {
+        source: result.source,
+        recordId: result.caseId,
+        caseNumber: result.caseNumber,
+        subject: result.subject,
+        priority: result.priority,
+        status: result.status,
+        contactName: result.contactName,
+        idempotencyKey: current.idempotencyKey,
+        readBack: true,
+      },
+    });
+  }
+
+  /**
    * Asks Salesforce, as the signed-in user, whether it would allow a write: permission set,
    * Marketing User, object and field access, and record access. Local development uses a
    * fixture report. Salesforce enforces the same rules again when the write runs.
@@ -1434,8 +2371,11 @@ export class MarketingOrchestrator extends AIChatAgent<
         ),
       );
       const permissions = parsePermissionReport(output, new Date());
+      if (!permissions)
+        console.warn("[salesforce] check_write_access returned an unreadable report");
       return permissions ? { permissions } : { failure: "invalid-response" };
-    } catch {
+    } catch (error) {
+      logUpstreamFailure(`check_write_access for ${action}`, error);
       return { failure: "call-failed" };
     }
   }
@@ -1443,48 +2383,151 @@ export class MarketingOrchestrator extends AIChatAgent<
   /**
    * Runs a confirmed Marketing Cloud write by asking the Campaign Creation agent, through its
    * Hosted MCP tool, to run its standard actions; then reads the result back from Salesforce.
-   * The confirmation is spent before the agent is called, so a second click can't resend it.
+   *
+   * The standard actions aren't idempotent, so the write is made safe to retry here: Salesforce
+   * is checked first, and a brief or campaign an earlier attempt already created is linked rather
+   * than created again. If the agent call fails, Salesforce is checked once more before giving
+   * up, since a timeout can come after the agent saved. The confirmation is spent before the
+   * agent is called, so a second click can't resend it.
    */
   private async executeMarketingWrite(current: Confirmation) {
     const write = current.write as MarketingWrite;
     this.setState({ ...this.state, pendingConfirmation: null });
-    if ((this.env.ENVIRONMENT as string) === "local")
-      return this.completeMarketingWrite(current, localAgentWrite(write, this.localMarketing));
-    await this.mcp.waitForConnections({ timeout: 5_000 });
-    const tool = this.salesforceTool(WRITE_TOOL_BY_ACTION[current.action]);
-    if (!tool)
-      return json(
-        {
-          error: {
-            code: "UPSTREAM_UNAVAILABLE",
-            message:
-              "The Marketing Cloud Campaign Creation agent's tool isn't in the Salesforce catalog. Reconnect Salesforce and prepare the save again. Nothing was saved.",
+    // Only a save this chat already sent (and never saw confirmed) can be linked to what's there;
+    // a brief with the same name from another chat is someone else's work.
+    this.stepProgress("lookup");
+    const attempt = await this.marketingAttemptKey(write);
+    const existing =
+      write.kind === "campaign" || this.sentBefore(attempt)
+        ? await this.existingMarketingRecords(write)
+        : null;
+    if (existing) {
+      this.forgetAttempt(attempt);
+      this.noteProgress(
+        "lookup",
+        write.kind === "brief"
+          ? "Found the brief an earlier attempt saved; linking it instead of saving again."
+          : "The brief already has its campaign; linking it instead of creating another.",
+      );
+      this.stepProgress("readback", undefined, true);
+      return this.completeMarketingWrite(current, null, existing, "reused");
+    }
+    this.noteProgress("lookup", "Nothing saved yet; asking the agent.");
+    let tool: ReturnType<MarketingOrchestrator["salesforceTool"]> = null;
+    if ((this.env.ENVIRONMENT as string) !== "local") {
+      await this.mcp.waitForConnections({ timeout: 5_000 });
+      tool = this.salesforceTool(WRITE_TOOL_BY_ACTION[current.action]);
+      if (!tool)
+        return json(
+          {
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message:
+                "The Marketing Cloud Campaign Creation agent's tool isn't in the Salesforce catalog. Reconnect Salesforce and prepare the save again. Nothing was saved.",
+            },
           },
-        },
-        { status: 503 },
-      );
+          { status: 503 },
+        );
+    }
+    // "confirmed" in the audit: sent to the agent, not yet verified in Salesforce.
+    await this.recordConfirmationAudit(current, "confirmed");
+    this.rememberAttempt(attempt);
     let reply: unknown;
+    this.stepProgress(
+      "call",
+      tool
+        ? "Sent through the Salesforce Hosted MCP server; the agent runs as you."
+        : "Local stand-in for the agent.",
+    );
     try {
-      reply = await resolveToolResult(
-        tool.execute(agentToolInput(tool, agentRequest(write)), {
-          toolCallId: current.id,
-          messages: [],
-          context: undefined,
-        }),
-      );
+      reply = await this.callMarketingAgent(current, write, tool);
     } catch (error) {
-      await this.recordConfirmationAudit(current, "denied");
+      logUpstreamFailure(`${current.action} agent call`, error, current.id);
+      this.stepProgress(
+        "readback",
+        "The agent call didn't finish; checking Salesforce in case it saved.",
+      );
+      const saved = await this.existingMarketingRecords(write);
+      if (saved) {
+        this.forgetAttempt(attempt);
+        return this.completeMarketingWrite(current, null, saved, "recovered");
+      }
       return json(
         {
           error: {
             code: "UPSTREAM_UNAVAILABLE",
-            message: `The Marketing Cloud agent didn't finish (${error instanceof Error ? error.message.slice(0, 160) : "unknown error"}). Check Marketing Cloud for the ${write.kind === "brief" ? "brief" : "campaign"} before preparing the save again.`,
+            message: `The Marketing Cloud agent didn't finish (${error instanceof Error ? error.message.slice(0, 160) : "unknown error"}), and Salesforce doesn't show the ${write.kind === "brief" ? "brief" : "campaign"} yet. It may still be saving: wait a minute, then prepare the save again. The workbench checks Marketing Cloud first and links what it finds instead of saving twice.`,
           },
         },
         { status: 502 },
       );
     }
-    return this.completeMarketingWrite(current, reply);
+    const done = await this.completeMarketingWrite(current, reply);
+    if (done.ok) this.forgetAttempt(attempt);
+    return done;
+  }
+
+  /** A stable key for one Marketing Cloud write: its action and exact content. */
+  private async marketingAttemptKey(write: MarketingWrite) {
+    return sha256(JSON.stringify(write));
+  }
+
+  private ensureAttempts() {
+    this.sql`CREATE TABLE IF NOT EXISTS northstar_marketing_attempts (
+      key TEXT PRIMARY KEY,
+      at INTEGER NOT NULL
+    )`;
+  }
+
+  /** Notes that this exact write was sent to the agent, until Salesforce confirms it. */
+  private rememberAttempt(key: string) {
+    this.ensureAttempts();
+    const now = Date.now();
+    this.sql`INSERT OR REPLACE INTO northstar_marketing_attempts (key, at) VALUES (${key}, ${now})`;
+    this.sql`DELETE FROM northstar_marketing_attempts WHERE at < ${now - AUDIT_RETENTION_MS}`;
+  }
+
+  /** Whether this exact write was sent to the agent before without being confirmed. */
+  private sentBefore(key: string) {
+    this.ensureAttempts();
+    return (
+      this.sql<{ key: string }>`SELECT key FROM northstar_marketing_attempts WHERE key = ${key}`
+        .length > 0
+    );
+  }
+
+  private forgetAttempt(key: string) {
+    this.ensureAttempts();
+    this.sql`DELETE FROM northstar_marketing_attempts WHERE key = ${key}`;
+  }
+
+  /** Asks the Campaign Creation agent to do a confirmed write; local development uses a stand-in. */
+  private async callMarketingAgent(
+    current: Confirmation,
+    write: MarketingWrite,
+    tool: ReturnType<MarketingOrchestrator["salesforceTool"]>,
+  ): Promise<unknown> {
+    if (!tool) return localAgentWrite(write, this.localMarketing);
+    return resolveToolResult(
+      tool.execute(await agentToolInput(tool, agentRequest(write)), {
+        toolCallId: current.id,
+        messages: [],
+        context: undefined,
+      }),
+    );
+  }
+
+  /**
+   * What an earlier attempt at this write already created in Marketing Cloud: the newest brief
+   * with the same name and key message, or the campaign on the brief. Null when there's none.
+   */
+  private async existingMarketingRecords(write: MarketingWrite) {
+    if (write.kind === "campaign") {
+      const readBack = await this.readMarketingRecords({ briefId: write.briefId });
+      return readBack?.campaign ? readBack : null;
+    }
+    const readBack = await this.readMarketingRecords({ briefName: write.brief.name });
+    return readBack?.brief && sameBrief(readBack.brief, write.brief) ? readBack : null;
   }
 
   /**
@@ -1492,15 +2535,23 @@ export class MarketingOrchestrator extends AIChatAgent<
    * Creation agent says it created, and only then links the focus to the Brief (and Campaign and
    * flow) and adds them to the workspace. The agent's reply is never taken as proof.
    */
-  private async completeMarketingWrite(current: Confirmation, reply: unknown) {
+  private async completeMarketingWrite(
+    current: Confirmation,
+    reply: unknown,
+    known?: MarketingReadBack,
+    found?: "reused" | "recovered",
+  ) {
     const write = current.write as MarketingWrite;
     const local = (this.env.ENVIRONMENT as string) === "local";
+    this.stepProgress("readback");
     const agentReply = toolText(reply).slice(0, 4000);
     const ids = idsFromAgentReply(agentReply);
     const briefId = write.kind === "campaign" ? write.briefId : ids.briefId;
-    const readBack = await this.readMarketingRecords(
-      briefId ? { briefId } : { briefName: write.kind === "brief" ? write.brief.name : "" },
-    );
+    const readBack =
+      known ??
+      (await this.readMarketingRecords(
+        briefId ? { briefId } : { briefName: write.kind === "brief" ? write.brief.name : "" },
+      ));
     const briefOk =
       readBack?.brief &&
       (write.kind === "campaign" ||
@@ -1529,10 +2580,11 @@ export class MarketingOrchestrator extends AIChatAgent<
         {
           id: `${current.action}-${current.id}`,
           label: ACTIVITY_LABELS[current.action],
-          detail:
+          detail: `${
             write.kind === "brief"
-              ? `${SALESFORCE_AGENTS[CAMPAIGN_AGENT].label} agent · Brief ${brief.id} · ${readBack.steps.length}-step preview${local ? " (local fixture)" : ""}`
-              : `${SALESFORCE_AGENTS[CAMPAIGN_AGENT].label} agent · Campaign ${campaign?.id}${campaign?.flow ? ` · ${campaign.flow.label}` : ""}${local ? " (local fixture)" : ""}`,
+              ? `${SALESFORCE_AGENTS[CAMPAIGN_AGENT].label} agent · Brief ${brief.id} · ${readBack.steps.length}-step preview`
+              : `${SALESFORCE_AGENTS[CAMPAIGN_AGENT].label} agent · Campaign ${campaign?.id}${campaign?.flow ? ` · ${campaign.flow.label}` : ""}`
+          }${found ? ` · ${FOUND_NOTES[found]}` : ""}${local ? " (local fixture)" : ""}`,
           occurredAt: "Now",
           status: "complete",
         },
@@ -1565,6 +2617,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         agent: { name: CAMPAIGN_AGENT, ...SALESFORCE_AGENTS[CAMPAIGN_AGENT] },
         actions: SALESFORCE_TOOL_DETAILS[WRITE_TOOL_BY_ACTION[current.action]]?.actions ?? [],
         agentReply,
+        ...(found ? { found, note: FOUND_NOTES[found] } : {}),
         brief: { id: brief.id, name: brief.name },
         preview: readBack.steps,
         ...(campaign ? { campaign } : {}),
@@ -1599,7 +2652,8 @@ export class MarketingOrchestrator extends AIChatAgent<
         ),
       );
       return parseMarketingReadBack(output);
-    } catch {
+    } catch (error) {
+      logUpstreamFailure("get_marketing_records", error);
       return null;
     }
   }
@@ -1718,6 +2772,125 @@ export class MarketingOrchestrator extends AIChatAgent<
     });
   }
 
+  /**
+   * Keeps the inventory check's three inputs and, once all three are in for the same location,
+   * computes which weather-driven items won't cover the forecast. The result becomes a context
+   * card and, when anything is low, an action card to open a case for the store manager. Code
+   * decides what's low; the model only explains it.
+   */
+  private checkInventory(tool: string | null, output: unknown) {
+    const data = toolPayload(output).data;
+    if (!data || isToolFailure(output)) return;
+    if (tool === "get_weather_forecast")
+      this.inventoryInputs.forecast = data as unknown as ForecastResult;
+    else if (tool === "map_weather_demand")
+      this.inventoryInputs.demand = data as unknown as DemandResult;
+    else if (tool === "get_location_inventory")
+      this.inventoryInputs.inventory = data as unknown as InventoryResult;
+    else return;
+    const { forecast, demand, inventory } = this.inventoryInputs;
+    const risk = assessInventoryRisk(forecast, demand, inventory);
+    if (!risk) return;
+    const at = new Date();
+    this.setState({
+      ...this.state,
+      inventoryRisk: risk,
+      workingSet: mergeIntoWorkingSet(
+        this.state.workingSet,
+        { cards: [inventoryRiskCard(risk, at)], records: [] },
+        at,
+      ),
+      suggestions: (this.state.suggestions ?? []).filter(
+        (existing) => existing.action !== "create-inventory-case",
+      ),
+    });
+    if (risk.lowItems.length)
+      this.suggest({
+        action: "create-inventory-case",
+        title: `Open a Salesforce case for ${risk.manager.name}, the ${risk.city} store manager?`,
+        detail: `${risk.lowItems.length} item${risk.lowItems.length === 1 ? "" : "s"} won't cover the ${risk.window.days}-day forecast (${risk.conditions.join(", ")}): ${risk.lowItems
+          .slice(0, 4)
+          .map(
+            (item) =>
+              `${item.name} (${item.onHand + item.onOrder} of ${item.projectedNeed} ${item.unit})`,
+          )
+          .join("; ")}${risk.lowItems.length > 4 ? "; …" : ""}.`,
+        cta: "Review case",
+      });
+  }
+
+  /** The local inventory check: the plan's three tools with a fixed forecast, then the risk. */
+  private async localInventoryCheck(prompt: string) {
+    const location =
+      (Object.keys(LOCATIONS) as Array<keyof typeof LOCATIONS>).find((id) =>
+        prompt.toLowerCase().includes(LOCATIONS[id].city.toLowerCase()),
+      ) ?? "sacramento";
+    const start = new Date();
+    const date = (offset: number) =>
+      new Date(start.getTime() + offset * 86_400_000).toISOString().slice(0, 10);
+    const forecast = {
+      source: "Open-Meteo (local fixture)",
+      location,
+      city: LOCATIONS[location].city,
+      days: [
+        {
+          date: date(0),
+          condition: "clear",
+          demandCondition: "clear",
+          highF: 84,
+          lowF: 58,
+          precipitationChance: 0,
+        },
+        {
+          date: date(1),
+          condition: "clear",
+          demandCondition: "heat",
+          highF: 95,
+          lowF: 64,
+          precipitationChance: 0,
+        },
+        {
+          date: date(2),
+          condition: "clear",
+          demandCondition: "clear",
+          highF: 86,
+          lowF: 60,
+          precipitationChance: 0,
+        },
+      ],
+      demandConditions: ["clear", "heat"],
+    };
+    const mcp = (data: unknown) => ({
+      structuredContent: data,
+      content: [{ type: "text", text: JSON.stringify(data) }],
+    });
+    this.ingestToolResult("context_get_weather_forecast", { location, days: 3 }, mcp(forecast));
+    const spec = KNOWLEDGE_GRAPH_TOOL_SPECS.find((entry) => entry.name === "map_weather_demand");
+    const demandInput = { location, conditions: forecast.demandConditions };
+    const demand = await spec?.run(knowledgeGraphBackend(this.env), demandInput as never);
+    this.ingestToolResult("graph_map_weather_demand", demandInput, mcp(demand));
+    this.ingestToolResult(
+      "context_get_location_inventory",
+      { location },
+      // A fixed count date keeps the local check (and its tests) the same every day.
+      mcp(locationInventory(location, LOCAL_FIXTURE_COUNT_DATE)),
+    );
+    const risk = this.state.inventoryRisk;
+    if (!risk) return "The inventory check could not complete locally.";
+    return [
+      `**Inventory check for Coastline Kitchen ${risk.city}** (local fixture forecast: ${risk.conditions.join(", ")}).\n\n`,
+      risk.lowItems.length
+        ? `${risk.lowItems.length} item${risk.lowItems.length === 1 ? "" : "s"} won't cover the forecast:\n\n${risk.lowItems
+            .map(
+              (item) =>
+                `- **${item.name}:** ${item.onHand} ${item.unit} on hand + ${item.onOrder} on order, ${item.projectedNeed} needed (${item.menuItems.join(", ")})`,
+            )
+            .join("\n")}\n\n`
+        : "Every weather-driven item covers the forecast.\n\n",
+      `Store manager: ${risk.manager.name}. ${risk.lowItems.length ? "Use the action card to open a Salesforce case for them; nothing is created until you confirm." : ""} Stock counts come from a randomized mock of the store inventory system.`,
+    ].join("");
+  }
+
   /** Accepting an action card prepares its confirmation, with the Salesforce permission check. */
   private async acceptSuggestion(id: string): Promise<Response> {
     const suggestion = (this.state.suggestions ?? []).find((item) => item.id === id);
@@ -1726,6 +2899,8 @@ export class MarketingOrchestrator extends AIChatAgent<
         { error: { code: "NOT_FOUND", message: "That suggestion is no longer available." } },
         { status: 404 },
       );
+    if (suggestion.action === "create-inventory-case")
+      return this.prepareConfirmation({ action: "create-inventory-case" });
     if (suggestion.action === "save-focus") {
       const focus = this.state.workingSet.focus;
       if (!focus)
@@ -1776,6 +2951,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       at: new Date(),
     });
     if (next !== this.state.workingSet) this.setState({ ...this.state, workingSet: next });
+    this.checkInventory(baseToolName(toolName), output);
     // The brief the Marketing Cloud agent drafted becomes the focus, field for field.
     if (baseToolName(toolName) === "draft_campaign_brief") {
       const focus = this.state.workingSet.focus;
@@ -1832,7 +3008,10 @@ export class MarketingOrchestrator extends AIChatAgent<
       pendingConfirmation: null,
       suggestions: [],
       activity: [],
+      inventoryRisk: null,
+      writeProgress: null,
     });
+    this.inventoryInputs = {};
   }
 
   /**
@@ -1855,9 +3034,9 @@ export class MarketingOrchestrator extends AIChatAgent<
     )`;
   }
 
-  /** Notes a remember or forget in this user's agent storage, kept as long as the audit. */
+  /** Notes a remember, reopen, or forget in this user's agent storage, kept as long as the audit. */
   private auditMemory(
-    action: "remember" | "decision" | "forget",
+    action: "remember" | "decision" | "forget" | "reopen",
     memoryId: string,
     detail: string,
   ) {
@@ -1927,8 +3106,12 @@ export class MarketingOrchestrator extends AIChatAgent<
     record: MemoryRecordRef,
     detail: { outcome: string; note: string; campaignId?: string },
   ) {
+    this.stepProgress("remember");
     const backend = this.memoryBackend();
-    if (!backend) return;
+    if (!backend) {
+      this.noteProgress("remember", "Long-term memory is turned off; nothing was remembered.");
+      return;
+    }
     try {
       const actorHash = await memoryActorHash(this.principalSubject);
       const focus = this.state.workingSet.focus;
@@ -2009,6 +3192,8 @@ export class MarketingOrchestrator extends AIChatAgent<
             { status: result.status },
           );
     }
+    const reopen = url.pathname.match(/\/memory\/([a-f0-9-]{36})\/reopen$/);
+    if (reopen?.[1] && request.method === "POST") return this.reopenMemory(reopen[1]);
     const forget = url.pathname.match(/\/memory\/([a-f0-9-]{36})$/);
     if (forget?.[1] && request.method === "DELETE") {
       const backend = this.memoryBackend();
@@ -2029,6 +3214,39 @@ export class MarketingOrchestrator extends AIChatAgent<
     return null;
   }
 
+  /**
+   * Reopens a remembered draft or decision in the current chat: the draft becomes the focus and
+   * its records join the working set as remembered. Only the user can do this, from the Memory tab.
+   */
+  private async reopenMemory(id: string): Promise<Response> {
+    const backend = this.memoryBackend();
+    if (!backend)
+      return json(
+        { error: { code: "MEMORY_DISABLED", message: "Long-term memory is turned off." } },
+        { status: 503 },
+      );
+    const now = new Date();
+    const items = await listMemory(backend, this.state.workspaceId, now);
+    const item = items.find((entry) => entry.id === id);
+    if (!item)
+      return json(
+        { error: { code: "NOT_FOUND", message: "That memory is not in this workspace." } },
+        { status: 404 },
+      );
+    const draft = item.type === "Draft" ? item : items.find((entry) => entry.id === item.draft?.id);
+    const workingSet = reopenFromMemory(this.state.workingSet, item, draft, now);
+    this.setState({ ...this.state, workingSet });
+    this.auditMemory("reopen", id, `Reopened “${item.title}” in the workspace`);
+    return json({
+      reopened: id,
+      title: item.title,
+      focus: Boolean(
+        workingSet.focus && draft && workingSet.focus.id === (draft.focusId ?? draft.id),
+      ),
+      records: item.records.length + (draft && draft !== item ? draft.records.length : 0),
+    });
+  }
+
   private syncConnector() {
     const connector = connectorFromMcp(Boolean(this.env.SALESFORCE_MCP_URL), this.getMcpServers());
     this.setState({
@@ -2042,7 +3260,7 @@ export class MarketingOrchestrator extends AIChatAgent<
 
   private async recordConfirmationAudit(
     confirmation: ReturnType<typeof ConfirmationSchema.parse>,
-    status: "pending" | "denied" | "expired" | "executed",
+    status: "pending" | "confirmed" | "denied" | "expired" | "executed",
     sourceRecordId?: string,
   ) {
     if ((this.env.ENVIRONMENT as string) === "local")
@@ -2221,299 +3439,7 @@ export class MarketingOrchestrator extends AIChatAgent<
           { status: 409 },
         );
       }
-      // Briefs and campaigns are created by the Marketing Cloud Campaign Creation agent.
-      if (current.write) return this.executeMarketingWrite(current);
-      if ((this.env.ENVIRONMENT as string) !== "local") {
-        const signingKey = this.env.CONFIRMATION_SIGNING_KEY;
-        if (!signingKey)
-          return json(
-            {
-              error: {
-                code: "UPSTREAM_UNAVAILABLE",
-                message: "Signed confirmation execution is not configured.",
-              },
-            },
-            { status: 503 },
-          );
-        await this.mcp.waitForConnections({ timeout: 5_000 });
-        const tools = this.mcp.getAITools();
-        const toolName = WRITE_TOOL_BY_ACTION[current.action];
-        const entry = Object.entries(tools).find(([key]) => key.endsWith(`_${toolName}`));
-        const tool = entry?.[1];
-        if (!tool || !("execute" in tool) || typeof tool.execute !== "function")
-          return json(
-            {
-              error: {
-                code: "UPSTREAM_UNAVAILABLE",
-                message: "The confirmed Salesforce write tool is unavailable. Reconnect and retry.",
-              },
-            },
-            { status: 503 },
-          );
-        const confirmationExpiresAt = Math.floor(Date.parse(current.expiresAt) / 1000);
-        const canonicalConfirmation = [
-          current.action,
-          current.recordId,
-          current.id,
-          current.requestHash,
-          current.idempotencyKey,
-          String(confirmationExpiresAt),
-          current.principalSubject,
-        ].join("\n");
-        const confirmationSignature = await hmacSha256Hex(signingKey, canonicalConfirmation);
-        const principalHex = [...new TextEncoder().encode(current.principalSubject)]
-          .map((byte) => byte.toString(16).padStart(2, "0"))
-          .join("");
-        const signedConfirmation = [
-          "v1",
-          current.id,
-          String(confirmationExpiresAt),
-          principalHex,
-          confirmationSignature,
-        ].join(".");
-        const imagePayload =
-          current.action === "attach-generated-image"
-            ? await this.loadConfirmedImage(current)
-            : undefined;
-        if (imagePayload && "error" in imagePayload)
-          return json(
-            { error: { code: "CONFLICT", message: imagePayload.error } },
-            { status: 409 },
-          );
-        let upstream: unknown;
-        try {
-          upstream = await resolveToolResult(
-            tool.execute(
-              {
-                inputs: [
-                  {
-                    campaignId: current.recordId,
-                    ...(imagePayload ?? {}),
-                    confirmationId: signedConfirmation,
-                    requestHash: current.requestHash,
-                    idempotencyKey: current.idempotencyKey,
-                  },
-                ],
-              },
-              { toolCallId: current.id, messages: [], context: undefined },
-            ),
-          );
-        } catch {
-          return json(
-            {
-              error: {
-                code: "UPSTREAM_UNAVAILABLE",
-                message:
-                  "Salesforce rejected the confirmed write. The request was not recorded as executed; reconnect or ask an administrator to verify the confirmation configuration, then retry.",
-              },
-            },
-            { status: 502 },
-          );
-        }
-        const campaignId = findToolField(upstream, "campaignId");
-        const readBack = findToolField(upstream, "readBack");
-        const sourceRecordId =
-          current.action === "create-review-task"
-            ? findToolField(upstream, "taskId")
-            : current.action === "attach-generated-image"
-              ? findToolField(upstream, "contentDocumentId")
-              : campaignId;
-        const imageDetails =
-          current.action === "attach-generated-image"
-            ? {
-                contentVersionId: findToolField(upstream, "contentVersionId"),
-                title: findToolField(upstream, "title"),
-                contentSize: findToolField(upstream, "contentSize"),
-                contentHash: findToolField(upstream, "contentHash"),
-              }
-            : {};
-        const taskDetails =
-          current.action === "create-review-task"
-            ? {
-                subject: findToolField(upstream, "subject"),
-                priority: findToolField(upstream, "priority"),
-                dueDate: findToolField(upstream, "dueDate"),
-                description: findToolField(upstream, "description"),
-              }
-            : {};
-        if (
-          typeof sourceRecordId !== "string" ||
-          campaignId !== current.recordId ||
-          readBack !== true ||
-          (current.action === "create-review-task" &&
-            (typeof taskDetails.subject !== "string" ||
-              typeof taskDetails.priority !== "string" ||
-              typeof taskDetails.dueDate !== "string" ||
-              typeof taskDetails.description !== "string")) ||
-          (current.action === "attach-generated-image" &&
-            (typeof imageDetails.contentVersionId !== "string" ||
-              typeof imageDetails.title !== "string" ||
-              typeof imageDetails.contentSize !== "number" ||
-              imageDetails.contentHash !== current.contentHash))
-        )
-          return json(
-            {
-              error: {
-                code: "CONFLICT",
-                message: "Salesforce did not return the required authoritative read-back.",
-              },
-            },
-            { status: 409 },
-          );
-        const executed = { ...current, status: "executed" as const };
-        await this.recordConfirmationAudit(current, "executed", sourceRecordId);
-        if (current.imageId) await this.markImageAttached(current.imageId);
-        this.setState({
-          ...this.state,
-          pendingConfirmation: null,
-          workingSet: this.withCreatedRecord(
-            current.action,
-            sourceRecordId,
-            typeof taskDetails.subject === "string"
-              ? taskDetails.subject
-              : typeof imageDetails.title === "string"
-                ? imageDetails.title
-                : undefined,
-          ),
-          activity: [
-            {
-              id: `${current.action}-${sourceRecordId}`,
-              label: ACTIVITY_LABELS[current.action],
-              detail: `Salesforce read-back · ${sourceRecordId}`,
-              occurredAt: "Now",
-              status: "complete",
-            },
-            ...this.state.activity,
-          ],
-        });
-        await this.rememberConfirmedWrite(
-          current,
-          {
-            system: "salesforce",
-            objectType:
-              current.action === "create-review-task"
-                ? "Task"
-                : current.action === "attach-generated-image"
-                  ? "ContentDocument"
-                  : "Campaign",
-            recordId: sourceRecordId,
-            title:
-              typeof taskDetails.subject === "string"
-                ? taskDetails.subject
-                : typeof imageDetails.title === "string"
-                  ? imageDetails.title
-                  : ACTIVITY_LABELS[current.action],
-          },
-          {
-            outcome: `${ACTIVITY_LABELS[current.action]} (${sourceRecordId}), confirmed and read back from Salesforce.`,
-            note:
-              typeof taskDetails.dueDate === "string"
-                ? `Due ${taskDetails.dueDate}.`
-                : current.summary,
-            campaignId: typeof campaignId === "string" ? campaignId : undefined,
-          },
-        );
-        return json({
-          confirmation: executed,
-          result: {
-            source: "salesforce",
-            recordId: sourceRecordId,
-            campaignId,
-            status: findToolField(upstream, "status"),
-            ...taskDetails,
-            ...imageDetails,
-            idempotencyKey: current.idempotencyKey,
-            readBack: true,
-          },
-        });
-      }
-      const executed = { ...current, status: "executed" as const };
-      // The local fixture still verifies the confirmed image bytes so the flow is exercised end to end.
-      const fixtureImage =
-        current.action === "attach-generated-image"
-          ? await this.loadConfirmedImage(current)
-          : undefined;
-      if (fixtureImage && "error" in fixtureImage)
-        return json({ error: { code: "CONFLICT", message: fixtureImage.error } }, { status: 409 });
-      const fixtureRecordId =
-        current.action === "create-review-task"
-          ? "00T000000000001"
-          : current.action === "attach-generated-image"
-            ? "069000000000001"
-            : current.recordId;
-      await this.recordConfirmationAudit(current, "executed", fixtureRecordId);
-      if (current.imageId) await this.markImageAttached(current.imageId);
-      this.setState({
-        ...this.state,
-        pendingConfirmation: null,
-        workingSet: this.withCreatedRecord(
-          current.action,
-          fixtureRecordId,
-          current.action === "create-review-task"
-            ? "Review campaign readiness: VERO Phase 1 Launch"
-            : fixtureImage?.title,
-        ),
-        activity: [
-          {
-            id: `${current.action}-${current.id}`,
-            label: ACTIVITY_LABELS[current.action],
-            detail: `Local fixture read-back · ${current.recordId}`,
-            occurredAt: "Now",
-            status: "complete",
-          },
-          ...this.state.activity,
-        ],
-      });
-      await this.rememberConfirmedWrite(
-        current,
-        {
-          system: "salesforce",
-          objectType:
-            current.action === "create-review-task"
-              ? "Task"
-              : current.action === "attach-generated-image"
-                ? "ContentDocument"
-                : "Campaign",
-          recordId: fixtureRecordId,
-          title:
-            current.action === "create-review-task"
-              ? "Review campaign readiness: VERO Phase 1 Launch"
-              : (fixtureImage?.title ?? ACTIVITY_LABELS[current.action]),
-        },
-        {
-          outcome: `${ACTIVITY_LABELS[current.action]} (${fixtureRecordId}), confirmed and read back from the local fixture.`,
-          note: current.summary,
-          campaignId: current.recordId,
-        },
-      );
-      return json({
-        confirmation: executed,
-        result: {
-          source: "local-fixture",
-          recordId: fixtureRecordId,
-          campaignId: current.recordId,
-          status: "Open",
-          ...(current.action === "create-review-task"
-            ? {
-                subject: "Review campaign readiness: VERO Phase 1 Launch",
-                priority: "High",
-                dueDate: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10),
-                description:
-                  "Campaign context, readiness findings, and a human review checklist were recorded in Salesforce.",
-              }
-            : {}),
-          ...(fixtureImage
-            ? {
-                contentVersionId: "068000000000001",
-                title: fixtureImage.title,
-                contentSize: Math.floor((fixtureImage.imageBase64.length * 3) / 4),
-                contentHash: fixtureImage.contentHash,
-              }
-            : {}),
-          idempotencyKey: current.idempotencyKey,
-          readBack: true,
-        },
-      });
+      return this.runConfirmedWrite(current);
     }
     const response = await super.onRequest(request);
     return (
@@ -2611,6 +3537,19 @@ export class MarketingOrchestrator extends AIChatAgent<
       return scriptedResponse([text], {
         model: "local-fixture",
         reasoning: "Local development has no model: answer from the workspace's long-term memory.",
+        abortSignal,
+        onComplete: (result) =>
+          this.recordTurn(utterance, { model: "local-fixture", route: "local-fixture" }, result),
+      });
+    }
+    // Local development has no model: an inventory check runs the same three tools in process,
+    // with a fixed forecast, and the workbench computes the same inventory risk.
+    if (isInventoryCheck(utterance)) {
+      const text = await this.localInventoryCheck(utterance);
+      return scriptedResponse([text], {
+        model: "local-fixture",
+        reasoning:
+          "Local development has no model or network: a fixed forecast, the graph's demand map, and the store inventory mock go through the same ingestion and risk check.",
         abortSignal,
         onComplete: (result) =>
           this.recordTurn(utterance, { model: "local-fixture", route: "local-fixture" }, result),

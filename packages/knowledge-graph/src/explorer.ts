@@ -3,11 +3,11 @@ import type { GraphBackend, Row } from "./tools.ts";
 
 /**
  * Read-only snapshots of the knowledge graph for the Graph explorer page. The overview returns
- * every node except the high-volume push sends; neighbors expands one node at a time. Both run
+ * every node except the high-volume push and email sends; neighbors expands one node at a time. Both run
  * fixed, parameterized Cypher against Neo4j, or the same logic against the in-memory fixture.
  */
 
-export const EXPLORER_HIDDEN_LABELS = ["PushSend"] as const;
+export const EXPLORER_HIDDEN_LABELS = ["PushSend", "EmailSend"] as const;
 export const EXPLORER_NEIGHBOR_LIMIT = 60;
 export const EXPLORER_MAX_ROWS = 5_000;
 const NODE_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;

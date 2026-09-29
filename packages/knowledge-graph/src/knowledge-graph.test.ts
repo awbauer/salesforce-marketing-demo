@@ -190,17 +190,285 @@ describe("Neo4j Query API client", () => {
       condition: "rain",
     })) as {
       topItems: Array<{ content: string | null }>;
-      audience: { segment: string; pushOptIns: number; consentScope: string };
+      audience: { segment: string; optedIn: number; consentScope: string };
       paths: Array<{ relationships: Array<{ type: string }> }>;
     };
     expect(result.topItems.every((item) => item.content?.endsWith("· push"))).toBe(true);
     expect(result.audience).toEqual({
       segment: "Coastline app · Los Angeles",
       appUsers: 18400,
-      pushOptIns: 11900,
+      channel: "push",
+      optedIn: 11900,
       consentScope: "push marketing",
     });
     const types = result.paths.flatMap((path) => path.relationships.map((edge) => edge.type));
     expect(types).toEqual(expect.arrayContaining(["FEATURED", "USED", "SENT_TO"]));
+  });
+
+  it("reports email history, email content, and email consent for an email campaign", async () => {
+    const result = (await tool("find_similar_past_pushes")({
+      location: "los-angeles",
+      daypart: "lunch",
+      condition: "rain",
+      channel: "email",
+    })) as {
+      history: string;
+      topItems: Array<{ content: string | null; avgOpenRate: number }>;
+      audience: { optedIn: number; consentScope: string; channel: string };
+      note: string;
+      paths: Array<{
+        nodes: Array<{ label: string; name: string }>;
+        relationships: Array<{ type: string }>;
+      }>;
+    };
+    expect(result.history).toBe("email");
+    expect(result.topItems.length).toBeGreaterThan(0);
+    expect(result.topItems.every((item) => item.content?.endsWith("· email"))).toBe(true);
+    const labels = result.paths.flatMap((path) => path.nodes.map((node) => node.label));
+    expect(labels).toContain("EmailSend");
+    expect(labels).not.toContain("PushSend");
+    expect(result.audience).toMatchObject({
+      channel: "email",
+      optedIn: 13100,
+      consentScope: "email marketing",
+    });
+    expect(result.note).toBe("Fictional email history for demonstration.");
+    const scopes = result.paths.flatMap((path) =>
+      path.nodes.filter((node) => node.name.endsWith("marketing")).map((node) => node.name),
+    );
+    expect(scopes).toEqual(["email marketing"]);
+    // The emails were sent to this audience, under its email consent.
+    expect(result.paths.flatMap((path) => path.relationships.map((edge) => edge.type))).toContain(
+      "SENT_TO",
+    );
+  });
+
+  it("uses push history for SMS, which has none of its own, and says so", async () => {
+    const result = (await tool("find_similar_past_pushes")({
+      location: "los-angeles",
+      daypart: "lunch",
+      condition: "rain",
+      channel: "sms",
+    })) as {
+      history: string;
+      audience: { optedIn: number; consentScope: string };
+      note: string;
+      paths: Array<{ relationships: Array<{ type: string }> }>;
+    };
+    expect(result.history).toBe("push");
+    expect(result.audience).toMatchObject({ optedIn: 5200, consentScope: "sms marketing" });
+    expect(result.note).toMatch(/no SMS send history/);
+    expect(
+      result.paths.flatMap((path) => path.relationships.map((edge) => edge.type)),
+    ).not.toContain("SENT_TO");
+  });
+});
+
+describe("use-case graph tools", () => {
+  it("plans account outreach with consented channels and the account's country", async () => {
+    const result = (await tool("plan_account_outreach")({
+      account: "Harbor Point Sports",
+      limit: 4,
+    })) as {
+      country: string;
+      contacts: Array<{
+        persona: string;
+        reachableBy: string[];
+        lastEngagedDaysAgo: number | null;
+      }>;
+      paths: Array<{ relationships: Array<{ type: string }> }>;
+    };
+    expect(result.country).toBe("GB");
+    expect(result.contacts.length).toBeGreaterThan(0);
+    for (const contact of result.contacts)
+      expect(contact.persona.startsWith("Harbor Point Sports · ")).toBe(true);
+    expect(
+      result.paths.some((path) => path.relationships.some((rel) => rel.type === "HAS_CONSENT")),
+    ).toBe(true);
+  });
+
+  it("assesses a location's affected audience, push reach, and campaigns to pause", async () => {
+    const result = (await tool("assess_location_impact")({ location: "san-diego" })) as {
+      affectedAppUsers: number;
+      reachableByChannel: Array<{ channel: string; optedIn: number; consentScope: string }>;
+      campaignsToReview: Array<{ name: string }>;
+      paths: Array<{ relationships: Array<{ type: string }> }>;
+    };
+    // Each channel has its own marketing consent, counted separately.
+    expect(result.reachableByChannel).toEqual([
+      { channel: "email", consentScope: "email marketing", optedIn: 7000, coverageRate: 0.714 },
+      { channel: "push", consentScope: "push marketing", optedIn: 6600, coverageRate: 0.673 },
+      { channel: "sms", consentScope: "sms marketing", optedIn: 2600, coverageRate: 0.265 },
+    ]);
+    for (const reach of result.reachableByChannel)
+      expect(result.affectedAppUsers).toBeGreaterThan(reach.optedIn);
+    expect(result.campaignsToReview.map((campaign) => campaign.name)).toContain(
+      "Coastline Weather Moments",
+    );
+    expect(result.paths.map((path) => path.relationships[0]?.type.split(" ")[0])).toEqual(
+      expect.arrayContaining(["NEAR", "HAS_CONSENT", "TARGETS"]),
+    );
+  });
+
+  it("maps forecast weather to lifted dishes, their inventory, and the store manager", async () => {
+    const result = (await tool("map_weather_demand")({
+      location: "sacramento",
+      conditions: ["heat"],
+    })) as {
+      manager: { name: string } | null;
+      menuItems: Array<{ name: string; lift: number }>;
+      inventoryItems: Array<{ id: string; usedBy: Array<{ menuItem: string }> }>;
+      paths: Array<{ relationships: Array<{ type: string }> }>;
+    };
+    // Heat lifts the cold dishes, learned from past push results.
+    expect(result.menuItems.map((item) => item.name)).toContain("Açaí Sunrise Bowl");
+    expect(result.menuItems.every((item) => item.lift >= 1.15)).toBe(true);
+    expect(result.inventoryItems.map((item) => item.id)).toContain("acai");
+    expect(result.manager).toEqual({ name: "Tom Okafor" });
+    expect(result.paths.map((path) => path.relationships.map((rel) => rel.type).join(">"))).toEqual(
+      expect.arrayContaining(["MANAGED_BY", "LIFTS_DEMAND>MADE_WITH"]),
+    );
+    // The graph holds no contact data about the manager.
+    expect(JSON.stringify(result)).not.toMatch(/@/);
+  });
+});
+
+describe("financial services graph tools", () => {
+  type Approval = { id: string; status: string };
+  it("matches a rate increase to approved content, and says why the rest is blocked", async () => {
+    const result = (await tool("match_news_to_approved_content")({ event: "rate-increase" })) as {
+      readyToSend: Array<{
+        asset: string;
+        channel: string;
+        approval: Approval;
+        disclosures: string[];
+        reachableUnderMarketingConsent: number;
+      }>;
+      blocked: Array<{ asset: string; reasons: string[] }>;
+      speed: { withinSixHours: { avgOpenRate: number }; later: { avgOpenRate: number } };
+      paths: Array<{ relationships: Array<{ type: string }> }>;
+    };
+    expect(result.readyToSend.map((asset) => [asset.channel, asset.approval.id])).toEqual([
+      ["email", "COMP-2026-0412"],
+      ["sms", "COMP-2026-0413"],
+    ]);
+    // Reach is marketing consent per channel: clients plus subscribers for email, clients for SMS.
+    expect(result.readyToSend.map((asset) => asset.reachableUnderMarketingConsent)).toEqual([
+      31_400 + 22_500,
+      9_800,
+    ]);
+    expect(result.readyToSend[0]?.disclosures).toContain(
+      "Not FDIC insured. No bank guarantee. May lose value.",
+    );
+    const reasons = Object.fromEntries(result.blocked.map((asset) => [asset.asset, asset.reasons]));
+    expect(reasons["Rates rose: time to revisit your bond ladder"]?.[0]).toMatch(/expired/);
+    expect(reasons["Higher rates, higher returns"]).toEqual([
+      "Approval COMP-2026-0519 is still pending with compliance",
+      "Failed compliance check: No performance guarantees",
+    ]);
+    // Past responses sent within hours of the news opened better than next-day ones.
+    expect(result.speed.withinSixHours.avgOpenRate).toBeGreaterThan(result.speed.later.avgOpenRate);
+    expect(result.paths.map((path) => path.relationships[0]?.type)).toContain("RESPONDS_TO");
+  });
+
+  it("limits approved content to one channel when asked", async () => {
+    const result = (await tool("match_news_to_approved_content")({
+      event: "rate-hold",
+      channel: "sms",
+    })) as { readyToSend: unknown[]; blocked: Array<{ channel: string }> };
+    expect(result.readyToSend).toEqual([]);
+    expect(result.blocked.map((asset) => asset.channel)).toEqual(["sms"]);
+  });
+
+  it("orders the embargoed acquisition package and blocks what can't go out", async () => {
+    const result = (await tool("prepare_deal_release")({})) as {
+      steps: Array<{
+        step: number;
+        asset: string;
+        reachable: number | null;
+        reliesOn: string;
+        approval: Approval & { embargoed?: boolean };
+        ready: boolean;
+        blockers: string[];
+      }>;
+      readyCount: number;
+      blockedCount: number;
+    };
+    expect(result.steps.map((step) => step.step)).toEqual([1, 2, 3, 3, 4, 5]);
+    expect(result.readyCount).toBe(4);
+    expect(result.blockedCount).toBe(2);
+    const letter = result.steps.find((step) => step.asset === "Welcome letter to Bayview clients");
+    // Bayview's clients get service notices under their client agreement, never marketing.
+    expect(letter).toMatchObject({ ready: true, reachable: 12_600 });
+    expect(letter?.reliesOn).toMatch(/service notice/);
+    expect(letter?.approval.embargoed).toBe(true);
+    const sms = result.steps.find((step) => step.asset === "SMS: news about your account");
+    expect(sms?.ready).toBe(false);
+    expect(sms?.blockers.join(" ")).toMatch(/Required disclosures present/);
+    expect(sms?.blockers.join(" ")).toMatch(/no sms marketing consent/);
+  });
+
+  it("builds an AUM account plan from signals, peers, approved content, and consent", async () => {
+    const result = (await tool("build_aum_account_plan")({
+      client: "Cedar Valley Community Foundation",
+    })) as {
+      advisor: { name: string };
+      walletShare: number;
+      plays: Array<{
+        product: string;
+        estimatedOpportunityMillions: number;
+        peerAdoption: string;
+        approvedContent: Array<{ asset: string; approval: { id: string } }>;
+        blockedContent: Array<{ reasons: string[] }>;
+      }>;
+      totalOpportunityMillions: number;
+      contacts: Array<{
+        persona: string;
+        reachableBy: string[];
+        channelForPlayContent: string | null;
+      }>;
+      noApprovedContentForTheirChannels: string[];
+      paths: Array<{ relationships: Array<{ type: string }> }>;
+    };
+    expect(result.advisor.name).toBe("Marcus Oyelaran");
+    expect(result.walletShare).toBeCloseTo(42 / 107, 3);
+    // Plays are products the client doesn't hold, largest opportunity first.
+    expect(result.plays.map((play) => play.product)).toEqual([
+      "Outsourced CIO",
+      "Municipal bond ladder",
+      "Private credit fund",
+      "Securities-based lending",
+    ]);
+    expect(result.plays[0]).toMatchObject({
+      estimatedOpportunityMillions: 16.3,
+      peerAdoption: "2 of 3 other foundation clients hold it",
+    });
+    // Plans use evergreen approved content; a pending approval blocks the private credit play.
+    const content = result.plays.flatMap((play) =>
+      play.approvedContent.map((asset) => asset.asset),
+    );
+    expect(content.every((asset) => !/^Rates (?:rose|fell)/.test(asset))).toBe(true);
+    expect(result.plays[2]?.approvedContent).toEqual([]);
+    expect(result.plays[2]?.blockedContent[0]?.reasons[0]).toMatch(/pending/);
+    expect(result.totalOpportunityMillions).toBeCloseTo(
+      result.plays.reduce((sum, play) => sum + play.estimatedOpportunityMillions, 0),
+      1,
+    );
+    expect(result.contacts).toHaveLength(3);
+    // Play content is email only, so an SMS-only contact has no channel for it.
+    for (const contact of result.contacts)
+      expect(contact.channelForPlayContent).toBe(
+        contact.reachableBy.includes("email") ? "email" : null,
+      );
+    expect(result.noApprovedContentForTheirChannels).toEqual(
+      result.contacts
+        .filter(
+          (contact) => contact.reachableBy.length > 0 && !contact.reachableBy.includes("email"),
+        )
+        .map((contact) => contact.persona),
+    );
+    expect(result.paths.map((path) => path.relationships.map((rel) => rel.type).join(">"))).toEqual(
+      expect.arrayContaining(["COVERED_BY", "HAS_SIGNAL>SUGGESTS", "EXPLAINS>APPROVED_UNDER"]),
+    );
   });
 });

@@ -1,0 +1,95 @@
+name: Verify
+
+# Every gate in `pnpm verify` (format, lint, types, unit and worker tests, evals, contracts, docs,
+# Learn, build) on every pull request and push to main. The Playwright suite is manual-only
+# (workflow_dispatch) since it's slow and the gates above catch most regressions.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The Learn gate diffs against the merge base and reads commit trailers.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.vite
+            **/node_modules/.vite
+          key: vite-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            vite-${{ runner.os }}-
+
+      - name: Verify
+        env:
+          LEARN_BASE_REF: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: |
+          if [ -z "$LEARN_BASE_REF" ]; then unset LEARN_BASE_REF; fi
+          pnpm verify
+
+  e2e:
+    # Slow and now manual-only: trigger from the Actions tab (Run workflow) instead of on every PR.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Chrome for Playwright
+        run: pnpm exec playwright install --with-deps chrome
+
+      - name: End-to-end tests (Chrome and Edge projects)
+        run: pnpm test:e2e
+
+      - name: Keep the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7

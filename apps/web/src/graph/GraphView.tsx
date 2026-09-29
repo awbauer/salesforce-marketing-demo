@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type CanvasCommand, GraphCanvas } from "./GraphCanvas";
 import {
+  brandScope,
   type ConnectionGroup,
   connectionsOf,
   DOMAINS,
@@ -69,6 +70,24 @@ export const TOURS: Tour[] = [
     expand: true,
   },
   {
+    id: "wealth-news",
+    title: "Approved content for market news",
+    question: "What can Harborstone send when the Fed raises rates?",
+    explain:
+      "Harborstone Wealth is a brand under Northstar. Content about a market event is approved ahead of time: each asset links to its approval record (approved, expired, or pending) and the disclosures it must carry, so the graph can say what's ready to send and why the rest is blocked.",
+    target: () => "event-rate-increase",
+    expand: true,
+  },
+  {
+    id: "wealth-client",
+    title: "An account plan from the graph",
+    question: "How could Harborstone grow Cedar Valley Community Foundation?",
+    explain:
+      "A client's signals suggest products it doesn't hold yet, peers of the same type show what's typical, and each product links to approved content. Its contacts carry consent by channel, so the plan names who to reach, how, and with what.",
+    target: () => "client-cedar-valley-community-foundation",
+    expand: true,
+  },
+  {
     id: "brand",
     title: "A failed brand check",
     question: "Which content failed a brand rule?",
@@ -86,6 +105,7 @@ export function GraphView({ onClose }: { onClose: () => void }) {
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [graph, setGraph] = useState<GraphState>({ nodes: [], links: [] });
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  const [brand, setBrand] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hovered, setHovered] = useState<SimNode | null>(null);
   const [expanded, setExpanded] = useState<Record<string, { shown: number; total: number }>>({});
@@ -169,6 +189,7 @@ export function GraphView({ onClose }: { onClose: () => void }) {
   const startTour = (tour: Tour) => {
     const id = tour.target(graphRef.current);
     if (!id) return;
+    if (scope && !scope.has(id)) setBrand(null);
     setTourId(tour.id);
     select(id);
     if (tour.expand && !expanded[id]) void expand(id);
@@ -188,18 +209,37 @@ export function GraphView({ onClose }: { onClose: () => void }) {
     return loaded;
   }, [graph.nodes]);
 
+  const brands = useMemo(
+    () =>
+      graph.nodes
+        .filter((node) => node.label === "Brand")
+        .map((node) => ({
+          ...node,
+          parent: graph.nodes.find((other) =>
+            graph.links.some(
+              (link) => link.type === "PART_OF" && link.from === node.id && link.to === other.id,
+            ),
+          ),
+        }))
+        .sort((a, b) => Number(Boolean(a.parent)) - Number(Boolean(b.parent))),
+    [graph],
+  );
+  const scope = useMemo(() => (brand ? brandScope(graph, brand) : null), [graph, brand]);
+  const activeBrand = brands.find((candidate) => candidate.id === brand) ?? null;
+
   const matches = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (term.length < 2) return [];
     return graph.nodes
       .filter(
         (node) =>
-          node.name.toLowerCase().includes(term) ||
-          labelName(node.label).toLowerCase().includes(term),
+          (!scope || scope.has(node.id)) &&
+          (node.name.toLowerCase().includes(term) ||
+            labelName(node.label).toLowerCase().includes(term)),
       )
       .sort((a, b) => b.degree - a.degree)
       .slice(0, 8);
-  }, [graph.nodes, query]);
+  }, [graph.nodes, query, scope]);
 
   const selected = graph.nodes.find((node) => node.id === selectedId) ?? null;
   const tour = TOURS.find((candidate) => candidate.id === tourId) ?? null;
@@ -218,8 +258,9 @@ export function GraphView({ onClose }: { onClose: () => void }) {
           <p className="kicker">Knowledge graph</p>
           <h2 id="graph-title">Graph explorer</h2>
           <p className="graph-lede">
-            The fictional Northstar and Coastline Kitchen graph that the orchestrator's graph tools
-            read. Pick a tour, search, or click any node to see how it connects.
+            The fictional Northstar, Coastline Kitchen, and Harborstone Wealth graph that the
+            orchestrator's graph tools read. Pick a tour, search, or click any node to see how it
+            connects.
           </p>
         </div>
         <button type="button" className="text-button" onClick={onClose}>
@@ -319,6 +360,35 @@ export function GraphView({ onClose }: { onClose: () => void }) {
                   )}
                 </div>
 
+                {brands.length > 1 && (
+                  <section className="graph-brands" aria-labelledby="graph-brands-title">
+                    <h3 id="graph-brands-title">Brand</h3>
+                    <fieldset className="graph-brand-options">
+                      <legend className="sr-only">Filter by brand</legend>
+                      {[{ id: null, name: "All brands" }, ...brands].map((option) => (
+                        <button
+                          type="button"
+                          key={option.id ?? "all"}
+                          className="graph-brand"
+                          aria-pressed={brand === option.id}
+                          onClick={() => setBrand(option.id)}
+                        >
+                          {option.name}
+                        </button>
+                      ))}
+                    </fieldset>
+                    {activeBrand && scope && (
+                      <p className="graph-hint">
+                        {scope.size.toLocaleString()} loaded nodes connect to {activeBrand.name}{" "}
+                        more closely than to any other brand
+                        {activeBrand.parent
+                          ? `; anything reached through ${activeBrand.parent.name}, its parent brand, is hidden.`
+                          : "."}
+                      </p>
+                    )}
+                  </section>
+                )}
+
                 <section className="graph-tours" aria-labelledby="graph-tours-title">
                   <h3 id="graph-tours-title">Guided tours</h3>
                   <ol>
@@ -416,6 +486,7 @@ export function GraphView({ onClose }: { onClose: () => void }) {
                 <GraphCanvas
                   graph={graph}
                   hiddenLabels={hidden}
+                  scope={scope}
                   selectedId={selectedId}
                   onSelect={(id) => {
                     setTourId(null);
@@ -462,6 +533,7 @@ export function GraphView({ onClose }: { onClose: () => void }) {
                     onSelect={(id) => {
                       const node = graph.nodes.find((candidate) => candidate.id === id);
                       if (node && hidden.has(node.label)) toggleLabel(node.label);
+                      if (scope && !scope.has(id)) setBrand(null);
                       select(id);
                     }}
                   />

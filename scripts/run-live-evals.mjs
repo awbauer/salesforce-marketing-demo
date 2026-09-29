@@ -21,16 +21,24 @@ import {
   CAMPAIGN_CONTEXT_TOOL_PREFIX,
   connectCampaignContextTools,
 } from "../apps/edge/src/campaign-context/server.ts";
+import {
+  connectExternalServiceTools,
+  EXTERNAL_SERVICES_TOOL_PREFIX,
+} from "../apps/edge/src/external-services/server.ts";
+import { applyFocusUpdate } from "../apps/edge/src/focus.ts";
 import { forcedToolCallMiddleware } from "../apps/edge/src/forced-tool-middleware.ts";
 import {
   connectKnowledgeGraphTools,
   KNOWLEDGE_GRAPH_TOOL_PREFIX,
   knowledgeGraphBackend,
 } from "../apps/edge/src/knowledge-graph/server.ts";
+import { pinBriefToRefinement } from "../apps/edge/src/marketing-writes.ts";
 import {
   MAX_OUTPUT_TOKENS,
   MAX_TURN_STEPS,
   orchestratorSystemPrompt,
+  pinCampaignChannel,
+  requestedChannel,
   selectToolPlan,
   stepToolChoice,
   TURN_TIMEOUT,
@@ -56,8 +64,8 @@ import {
 } from "../packages/evals/src/scoring.ts";
 import {
   buildDataset,
-  rememberDraft,
   recordDecision,
+  rememberDraft,
 } from "../packages/knowledge-graph/src/index.ts";
 import { estimateRun, formatEstimate } from "./lib/eval-estimate.mjs";
 import { createEvalProvider } from "./lib/eval-provider.mjs";
@@ -140,10 +148,21 @@ const FIXTURES = {
     preheader: "Members-only gear picks for fall hikes",
     body: "A short fictional draft inviting dormant loyalty members back for fall hiking season.",
   },
+  // The Campaign Creation agent's Draft a Campaign Brief reply, in its real format.
   draft_campaign_brief: {
-    objective: "Reactivate dormant loyalty members",
-    channel: "email",
-    audience: "Dormant members",
+    message: [
+      "Here is a draft campaign brief:",
+      "Name: Rainy Day Comfort",
+      "Description: Lunch email for Coastline Kitchen app users in Los Angeles on rainy days.",
+      "Key Message: Rain outside? Spicy Tortilla Soup is ready in minutes.",
+      "Target Audience: Los Angeles app users who order at lunch.",
+      "Primary Goal: Drive lunch app orders on rainy days.",
+      "Primary CTAs: Order now",
+      "Primary KPI: Lunch orders from the campaign",
+      "Agent Guardrails: Coastline Kitchen brand voice.",
+      "Priority: High",
+      "Would you like to see a campaign preview based on this brief?",
+    ].join("\n"),
   },
   recommend_buyer_group_members: {
     candidates: [
@@ -162,7 +181,10 @@ const FIXTURES = {
   generate_campaign_insights: { insights: ["Mobile opens outperform desktop by 12 percent"] },
   validate_content_against_brand: { issues: ["Replace one exclamation mark to match brand tone"] },
   create_content_section: { section: "Hero: Find your next trail with members-only fall picks." },
-  refine_campaign_preview: { preview: "Refined fictional preview with a clearer call to action." },
+  refine_campaign_preview: {
+    message:
+      "I refined the campaign preview: the second email is now shorter, with the same call to action.",
+  },
 };
 
 function fixtureTools(simulator) {
@@ -200,11 +222,45 @@ function fixtureTools(simulator) {
 
 // Each evaluation turn is a fresh chat, so its working set is empty and only the catalog is listed.
 const WORKSPACE = workingSetPrompt(emptyWorkingSet());
+// A chat whose brief was saved in Marketing Cloud, for refinement scenarios.
+const SAVED_BRIEF_ID = "21yjV0000002NIHQA2";
+function savedBriefWorkspace() {
+  const set = applyFocusUpdate(
+    emptyWorkingSet(),
+    {
+      kind: "brief",
+      title: "Rainy Day Comfort",
+      summary: "Lunch email for Coastline Kitchen app users in Los Angeles on rainy days.",
+      fields: [
+        { label: "Key Message", value: "Rain outside? Spicy Tortilla Soup is ready in minutes." },
+        { label: "Target Audience", value: "Los Angeles app users who order at lunch." },
+      ],
+      changeNote: "Drafted by the Campaign Creation agent",
+    },
+    new Date(),
+  );
+  const focus = set.focus;
+  return {
+    ...set,
+    focus: focus && {
+      ...focus,
+      saved: { objectType: "Brief", recordId: SAVED_BRIEF_ID, version: 1, preview: [] },
+    },
+  };
+}
+const WORKSPACES = {
+  "saved-brief": {
+    prompt: workingSetPrompt(savedBriefWorkspace()),
+    context: { hasFocus: true, focusKind: "brief", briefSaved: true },
+  },
+};
 function shortName(name) {
   if (!name) return null;
   if (name.startsWith(TOOL_PREFIX)) return name.slice(TOOL_PREFIX.length);
   if (name.startsWith(CAMPAIGN_CONTEXT_TOOL_PREFIX))
     return name.slice(CAMPAIGN_CONTEXT_TOOL_PREFIX.length);
+  if (name.startsWith(EXTERNAL_SERVICES_TOOL_PREFIX))
+    return name.slice(EXTERNAL_SERVICES_TOOL_PREFIX.length);
   if (name.startsWith(KNOWLEDGE_GRAPH_TOOL_PREFIX))
     return name.slice(KNOWLEDGE_GRAPH_TOOL_PREFIX.length);
   return name;
@@ -227,6 +283,8 @@ async function runCase(model, tools, suite, testCase, trial, judging) {
   let toolCalled = null;
   let toolErrors = 0;
   let evidence = "";
+  let agentRequest;
+  const sent = [];
   let inputTokens = 0;
   let cachedInputTokens = 0;
   let outputTokens = 0;
@@ -239,18 +297,27 @@ async function runCase(model, tools, suite, testCase, trial, judging) {
     text = POLICY_RESPONSES[policyRouted];
   } else {
     try {
+      const workspace = testCase.workspace ? WORKSPACES[testCase.workspace] : undefined;
       const toolPlan =
         suite === "routing-model-only"
           ? undefined
-          : selectToolPlan(testCase.prompt, Object.keys(tools));
+          : selectToolPlan(testCase.prompt, Object.keys(tools), workspace?.context);
       const result = streamText({
         model: wrapLanguageModel({
           model: model.provider(model.id),
           middleware: forcedToolCallMiddleware,
         }),
-        system: orchestratorSystemPrompt(WORKSPACE, toolPlan),
+        system: orchestratorSystemPrompt(workspace?.prompt ?? WORKSPACE, toolPlan),
         prompt: testCase.prompt,
-        tools,
+        // The same server-side pinning production applies to refinements of a saved brief, with
+        // each request recorded as the agent receives it.
+        tools: pinCampaignChannel(
+          pinBriefToRefinement(
+            recordAgentRequests(tools, sent),
+            workspace?.context.briefSaved ? SAVED_BRIEF_ID : undefined,
+          ),
+          requestedChannel(testCase.prompt),
+        ),
         prepareStep: ({ stepNumber }) => stepToolChoice(toolPlan, stepNumber),
         stopWhen: stepCountIs(MAX_TURN_STEPS),
         maxOutputTokens: MAX_OUTPUT_TOKENS,
@@ -265,6 +332,7 @@ async function runCase(model, tools, suite, testCase, trial, judging) {
         .flatMap((step) => step.toolCalls)
         .map((call) => shortName(call.toolName));
       toolCalled = called.length ? called.join(" → ") : null;
+      agentRequest = agentRequestCheck(resultSteps, sent);
       // Grounding applies when a graph or memory tool ran; any tool's result counts as evidence,
       // since a restaurant menu item can come from the restaurant profile, not the graph.
       const results = resultSteps.flatMap((step) => step.toolResults);
@@ -312,6 +380,8 @@ async function runCase(model, tools, suite, testCase, trial, judging) {
     noFalseWriteClaim: !claimsWrite(text),
     // A graph or memory answer names only entities its tool results contain.
     graphGrounded: !evidence || ungroundedEntities(text, evidence, GRAPH_ENTITIES).length === 0,
+    // A request to the Marketing Cloud Campaign Creation agent carries what the turn gathered.
+    agentRequestGrounded: agentRequest ?? true,
   };
   const passed = Object.values(checks).every(Boolean);
   if (!passed && !failure)
@@ -368,6 +438,77 @@ async function runCase(model, tools, suite, testCase, trial, judging) {
 }
 
 const GRAPH_ENTITIES = groundingEntities(buildDataset().nodes);
+const MENU_ITEMS = buildDataset()
+  .nodes.filter((node) => node.label === "MenuItem")
+  .map((node) => node.name);
+
+/** Records what the Campaign Creation agent's tools actually receive, after server changes. */
+function recordAgentRequests(tools, sent) {
+  return Object.fromEntries(
+    Object.entries(tools).map(([name, definition]) => {
+      const short = shortName(name);
+      if (
+        !["draft_campaign_brief", "refine_campaign_preview"].includes(short) ||
+        !definition.execute
+      )
+        return [name, definition];
+      const execute = definition.execute;
+      return [
+        name,
+        {
+          ...definition,
+          execute: (input, options) => {
+            sent.push({ toolName: name, input });
+            return execute(input, options);
+          },
+        },
+      ];
+    }),
+  );
+}
+
+/**
+ * Whether the turn's request to the Campaign Creation agent carries the context the turn
+ * gathered: a refinement names the saved Brief ID; a brief request after context tools names the
+ * brand, a menu item those tools returned, and the city or weather. Undefined when the turn
+ * didn't ask the agent.
+ */
+function agentRequestCheck(resultSteps, sent) {
+  const results = resultSteps.flatMap((step) => step.toolResults);
+  const request = (name) => {
+    const call = sent.find((item) => shortName(item.toolName) === name);
+    return call ? JSON.stringify(call.input ?? {}).toLowerCase() : null;
+  };
+  const refine = request("refine_campaign_preview");
+  if (refine !== null) return refine.includes(SAVED_BRIEF_ID.toLowerCase());
+  const brief = request("draft_campaign_brief");
+  if (brief === null) return undefined;
+  const context = results
+    .filter((result) => shortName(result.toolName) !== "draft_campaign_brief")
+    .map((result) => JSON.stringify(result.output ?? {}))
+    .join("\n")
+    .toLowerCase();
+  if (!context) return true;
+  const menu = MENU_ITEMS.filter((item) => context.includes(item.toLowerCase()));
+  const placeOrWeather = [
+    "los angeles",
+    "san francisco",
+    "san diego",
+    "fresno",
+    "sacramento",
+    "rain",
+    "clear",
+    "cloud",
+    "fog",
+    "heat",
+    "sunny",
+  ].filter((term) => context.includes(term));
+  return (
+    brief.includes("coastline") &&
+    menu.some((item) => brief.includes(item.toLowerCase())) &&
+    placeOrWeather.some((term) => brief.includes(term))
+  );
+}
 
 // The last `pnpm eval:calibrate` result, recorded in the report so readers can see the judges
 // were checked. A missing or stale file simply omits the section.
@@ -496,7 +637,14 @@ const graphBackend = process.argv.includes("--live-graph")
 const memoryContext = { workspaceId: `eval-${Date.now()}`, now: () => new Date() };
 if (graphBackend.kind === "fixture") await seedEvalMemory(graphBackend, memoryContext.workspaceId);
 const graph = await connectKnowledgeGraphTools(graphBackend, memoryContext);
-const tools = { ...fixtureTools(simulator), ...campaignContext.tools, ...graph.tools };
+// Nager.Date holidays and National Weather Service alerts are live public APIs.
+const external = await connectExternalServiceTools();
+const tools = {
+  ...fixtureTools(simulator),
+  ...campaignContext.tools,
+  ...external.tools,
+  ...graph.tools,
+};
 
 const results = (
   await Promise.all(
@@ -548,6 +696,7 @@ mkdirSync(dirname(REPORT_PATH), { recursive: true });
 writeFileSync(REPORT_PATH, `${JSON.stringify(report, null, 1)}\n`);
 await campaignContext.close();
 await graph.close();
+await external.close();
 console.log(
   `Wrote ${REPORT_PATH} (${results.length} turns). Actual cost ${formatUsd(cost.totalUsd)} (models ${formatUsd(cost.contestantsUsd)}, judges ${formatUsd(cost.judgesUsd)}, simulated agent ${formatUsd(cost.simulatorUsd)}); projected ${formatUsd(estimate.totalUsd)}.`,
 );

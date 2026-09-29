@@ -1,11 +1,13 @@
 import { SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { conditionFromWmo, fetchCurrentWeather, openMeteoUrl } from "./campaign-context/open-meteo";
-import type { RESTAURANT_PROFILES } from "./campaign-context/restaurant-profile";
+import { RESTAURANT_PROFILES } from "./campaign-context/restaurant-profile";
 import { connectCampaignContextTools } from "./campaign-context/server";
 import {
   draftIntent,
   missingPlannedTool,
+  pinCampaignChannel,
+  requestedChannel,
   requestedToolPlan,
   selectToolPlan,
   stepToolChoice,
@@ -58,7 +60,9 @@ describe("campaign-context MCP", () => {
     try {
       expect(Object.keys(tools).sort()).toEqual([
         "context_get_current_weather",
+        "context_get_location_inventory",
         "context_get_restaurant_profile",
+        "context_get_weather_forecast",
       ]);
       const profile = (await tools.context_get_restaurant_profile?.execute?.(
         { restaurant: "coastline-kitchen" },
@@ -173,5 +177,52 @@ describe("campaign-context MCP", () => {
     expect(
       draftIntent("Summarize the campaign", { hasFocus: true, focusKind: "email" }),
     ).toBeNull();
+  });
+});
+
+describe("channel-aware consent", () => {
+  it("reads the campaign's channel from the request, or else the draft in focus", () => {
+    expect(requestedChannel(PUSH_PROMPT)).toBe("push");
+    expect(
+      requestedChannel("Draft an email campaign for Coastline Kitchen tailored to the weather"),
+    ).toBe("email");
+    expect(requestedChannel("Write a text message for the lunch rush")).toBe("sms");
+    // The first channel named wins: an email that mentions notifications is still an email.
+    expect(requestedChannel("Email our app users about push notification settings")).toBe("email");
+    expect(requestedChannel("Make it warmer", "Email")).toBe("email");
+    expect(requestedChannel("Make it warmer")).toBeNull();
+  });
+
+  it("looks up similar pushes with the requested channel's consent, whatever the model passed", async () => {
+    const seen: unknown[] = [];
+    const tools = {
+      graph_find_similar_past_pushes: { execute: (input: unknown) => seen.push(input) },
+      context_get_restaurant_profile: { execute: (input: unknown) => seen.push(input) },
+    };
+    const pinned = pinCampaignChannel(tools, "email");
+    await pinned.graph_find_similar_past_pushes.execute({
+      location: "los-angeles",
+      channel: "push",
+    });
+    await pinned.context_get_restaurant_profile.execute({ restaurant: "coastline-kitchen" });
+    expect(seen).toEqual([
+      { location: "los-angeles", channel: "email" },
+      { restaurant: "coastline-kitchen" },
+    ]);
+    expect(pinCampaignChannel(tools, null)).toBe(tools);
+  });
+
+  it("reports the restaurant's opt-ins by channel", () => {
+    const profile = RESTAURANT_PROFILES["coastline-kitchen"];
+    expect(profile.locations.find((location) => location.id === "los-angeles")?.optIns).toEqual({
+      push: 11900,
+      email: 13100,
+      sms: 5200,
+    });
+    expect(profile.audience.marketingOptInsByChannel).toEqual({
+      push: 31700,
+      email: 36400,
+      sms: 13600,
+    });
   });
 });

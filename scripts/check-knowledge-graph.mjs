@@ -7,6 +7,7 @@ import {
   ACCOUNTS,
   buildDataset,
   ALL_CAMPAIGNS,
+  CLIENT_NAMES,
   createMemoryStore,
   forgetMemory,
   KNOWLEDGE_GRAPH_TOOL_SPECS,
@@ -44,8 +45,28 @@ const cases = {
     { location: "san-francisco", daypart: "late-night", condition: "fog" },
     { location: "fresno", daypart: "afternoon", condition: "heat" },
     { location: "san-diego", daypart: "breakfast", condition: "rain" },
+    { location: "los-angeles", daypart: "lunch", condition: "clear", channel: "email" },
+    { location: "sacramento", daypart: "dinner", condition: "heat", channel: "sms" },
   ],
   trace_content_lineage: ALL_CAMPAIGNS.map((campaign) => ({ campaign: campaign.id })),
+  plan_account_outreach: [ACCOUNTS[0], ACCOUNTS[3], ACCOUNTS[11]].map((account) => ({
+    account,
+    limit: 5,
+  })),
+  assess_location_impact: ["los-angeles", "san-diego", "fresno"].map((location) => ({ location })),
+  match_news_to_approved_content: [
+    { event: "rate-increase", channel: "any" },
+    { event: "rate-cut", channel: "email" },
+    { event: "rate-hold", channel: "sms" },
+    { event: "market-volatility", channel: "any" },
+  ],
+  prepare_deal_release: [{ deal: "deal-bayview" }],
+  build_aum_account_plan: CLIENT_NAMES.map((client) => ({ client })),
+  map_weather_demand: [
+    { location: "sacramento", conditions: ["heat"] },
+    { location: "san-francisco", conditions: ["fog", "rain"] },
+    { location: "fresno", conditions: ["clear", "heat"] },
+  ],
 };
 
 // Averages can differ in the last floating-point digits by summation order.

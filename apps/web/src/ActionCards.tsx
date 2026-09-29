@@ -7,10 +7,13 @@ import type { SuggestedAction } from "@northstar/contracts";
  */
 export function ActionCards({
   suggestions,
+  preparing = null,
   onAccept,
   onDismiss,
 }: {
   suggestions: readonly SuggestedAction[];
+  /** The card whose confirmation is being prepared, if any: every card waits for it. */
+  preparing?: string | null;
   onAccept: (id: string) => void;
   onDismiss: (id: string) => void;
 }) {
@@ -25,10 +28,20 @@ export function ActionCards({
           <h3>{suggestion.title}</h3>
           <p>{suggestion.detail}</p>
           <div className="action-card-buttons">
-            <button type="button" onClick={() => onAccept(suggestion.id)}>
-              {suggestion.cta}
+            <button
+              type="button"
+              disabled={preparing !== null}
+              aria-busy={preparing === suggestion.id}
+              onClick={() => onAccept(suggestion.id)}
+            >
+              {preparing === suggestion.id ? "Preparing…" : suggestion.cta}
             </button>
-            <button type="button" className="text-button" onClick={() => onDismiss(suggestion.id)}>
+            <button
+              type="button"
+              className="text-button"
+              disabled={preparing !== null}
+              onClick={() => onDismiss(suggestion.id)}
+            >
               Not now
             </button>
           </div>

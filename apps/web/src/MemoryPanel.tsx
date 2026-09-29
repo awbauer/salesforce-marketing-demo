@@ -46,9 +46,12 @@ async function errorMessage(response: Response, fallback: string) {
 export function MemoryPanel({
   refreshKey,
   focusTitle,
+  onReopened,
 }: {
   refreshKey: number;
   focusTitle?: string;
+  /** Called after a memory is reopened in the workspace, to show it. */
+  onReopened?: () => void;
 }) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [notice, setNotice] = useState<string | null>(null);
@@ -100,6 +103,15 @@ export function MemoryPanel({
       load();
     } else setNotice(await errorMessage(response, "Could not forget that memory."));
     setPending(null);
+  };
+
+  const reopen = async (item: MemoryItem) => {
+    setPending(item.id);
+    setNotice(null);
+    const response = await fetch(`/agent/memory/${item.id}/reopen`, { method: "POST" });
+    setPending(null);
+    if (response.ok) onReopened?.();
+    else setNotice(await errorMessage(response, "Could not reopen that memory."));
   };
 
   return (
@@ -156,6 +168,17 @@ export function MemoryPanel({
                       {item.type === "Draft" ? `Draft v${item.version ?? 1}` : "Decision"}
                     </span>
                     <strong>{item.title}</strong>
+                    {(item.fields.length > 0 || item.draft || item.records.length > 0) && (
+                      <button
+                        type="button"
+                        className="text-button memory-reopen"
+                        disabled={pending !== null}
+                        onClick={() => reopen(item)}
+                        aria-label={`Reopen ${item.title} in the workspace`}
+                      >
+                        Reopen
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="text-button memory-forget"
