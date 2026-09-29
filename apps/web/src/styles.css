@@ -1631,6 +1631,81 @@ a {
   font-size: 12px;
   color: #3c4a42;
 }
+.evaluation-anchors {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.evaluation-answer {
+  white-space: pre-wrap;
+}
+.evaluation-scenario {
+  border-top: 1px solid #e0e7de;
+  padding: 8px 0;
+}
+.evaluation-scenario summary {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+.evaluation-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  color: var(--muted);
+}
+.chip {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #eef1eb;
+  color: var(--forest);
+  font-weight: 650;
+}
+.chip.good {
+  background: #dcefe2;
+  color: #2f7a4a;
+}
+.chip.fair {
+  background: #f6ebd3;
+  color: #8a5a12;
+}
+.chip.poor {
+  background: #f4ddd7;
+  color: #a4412f;
+}
+.cost-quality {
+  width: 100%;
+  max-width: 720px;
+  height: auto;
+  margin-top: 8px;
+}
+.cq-grid {
+  stroke: #e0e7de;
+  stroke-width: 1;
+}
+.cq-tick,
+.cq-axis {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.cq-label {
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+.cq-dot {
+  fill: var(--forest);
+  stroke: #fff;
+  stroke-width: 2;
+}
+.cq-ring {
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 2;
+}
 @media (max-width: 1000px) {
   .evaluations-view {
     grid-column: 2;

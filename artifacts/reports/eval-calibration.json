@@ -1,0 +1,58 @@
+{
+ "ranAt": "2026-09-29T18:33:51.490Z",
+ "passed": true,
+ "strongMinusWeak": {
+  "@cf/zai-org/glm-5.3": 66.85897435897436,
+  "@cf/deepseek-ai/deepseek-v4-pro-0813": 72.11538461538461
+ },
+ "details": [
+  {
+   "judge": "@cf/zai-org/glm-5.3",
+   "caseId": "demo-restaurant-push",
+   "strong": 69.23076923076923,
+   "mediocre": 23.076923076923077,
+   "weak": 1.9230769230769231,
+   "ordered": true
+  },
+  {
+   "judge": "@cf/zai-org/glm-5.3",
+   "caseId": "demo-restaurant-email",
+   "strong": 75,
+   "mediocre": 14.423076923076922,
+   "weak": 6.730769230769231,
+   "ordered": true
+  },
+  {
+   "judge": "@cf/zai-org/glm-5.3",
+   "caseId": "demo-readiness",
+   "strong": 80,
+   "mediocre": 40,
+   "weak": 15,
+   "ordered": true
+  },
+  {
+   "judge": "@cf/deepseek-ai/deepseek-v4-pro-0813",
+   "caseId": "demo-restaurant-push",
+   "strong": 85.57692307692307,
+   "mediocre": 34.61538461538461,
+   "weak": 3.8461538461538463,
+   "ordered": true
+  },
+  {
+   "judge": "@cf/deepseek-ai/deepseek-v4-pro-0813",
+   "caseId": "demo-restaurant-email",
+   "strong": 88.46153846153845,
+   "mediocre": 11.538461538461538,
+   "weak": 3.8461538461538463,
+   "ordered": true
+  },
+  {
+   "judge": "@cf/deepseek-ai/deepseek-v4-pro-0813",
+   "caseId": "demo-readiness",
+   "strong": 70,
+   "mediocre": 50,
+   "weak": 20,
+   "ordered": true
+  }
+ ]
+}

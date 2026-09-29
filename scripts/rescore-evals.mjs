@@ -1,10 +1,13 @@
 // Re-derives pass/fail and summaries for the published evaluation run under the current checks.
-// It makes no model calls: it only reads the stored per-check results and drops retired checks.
+// It makes no model calls: it reads the stored per-check results, drops retired checks, and prices
+// turns that predate cost tracking from their stored token counts (all input at the uncached rate).
+// Quality scores and rubric criteria need the live tool evidence, so only a new run produces them.
 import { readFileSync, writeFileSync } from "node:fs";
 import { PROOF_DEFAULTS } from "../packages/contracts/src/index.ts";
+import { turnCost } from "../packages/evals/src/pricing.ts";
 import { EVAL_CHECKS, EvalReportSchema } from "../packages/evals/src/report.ts";
 import { buildMethodology } from "./lib/eval-methodology.mjs";
-import { summarize } from "./lib/eval-summary.mjs";
+import { summarize, summarizeCost } from "./lib/eval-summary.mjs";
 
 const REPORT_PATH = process.argv[2] ?? "apps/web/public/evals/latest.json";
 const previous = JSON.parse(readFileSync(REPORT_PATH, "utf8"));
@@ -28,7 +31,14 @@ const results = previous.results.map((result) => {
     .every((name) => name === "" || CHECK_NAMES.has(name) || name === "plainText");
   const { failure: _failure, ...rest } = result;
   const failure = passed ? undefined : listedChecksOnly ? failedChecks : result.failure;
-  return { ...rest, checks, passed, ...(failure ? { failure } : {}) };
+  const cost =
+    result.cost ??
+    turnCost(result.model, {
+      inputTokens: result.inputTokens,
+      cachedInputTokens: result.cachedInputTokens ?? 0,
+      outputTokens: result.outputTokens,
+    });
+  return { ...rest, cost, checks, passed, ...(failure ? { failure } : {}) };
 });
 
 const report = EvalReportSchema.parse({
@@ -40,6 +50,11 @@ const report = EvalReportSchema.parse({
   }),
   summaries: summarize(results),
   results,
+  // Judge and simulator spend cannot be re-derived, so a previous run's figures are kept.
+  cost: summarizeCost(results, {
+    judgeCosts: [{ usd: previous.cost?.judgesUsd ?? 0, neurons: 0 }],
+    simulatorCost: { usd: previous.cost?.simulatorUsd ?? 0, neurons: 0 },
+  }),
 });
 writeFileSync(REPORT_PATH, `${JSON.stringify(report, null, 1)}\n`);
 const changed = results.filter((result, index) => result.passed !== previous.results[index].passed);

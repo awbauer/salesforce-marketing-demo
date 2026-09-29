@@ -16,6 +16,9 @@ export default defineConfig({
       "@northstar/evals/report": fileURLToPath(
         new URL("./packages/evals/src/report.ts", import.meta.url),
       ),
+      "@northstar/evals/pricing": fileURLToPath(
+        new URL("./packages/evals/src/pricing.ts", import.meta.url),
+      ),
     },
   },
   test: {
