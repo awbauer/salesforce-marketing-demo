@@ -136,7 +136,10 @@ describe("technical trace hardening", () => {
     expect(rows[5]?.payload).toContain("701jV000004GglIQAS");
     expect(rows[6]?.detail).toBe("Finish reason: tool-calls · 900 input tokens · 40 output tokens");
     expect(rows[7]?.payload).toContain("Launch");
-    expect(rows.at(-1)).toMatchObject({ elapsed: "+9.02s", detail: "Total 9.02s" });
+    expect(rows.at(-1)).toMatchObject({
+      elapsed: "+9.02s",
+      detail: "Total 9.02s · 940 tokens · 1 tool call",
+    });
   });
 
   it("surfaces stream errors and timeouts as error events", () => {
