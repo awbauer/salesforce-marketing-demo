@@ -6,6 +6,7 @@
 //                       [--out path] [--live-graph] [--cases id,id] [--no-judge]
 //                       [--dry-run] [--max-usd n]
 //   --tier frontier  also runs the expensive models (they need Workers Paid)
+//   --models         explicit ids; the only way to run a model marked `excluded`
 //   --cases          only these case ids; for cheap targeted re-runs
 //   --dry-run        print the projected cost and exit without calling any model
 //   --max-usd        refuse to start when the projected cost exceeds this (default 2, or 15 with --tier frontier)
@@ -87,15 +88,24 @@ const CALIBRATION_PATH = "artifacts/reports/eval-calibration.json";
 
 // Inexpensive models run by default. The frontier tier is opt-in (--tier frontier) because Kimi K2.6
 // alone was about 60% of an earlier five-model run, and GLM-5.3 and DeepSeek V4 Pro are priced alike.
+// `excluded` marks a low performer that stays listed (and in the report as not included) but is
+// skipped unless named in --models. Evidence: docs/work-units/WU-051-exclude-low-performers.md.
 const MODELS = [
   { id: "@cf/openai/gpt-oss-120b", label: "gpt-oss-120b", family: "openai", tier: "default" },
   { id: "@cf/openai/gpt-oss-20b", label: "gpt-oss-20b", family: "openai", tier: "default" },
-  { id: "@cf/zai-org/glm-4.7-flash", label: "GLM-4.7-Flash", family: "zai", tier: "default" },
+  {
+    id: "@cf/zai-org/glm-4.7-flash",
+    label: "GLM-4.7-Flash",
+    family: "zai",
+    tier: "default",
+    excluded: true,
+  },
   {
     id: "@cf/meta/llama-4-scout-17b-16e-instruct",
     label: "Llama 4 Scout 17B",
     family: "meta",
     tier: "frontier",
+    excluded: true,
   },
   { id: "@cf/moonshotai/kimi-k2.6", label: "Kimi K2.6", family: "moonshot", tier: "frontier" },
   { id: "@cf/zai-org/glm-5.3", label: "GLM-5.3", family: "zai", tier: "frontier" },
@@ -584,7 +594,7 @@ const frontier = argument("tier", "default") === "frontier";
 const judgingOn = !process.argv.includes("--no-judge");
 const selected = argument(
   "models",
-  MODELS.filter((model) => frontier || model.tier === "default")
+  MODELS.filter((model) => !model.excluded && (frontier || model.tier === "default"))
     .map((model) => model.id)
     .join(","),
 ).split(",");
