@@ -63,7 +63,7 @@ Until now a run recorded tokens but not dollars. Its five checks were all pass/f
 - [x] Every demo scenario has a goal, criteria and weights, and a test enforces it.
 - [x] Judges pass calibration, and the report shows agreement and intervals.
 - [x] Old reports still render.
-- [ ] A full frontier run is published (see Evidence).
+- [ ] A full frontier run is published. Deliberately deferred: the projected cost on the merged 19-scenario set is about $9 and about 55 minutes, so it is left for a maintainer to run when wanted (see Evidence).
 
 ## Verification
 
@@ -88,3 +88,11 @@ pnpm exec playwright test tests/e2e/workbench.spec.ts
 Workers AI inference on the proof account (calibration, smoke runs, and the published run), billed at list price. No Salesforce or production changes.
 
 ## Evidence
+
+- **Unit and e2e:** typecheck, all unit and worker tests, `eval`, `learn:check`, `docs:check`, `contracts:check`, `hxl:check`, `sf:metadata:check`, and the Evaluations e2e in Chrome and Edge (screenshots in `artifacts/evidence/WU-041/`, drawn from a mocked report).
+- **Judge calibration:** [artifacts/reports/eval-calibration.json](../../artifacts/reports/eval-calibration.json). Both judges ranked strong > mediocre > weak on every reference, with mean strong-minus-weak gaps of 67 and 72 index points.
+- **Live runs during development:**
+  - A smoke test and full frontier runs on the original 11 demo scenarios.
+  - Two of those runs were invalidated by harness problems, both fixed here: per-minute rate limits (429), then an expired sign-in token (401).
+  - On the clean parts of those runs, cost and quality separated the models: Llama 4 Scout scored about 25 on the Quality Index and Kimi K2.6 about 72, and the projected cost tracked actual within about 20 to 50 percent.
+- **Not done:** a full published run on the merged 19-scenario set. Run `pnpm eval:live --tier frontier --dry-run` for the projection, then `pnpm eval:live --tier frontier --max-usd 15` and commit the resulting `apps/web/public/evals/latest.json`.
