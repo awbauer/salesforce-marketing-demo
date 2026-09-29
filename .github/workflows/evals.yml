@@ -1,0 +1,132 @@
+name: Live evals
+
+# Manual only (Actions tab, Run workflow). Runs `pnpm eval:live` against Workers AI, then commits the
+# regenerated report (apps/web/public/evals/latest.json) to a new branch and opens a pull request.
+# The workflow never pushes to main: merging that pull request is the human approval.
+# Costs real money: the runner prints a projection first and refuses to start above max_usd.
+# Needs repository secrets CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN (Workers AI) and
+# BLOCKED_WORDS_LOCAL, and the setting "Allow GitHub Actions to create and approve pull requests".
+on:
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: Model tier. "frontier" adds the expensive models (needs Workers Paid).
+        type: choice
+        options: [default, frontier]
+        default: default
+      models:
+        description: Optional comma-separated model ids. Overrides the tier and is the only way to run an excluded model.
+        type: string
+        default: ""
+      trials_demo:
+        description: Trials per demo scenario
+        type: string
+        default: "5"
+      trials_routing:
+        description: Trials per routing case
+        type: string
+        default: "2"
+      judge:
+        description: Score answer quality with the judge panel (adds judge and simulated-agent cost)
+        type: boolean
+        default: true
+      max_usd:
+        description: Refuse to start when the projected cost exceeds this many USD. A default-tier run with judging projects about $2.5; a frontier run needs a higher cap.
+        type: string
+        default: "5"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: live-evals
+  cancel-in-progress: false
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      IN_TIER: ${{ inputs.tier }}
+      IN_MODELS: ${{ inputs.models }}
+      IN_TRIALS_DEMO: ${{ inputs.trials_demo }}
+      IN_TRIALS_ROUTING: ${{ inputs.trials_routing }}
+      IN_JUDGE: ${{ inputs.judge }}
+      IN_MAX_USD: ${{ inputs.max_usd }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check credentials
+        run: |
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "Missing secret CLOUDFLARE_ACCOUNT_ID"; exit 1; }
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "Missing secret CLOUDFLARE_API_TOKEN"; exit 1; }
+
+      - name: Run live evals
+        run: |
+          args=(--tier "$IN_TIER" --trials-demo "$IN_TRIALS_DEMO" --trials-routing "$IN_TRIALS_ROUTING")
+          if [ -n "$IN_MODELS" ]; then args+=(--models "$IN_MODELS"); fi
+          if [ "$IN_JUDGE" != "true" ]; then args+=(--no-judge); fi
+          if [ -n "$IN_MAX_USD" ]; then args+=(--max-usd "$IN_MAX_USD"); fi
+          pnpm eval:live "${args[@]}" 2>&1 | tee eval-output.txt
+
+      - name: Keep the run output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-output
+          path: eval-output.txt
+          retention-days: 30
+
+      - name: Prepare local-only blocked-word gate
+        env:
+          BLOCKED_WORDS_LOCAL: ${{ secrets.BLOCKED_WORDS_LOCAL }}
+        run: |
+          test -n "$BLOCKED_WORDS_LOCAL"
+          mkdir -p .config
+          printf '%s\n' "$BLOCKED_WORDS_LOCAL" > .config/blocked-words.local
+          chmod 600 .config/blocked-words.local
+
+      - name: Commit the report and open a pull request
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- apps/web/public/evals/latest.json; then
+            echo "The report did not change; nothing to commit."
+            exit 0
+          fi
+          branch="evals/run-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add apps/web/public/evals/latest.json
+          git commit -q -m "chore: refresh live eval report (run ${GITHUB_RUN_ID})" \
+            -m "Learn-Reviewed: evaluations (regenerated report data only)"
+          pnpm security:blocked-words
+          git push -u origin "$branch"
+          summary=$(tail -n 1 eval-output.txt)
+          gh pr create --base "${GITHUB_REF_NAME}" --head "$branch" \
+            --title "Refresh live eval report (run ${GITHUB_RUN_ID})" \
+            --body "Regenerated \`apps/web/public/evals/latest.json\` by the **Live evals** workflow.
+
+          - Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - Inputs: tier \`${IN_TIER}\`, models \`${IN_MODELS:-(tier default)}\`, demo trials ${IN_TRIALS_DEMO}, routing trials ${IN_TRIALS_ROUTING}, judge ${IN_JUDGE}
+          - Result: ${summary}
+
+          No code changed. The Evaluations end-to-end screenshots may need refreshing after this merges."
