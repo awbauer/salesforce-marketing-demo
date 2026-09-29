@@ -1,8 +1,13 @@
 // Methodology text shared by the live runner and the offline rescore command.
+import { PRICING_AS_OF } from "../../packages/evals/src/pricing.ts";
+import { DIMENSION_META, QUALITY_DIMENSIONS } from "../../packages/evals/src/quality.ts";
+import { demoScenarios } from "../../packages/evals/src/cases.ts";
+import { scenarioRubrics } from "../../packages/evals/src/rubric.ts";
+
 export function buildMethodology({ trialsDemo, trialsRouting }) {
   return {
     summary:
-      "Each turn runs the production orchestrator pipeline against a live Workers AI model. Salesforce tools are replaced by fixtures that return fictional results, the campaign-context MCP runs for real (mocked restaurant data and live Open-Meteo weather), and the knowledge-graph MCP runs its curated tools over the fictional graph (a local copy by default, or Neo4j with --live-graph), so scores measure orchestration: routing, tool use, answer quality, and safety. They do not measure Salesforce agent quality.",
+      "Each turn runs the production orchestrator pipeline against a live Workers AI model. Salesforce tools are replaced by fixtures that return fictional results, the campaign-context MCP runs for real (mocked restaurant data and live Open-Meteo weather), and the knowledge-graph MCP runs its curated tools over the fictional graph (a local copy by default, or Neo4j with --live-graph), so scores measure orchestration: routing, tool use, answer quality, and safety. They do not measure Salesforce agent quality. Each demo scenario also has a written rubric: deterministic criteria plus 1-5 quality ratings from a cross-family judge panel, summarized as a 0-100 Quality Index with a 95% confidence interval. Every turn is priced at Cloudflare's Workers AI list rates.",
     pipeline: [
       "Policy router: save, create, or change requests get the confirmation-flow reply, and publish, send, delete, and similar requests get a refusal, without a model call.",
       "Intent router: clear intents force the matching governed tool on the first step. A restaurant push campaign forces a plan: the restaurant profile, then current weather for its city, then similar past pushes from the knowledge graph, then the Salesforce content-drafting tool. Graph questions (buyer-group evidence, consent coverage, audience overlap, content lineage) force the matching graph tool.",
@@ -11,7 +16,24 @@ export function buildMethodology({ trialsDemo, trialsRouting }) {
       "Summary steps receive no tools, so the model must answer in text.",
     ],
     toolResults:
-      "Tools return fictional fixture JSON shaped like Salesforce agent results. Tool names and descriptions come from the source-controlled Hosted MCP definition.",
+      "Read-style Salesforce tools return fictional fixture JSON shaped like Salesforce agent results. The drafting tools (campaign brief, content, content section, preview refinement) are answered by one fixed reference model that stands in for the Marketing Cloud agent, so creative quality depends on what the orchestrator asked for and how it presents the result, not on a canned string. Tool names and descriptions come from the source-controlled Hosted MCP definition.",
+    costModel: `Cost is tokens times Cloudflare's published Workers AI per-million-token rates (snapshot ${PRICING_AS_OF}); neurons are derived at $0.011 per 1,000. Cached input tokens are billed at the cached rate where the model has one. The report splits spend into the models under test, the judge panel, and the simulated agent. Policy-routed turns make no model call and cost nothing. The Workers AI free allocation of 10,000 neurons per day offsets a small run only on the Free plan; the frontier models require Workers Paid.`,
+    rubric: demoScenarios.map(({ id }) => ({
+      caseId: id,
+      goal: scenarioRubrics[id].goal,
+      ...(scenarioRubrics[id].persona ? { persona: scenarioRubrics[id].persona } : {}),
+      criteria: scenarioRubrics[id].criteria.map(({ id: criterion, label }) => ({
+        id: criterion,
+        label,
+      })),
+      weights: scenarioRubrics[id].weights,
+    })),
+    dimensions: QUALITY_DIMENSIONS.map((id) => ({
+      id,
+      label: DIMENSION_META[id].label,
+      question: DIMENSION_META[id].question,
+      anchors: [...DIMENSION_META[id].anchors],
+    })),
     suites: [
       {
         id: "demo-scenarios",
@@ -66,6 +88,10 @@ export function buildMethodology({ trialsDemo, trialsRouting }) {
       },
     ],
     limitations: [
+      'Quality scores come from LLM judges, not customers. "Would act" is a judge answering as a written persona, so read it as a relative ranking between models, not a forecast of real click or order rates. The judges are two different model families, no model judges its own family, and the report shows how often the two agree; the judge is checked against hand-written strong, mediocre, and weak reference answers before a run is published.',
+      "The simulated Marketing Cloud agent is one fixed model. It holds the copy engine constant across contestants but is not the real Salesforce agent, so absolute copy quality here is not the production agent's.",
+      "Pricing is a snapshot of Cloudflare's list prices; a run's dollar figures move if Cloudflare reprices. Runs recorded before cost tracking were priced from stored token counts with all input billed at the uncached rate.",
+      "Runs recorded before quality scoring carry no quality scores or rubric criteria.",
       "Tool results are fictional fixtures, not live Salesforce responses, so latency excludes Salesforce agent time.",
       'Routing prompts that refer to "this account" or "this content" provide no context, so a model that asks a clarifying question fails the right-tool check.',
       "Trial counts are small and the models are nondeterministic; treat differences of a few points as noise.",

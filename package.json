@@ -16,6 +16,7 @@
     "dev": "vite",
     "docs:check": "node scripts/check-docs.mjs",
     "eval": "node scripts/run-evals.mjs",
+    "eval:calibrate": "node scripts/calibrate-judge.mjs",
     "eval:live": "node scripts/run-live-evals.mjs",
     "eval:rescore": "node scripts/rescore-evals.mjs",
     "kg:seed": "node scripts/seed-knowledge-graph.mjs",

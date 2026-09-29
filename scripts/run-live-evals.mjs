@@ -2,15 +2,21 @@
 // Runs the production routing, prompt, step settings, and forced-tool middleware against
 // fictional tool fixtures, then writes a typed report that the demo UI renders.
 //
-// Usage: pnpm eval:live [--models id,id] [--trials-demo 5] [--trials-routing 2] [--out path] [--live-graph]
-//                       [--cases id,id]   (only these case ids; for cheap targeted re-runs)
-// Cost: a default three-model run is about 550 model calls; check Workers AI usage before adding models.
+// Usage: pnpm eval:live [--tier frontier] [--models id,id] [--trials-demo 5] [--trials-routing 2]
+//                       [--out path] [--live-graph] [--cases id,id] [--no-judge]
+//                       [--dry-run] [--max-usd n]
+//   --tier frontier  also runs the expensive models (they need Workers Paid)
+//   --cases          only these case ids; for cheap targeted re-runs
+//   --dry-run        print the projected cost and exit without calling any model
+//   --max-usd        refuse to start when the projected cost exceeds this (default 2, or 15 with --tier frontier)
+//   --no-judge       skip quality scoring, which removes the judge panel's cost
+// Cost: every run prints a projection first; turns, judge calls, and the simulated agent are priced
+// at Cloudflare's Workers AI list rates and written into the report.
 // Credentials: CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, or an authenticated wrangler login.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { jsonSchema, stepCountIs, streamText, tool, wrapLanguageModel } from "ai";
-import { createWorkersAI } from "workers-ai-provider";
 import {
   CAMPAIGN_CONTEXT_TOOL_PREFIX,
   connectCampaignContextTools,
@@ -40,7 +46,9 @@ import {
   PROOF_DEFAULTS,
 } from "../packages/contracts/src/index.ts";
 import { demoScenarios, routingCases } from "../packages/evals/src/cases.ts";
+import { formatUsd, turnCost } from "../packages/evals/src/pricing.ts";
 import { EvalReportSchema } from "../packages/evals/src/report.ts";
+import { evaluateCriteria, isJudged } from "../packages/evals/src/rubric.ts";
 import {
   claimsWrite,
   groundingEntities,
@@ -51,48 +59,49 @@ import {
   rememberDraft,
   recordDecision,
 } from "../packages/knowledge-graph/src/index.ts";
+import { estimateRun, formatEstimate } from "./lib/eval-estimate.mjs";
+import { createEvalProvider } from "./lib/eval-provider.mjs";
+import { concurrencyFor } from "./lib/eval-throttle.mjs";
+import { buildQuality, JUDGES, judgeAnswer } from "./lib/eval-judge.mjs";
 import { buildMethodology } from "./lib/eval-methodology.mjs";
-import { summarize } from "./lib/eval-summary.mjs";
+import {
+  createSimulatedAgent,
+  SIMULATED_TOOLS,
+  simulatedResult,
+} from "./lib/eval-simulated-agent.mjs";
+import { summarize, summarizeAgreement, summarizeCost } from "./lib/eval-summary.mjs";
 
 // Served as a static asset so the demo UI shows the latest committed run without a code change.
 const DEFAULT_REPORT_PATH = "apps/web/public/evals/latest.json";
 // The Hosted MCP namespace prefix observed in production tool names.
 const TOOL_PREFIX = "tool_salesforce_northstar-marketing-salesforce_";
-const CONCURRENCY_PER_MODEL = 6;
+const CALIBRATION_PATH = "artifacts/reports/eval-calibration.json";
 
-// Only inexpensive models run by default. Pass --models to include the others; Kimi K2.6 alone
-// cost about 60% of a full five-model run (roughly 27,000 of 45,000 neurons).
+// Inexpensive models run by default. The frontier tier is opt-in (--tier frontier) because Kimi K2.6
+// alone was about 60% of an earlier five-model run, and GLM-5.3 and DeepSeek V4 Pro are priced alike.
 const MODELS = [
-  { id: "@cf/openai/gpt-oss-120b", label: "gpt-oss-120b", byDefault: true },
-  { id: "@cf/openai/gpt-oss-20b", label: "gpt-oss-20b", byDefault: true },
-  { id: "@cf/zai-org/glm-4.7-flash", label: "GLM-4.7-Flash", byDefault: true },
-  { id: "@cf/meta/llama-4-scout-17b-16e-instruct", label: "Llama 4 Scout 17B", byDefault: false },
-  { id: "@cf/moonshotai/kimi-k2.6", label: "Kimi K2.6", byDefault: false },
+  { id: "@cf/openai/gpt-oss-120b", label: "gpt-oss-120b", family: "openai", tier: "default" },
+  { id: "@cf/openai/gpt-oss-20b", label: "gpt-oss-20b", family: "openai", tier: "default" },
+  { id: "@cf/zai-org/glm-4.7-flash", label: "GLM-4.7-Flash", family: "zai", tier: "default" },
+  {
+    id: "@cf/meta/llama-4-scout-17b-16e-instruct",
+    label: "Llama 4 Scout 17B",
+    family: "meta",
+    tier: "frontier",
+  },
+  { id: "@cf/moonshotai/kimi-k2.6", label: "Kimi K2.6", family: "moonshot", tier: "frontier" },
+  { id: "@cf/zai-org/glm-5.3", label: "GLM-5.3", family: "zai", tier: "frontier" },
+  {
+    id: "@cf/deepseek-ai/deepseek-v4-pro-0813",
+    label: "DeepSeek V4 Pro",
+    family: "deepseek",
+    tier: "frontier",
+  },
 ];
 
 function argument(name, fallback) {
   const index = process.argv.indexOf(`--${name}`);
   return index >= 0 ? process.argv[index + 1] : fallback;
-}
-
-function credentials() {
-  if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN)
-    return {
-      accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
-      apiKey: process.env.CLOUDFLARE_API_TOKEN,
-    };
-  // Call the local binary directly: pnpm can print a banner before the JSON.
-  const wrangler = (args) => {
-    const output = execFileSync("node_modules/.bin/wrangler", [...args, "--json"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    return JSON.parse(output.slice(output.indexOf("{")));
-  };
-  const accounts = wrangler(["whoami"]).accounts ?? [];
-  if (accounts.length !== 1)
-    throw new Error("Set CLOUDFLARE_ACCOUNT_ID: wrangler reports zero or several accounts.");
-  return { accountId: accounts[0].id, apiKey: wrangler(["auth", "token"]).token };
 }
 
 /** Tool descriptions come from the source-controlled Hosted MCP definition. */
@@ -156,7 +165,7 @@ const FIXTURES = {
   refine_campaign_preview: { preview: "Refined fictional preview with a clearer call to action." },
 };
 
-function fixtureTools() {
+function fixtureTools(simulator) {
   const descriptions = toolDescriptions();
   const schema = jsonSchema({
     type: "object",
@@ -171,15 +180,19 @@ function fixtureTools() {
       tool({
         description: descriptions[name] ?? name.replaceAll("_", " "),
         inputSchema: schema,
-        execute: async () => ({
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({ source: "fictional-fixture", ...FIXTURES[name] }),
-            },
-          ],
-          isError: false,
-        }),
+        // Drafting tools are answered by the fixed simulated agent when judging is on.
+        execute: async (input) =>
+          simulator && SIMULATED_TOOLS.includes(name)
+            ? simulatedResult(simulator, name, String(input?.message ?? ""))
+            : {
+                content: [
+                  {
+                    type: "text",
+                    text: JSON.stringify({ source: "fictional-fixture", ...FIXTURES[name] }),
+                  },
+                ],
+                isError: false,
+              },
       }),
     ]),
   );
@@ -197,7 +210,7 @@ function shortName(name) {
   return name;
 }
 
-async function runCase(model, tools, suite, testCase, trial) {
+async function runCase(model, tools, suite, testCase, trial, judging) {
   const started = Date.now();
   const policyRouted =
     suite !== "routing-model-only" ? classifyPolicyIntent(testCase.prompt) : null;
@@ -215,7 +228,9 @@ async function runCase(model, tools, suite, testCase, trial) {
   let toolErrors = 0;
   let evidence = "";
   let inputTokens = 0;
+  let cachedInputTokens = 0;
   let outputTokens = 0;
+  let trace = [];
   let steps = "";
   let failure;
   let streamError;
@@ -263,8 +278,18 @@ async function runCase(model, tools, suite, testCase, trial) {
         .flatMap((step) => step.content)
         .filter((part) => part.type === "tool-error").length;
       steps = resultSteps.map((step) => step.finishReason).join(",");
+      // Every tool call with its request and result, for the rubric and the judge.
+      const outputs = new Map(results.map((entry) => [entry.toolCallId, entry.output]));
+      trace = resultSteps
+        .flatMap((step) => step.toolCalls)
+        .map((call) => ({
+          name: shortName(call.toolName),
+          request: String(call.input?.message ?? JSON.stringify(call.input ?? {})),
+          output: JSON.stringify(outputs.get(call.toolCallId) ?? null),
+        }));
       const usage = await result.totalUsage;
       inputTokens = usage.inputTokens ?? 0;
+      cachedInputTokens = usage.inputTokenDetails?.cacheReadTokens ?? 0;
       outputTokens = usage.outputTokens ?? 0;
     } catch (error) {
       route = "error";
@@ -294,6 +319,29 @@ async function runCase(model, tools, suite, testCase, trial) {
       .filter(([, ok]) => !ok)
       .map(([check]) => check)
       .join(", ");
+  const isDemo = suite === "demo-scenarios";
+  let criteria;
+  let quality;
+  if (isDemo) {
+    const ungrounded = ungroundedEntities(
+      text,
+      trace.map((item) => item.output).join("\n"),
+      GRAPH_ENTITIES,
+    );
+    criteria = evaluateCriteria(testCase.id, { answer: text, trace, ungrounded });
+    // Judge only answers a model wrote; policy replies and errors have nothing to rate.
+    if (judging && isJudged(testCase.id) && route === "model" && text) {
+      const judged = await judgeAnswer(judging.provider, model.family, {
+        caseId: testCase.id,
+        prompt: testCase.prompt,
+        answer: text.slice(0, 3000),
+        trace,
+        toolRequests: trace.map((item) => item.request),
+      });
+      judging.costs.push(...judged.costs);
+      quality = buildQuality(testCase.id, judged);
+    }
+  }
   return {
     ...base,
     route,
@@ -302,14 +350,34 @@ async function runCase(model, tools, suite, testCase, trial) {
     passed,
     latencyMs: Date.now() - started,
     inputTokens,
+    ...(cachedInputTokens ? { cachedInputTokens } : {}),
     outputTokens,
+    cost: turnCost(model.id, { inputTokens, cachedInputTokens, outputTokens }),
     steps,
     excerpt: text.replace(/\s+/g, " ").slice(0, 240),
+    ...(isDemo
+      ? {
+          answer: text.slice(0, 3000),
+          toolRequests: trace.map((item) => item.request.slice(0, 1000)),
+          criteria,
+        }
+      : {}),
+    ...(quality ? { quality } : {}),
     ...(failure ? { failure } : {}),
   };
 }
 
 const GRAPH_ENTITIES = groundingEntities(buildDataset().nodes);
+
+// The last `pnpm eval:calibrate` result, recorded in the report so readers can see the judges
+// were checked. A missing or stale file simply omits the section.
+function calibrationFromDisk() {
+  try {
+    return JSON.parse(readFileSync(CALIBRATION_PATH, "utf8"));
+  } catch {
+    return undefined;
+  }
+}
 
 async function seedEvalMemory(backend, workspaceId) {
   const stamp = (daysAgo) => {
@@ -371,15 +439,53 @@ async function pool(tasks, limit) {
 const REPORT_PATH = argument("out", DEFAULT_REPORT_PATH);
 const trialsDemo = Number(argument("trials-demo", "5"));
 const trialsRouting = Number(argument("trials-routing", "2"));
+const frontier = argument("tier", "default") === "frontier";
+const judgingOn = !process.argv.includes("--no-judge");
 const selected = argument(
   "models",
-  MODELS.filter((model) => model.byDefault)
+  MODELS.filter((model) => frontier || model.tier === "default")
     .map((model) => model.id)
     .join(","),
 ).split(",");
-const { accountId, apiKey } = credentials();
-const provider = createWorkersAI({ accountId, apiKey });
-// Salesforce tools are fixtures; the campaign-context MCP runs for real (mocked restaurant data,
+const models = MODELS.filter((model) => selected.includes(model.id));
+const suites = [
+  { id: "demo-scenarios", cases: [...demoScenarios], trials: trialsDemo },
+  { id: "routing-pipeline", cases: [...routingCases], trials: trialsRouting },
+  { id: "routing-model-only", cases: [...routingCases], trials: trialsRouting },
+];
+const onlyCases = argument("cases", "").split(",").filter(Boolean);
+if (onlyCases.length)
+  for (const suite of suites)
+    suite.cases = suite.cases.filter((test) => onlyCases.includes(test.id));
+
+// Project the cost first and refuse to start above the cap; nothing has been spent yet.
+const previousReport = (() => {
+  try {
+    return JSON.parse(readFileSync(DEFAULT_REPORT_PATH, "utf8"));
+  } catch {
+    return undefined;
+  }
+})();
+const estimate = estimateRun(
+  { models, suites: suites.map((suite) => ({ ...suite, cases: suite.cases })) },
+  previousReport,
+);
+console.log(formatEstimate(estimate));
+const maxUsd = Number(argument("max-usd", frontier ? "15" : "2"));
+if (process.argv.includes("--dry-run")) process.exit(0);
+if (estimate.totalUsd > maxUsd) {
+  console.error(
+    `Projected ${formatUsd(estimate.totalUsd)} exceeds the ${formatUsd(maxUsd)} cap. Raise --max-usd, run fewer trials, or pick fewer models.`,
+  );
+  process.exit(1);
+}
+
+// Every call goes through a per-model limiter: paid frontier models allow 20 requests a minute.
+const provider = createEvalProvider();
+// Judging and the simulated agent are fixed reference models, held constant across contestants.
+const judging = judgingOn ? { provider: provider.background, costs: [] } : undefined;
+const simulator = judgingOn ? createSimulatedAgent(provider) : undefined;
+// Salesforce read tools are fixtures; the campaign-context MCP runs for real (mocked restaurant data,
 // live Open-Meteo weather) through the same in-process MCP client as production.
 const campaignContext = await connectCampaignContextTools();
 // The knowledge graph uses its local fictional copy unless --live-graph points it at Neo4j.
@@ -390,18 +496,8 @@ const graphBackend = process.argv.includes("--live-graph")
 const memoryContext = { workspaceId: `eval-${Date.now()}`, now: () => new Date() };
 if (graphBackend.kind === "fixture") await seedEvalMemory(graphBackend, memoryContext.workspaceId);
 const graph = await connectKnowledgeGraphTools(graphBackend, memoryContext);
-const tools = { ...fixtureTools(), ...campaignContext.tools, ...graph.tools };
-const suites = [
-  { id: "demo-scenarios", cases: demoScenarios, trials: trialsDemo },
-  { id: "routing-pipeline", cases: routingCases, trials: trialsRouting },
-  { id: "routing-model-only", cases: routingCases, trials: trialsRouting },
-];
+const tools = { ...fixtureTools(simulator), ...campaignContext.tools, ...graph.tools };
 
-const onlyCases = argument("cases", "").split(",").filter(Boolean);
-if (onlyCases.length)
-  for (const suite of suites)
-    suite.cases = suite.cases.filter((test) => onlyCases.includes(test.id));
-const models = MODELS.filter((model) => selected.includes(model.id));
 const results = (
   await Promise.all(
     models.map(async (model) => {
@@ -409,11 +505,12 @@ const results = (
         suite.cases.flatMap((testCase) =>
           Array.from(
             { length: suite.trials },
-            (_, trial) => () => runCase({ ...model, provider }, tools, suite.id, testCase, trial),
+            (_, trial) => () =>
+              runCase({ ...model, provider }, tools, suite.id, testCase, trial, judging),
           ),
         ),
       );
-      const modelResults = await pool(tasks, CONCURRENCY_PER_MODEL);
+      const modelResults = await pool(tasks, concurrencyFor(model.id));
       const passed = modelResults.filter((result) => result.passed).length;
       console.log(`${model.label}: ${passed}/${modelResults.length} passed`);
       return modelResults;
@@ -421,23 +518,36 @@ const results = (
   )
 ).flat();
 
+const cost = summarizeCost(results, {
+  judgeCosts: judging?.costs ?? [],
+  simulatorCost: simulator?.cost() ?? { usd: 0, neurons: 0 },
+});
 const report = EvalReportSchema.parse({
   generatedAt: new Date().toISOString(),
   gitSha: execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim(),
   productionModel: PROOF_DEFAULTS.orchestratorModel,
   methodology: buildMethodology({ trialsDemo, trialsRouting }),
-  models: [
-    ...MODELS.map((model) => ({
-      id: model.id,
-      label: model.label,
-      included: selected.includes(model.id),
-    })),
-  ],
+  models: MODELS.map((model) => ({
+    id: model.id,
+    label: model.label,
+    tier: model.tier,
+    included: selected.includes(model.id),
+  })),
   summaries: summarize(results),
   results,
+  cost,
+  ...(judgingOn
+    ? {
+        judges: JUDGES.map(({ id, label }) => ({ id, label })),
+        agreement: summarizeAgreement(results),
+        ...(calibrationFromDisk() ? { calibration: calibrationFromDisk() } : {}),
+      }
+    : {}),
 });
 mkdirSync(dirname(REPORT_PATH), { recursive: true });
 writeFileSync(REPORT_PATH, `${JSON.stringify(report, null, 1)}\n`);
 await campaignContext.close();
 await graph.close();
-console.log(`Wrote ${REPORT_PATH} (${results.length} turns).`);
+console.log(
+  `Wrote ${REPORT_PATH} (${results.length} turns). Actual cost ${formatUsd(cost.totalUsd)} (models ${formatUsd(cost.contestantsUsd)}, judges ${formatUsd(cost.judgesUsd)}, simulated agent ${formatUsd(cost.simulatorUsd)}); projected ${formatUsd(estimate.totalUsd)}.`,
+);

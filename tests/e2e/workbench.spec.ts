@@ -348,6 +348,7 @@ test("renders model comparison, checks, scenarios, failures, and methodology", a
     outputTokens: 300,
     steps: passed ? "tool-calls,stop" : "tool-calls,length",
     excerpt: passed ? "VERO Phase 1 Launch is in progress." : "",
+    cost: { usd: 0.002, neurons: 182 },
     ...(passed ? {} : { failure: "toolCorrect, textProduced" }),
   });
   const rates = (value: number) =>
@@ -361,6 +362,15 @@ test("renders model comparison, checks, scenarios, failures, and methodology", a
     latencyP50Ms: 8000,
     latencyP90Ms: 12000,
     meanOutputTokens: 300,
+    costUsd: 0.004,
+    costPerTurnUsd: 0.002,
+    ...(suite === "demo-scenarios"
+      ? {
+          qualityIndex: { mean: 72, ciLow: 64, ciHigh: 80, n: 2 },
+          actionIntentTop2: 0.5,
+          criteriaMetRate: 0.8,
+        }
+      : {}),
   });
   const suites = ["demo-scenarios", "routing-pipeline", "routing-model-only"];
   await page.route("**/evals/latest.json", (route) =>
@@ -385,6 +395,15 @@ test("renders model comparison, checks, scenarios, failures, and methodology", a
             definition: "Def.",
           })),
           limitations: ["Synthetic limitation."],
+        },
+        cost: {
+          contestantsUsd: 0.008,
+          judgesUsd: 0.05,
+          simulatorUsd: 0.001,
+          totalUsd: 0.059,
+          neurons: 5364,
+          pricingAsOf: "2026-09-17",
+          pricingSource: "https://developers.cloudflare.com/workers-ai/platform/pricing/",
         },
         models: [
           { id: "@cf/openai/gpt-oss-120b", label: "gpt-oss-120b", included: true },
@@ -411,6 +430,10 @@ test("renders model comparison, checks, scenarios, failures, and methodology", a
   });
   await expect(models.getByText("In production")).toBeVisible();
   await expect(models.getByRole("row", { name: /gpt-oss-20b/ })).toContainText("50%");
+  await expect(models.getByRole("row", { name: /gpt-oss-120b/ })).toContainText("72 ±8");
+  await expect(models.getByRole("row", { name: /gpt-oss-120b/ })).toContainText("$0.0020");
+  await expect(page.getByText(/run cost \$0\.059/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Cost vs quality" })).toBeVisible();
   await expect(page.getByText("Kimi K2.6 not evaluated: Errored.")).toBeVisible();
   await expect(page.getByRole("heading", { name: /Failed turns .*\(1\)/ })).toBeVisible();
   await page.getByText("called no tool").click();
@@ -422,7 +445,7 @@ test("renders model comparison, checks, scenarios, failures, and methodology", a
     "true",
   );
   await page.screenshot({
-    path: `artifacts/evidence/WU-021/evaluations-${testInfo.project.name}.png`,
+    path: `artifacts/evidence/WU-041/evaluations-${testInfo.project.name}.png`,
     fullPage: true,
   });
 });
