@@ -398,10 +398,11 @@ GraphRAG's advantages are **multi-hop reasoning** and **explainability**. Every 
       {
         id: "orchestrator",
         title: "The orchestrator agent",
-        summary: "A stateful Cloudflare agent per user that runs each chat turn.",
+        summary: "A stateful agent per user that runs each chat turn, on a local or hosted model.",
         body: `The **orchestrator** is a Cloudflare **Agents SDK** chat agent running in a **Durable Object**: a single-threaded, stateful instance with its own SQLite storage.
 - Each user gets their own instance, keyed by a hash of their Access identity and the workspace, so conversations and history are isolated by construction.
 - Each turn streams to the browser over a WebSocket, and the stream is **resumable** if the tab reconnects.
+- The Durable Object runtime is the open-source **workerd**, so the same agent runs on a laptop with \`pnpm dev\` and no Cloudflare account. Which model answers, and whether D1, R2 or Workers AI are bound, is decided by the **instance profile** and the deployment target, not by the agent's code (see *The model*).
 
 A turn runs a **tool loop** of up to 6 steps. On each step the model either calls a tool or writes the answer. Its tools come from four MCP servers, connected per turn: Salesforce, campaign context, the knowledge graph, and external services (public holidays and weather alerts). The orchestrator decides which tools are available on each step (see *Routing*) and records a **turn trace** of every event.
 
@@ -438,16 +439,19 @@ Four properties make it trustworthy:
       },
       {
         id: "model",
-        title: "The model: gpt-oss-20b on Workers AI",
-        summary: "An open-weight reasoning model served at the edge, chosen by evaluation.",
-        body: `The orchestrator runs **gpt-oss-20b**, OpenAI's open-weight reasoning model, on **Cloudflare Workers AI**, routed through **AI Gateway** for logging and cost visibility. The model ID is set in exactly one place: \`PROOF_DEFAULTS.orchestratorModel\`.
+        title: "The model: a local gpt-oss by default, hosted by choice",
+        summary: "One instance profile picks the model; the default runs on your own machine.",
+        body: `The orchestrator's chat model comes from the **instance profile** (\`models.chat\`), never from code. The default is **gpt-oss:20b**, OpenAI's open-weight reasoning model, served by **Ollama** on the presenter's machine, so a demo needs no cloud account. The profile can instead point at any OpenAI-compatible endpoint, **Cloudflare Workers AI** (optionally through **AI Gateway** for logging and cost visibility), or **Amazon Bedrock**. \`apps/edge/src/models.ts\` turns the profile into an AI SDK model in one place.
 
-- **Why 20b:** after the routing and reliability fixes, it matched or beat gpt-oss-120b through the pipeline at about 60% of the latency and lower cost (see *Evaluations*).
-- **Its quirks** shaped several guards. It sometimes writes a tool call into its reasoning or answer text instead of calling the tool, and leaks its internal "harmony" channel markup into tool names.`,
+- **Why gpt-oss:** after the routing and reliability fixes, the 20b size matched or beat the 120b through the pipeline at about 60% of the latency and lower cost (see *Evaluations*, measured on Workers AI).
+- **Its quirks** shaped several guards. It sometimes writes a tool call into its reasoning or answer text instead of calling the tool, and leaks its internal "harmony" channel markup into tool names. The repair middleware is applied only to gpt-oss models.
+- **No model reachable?** A local run falls back to scripted mode, and the fixtures answer the flows they cover. \`CHAT_ENGINE=fixture\` forces that mode for tests.
+- **Images** come from the profile's image provider; the default draws a deterministic placeholder locally.`,
         inDemo: [
-          "packages/contracts/src/index.ts (PROOF_DEFAULTS)",
+          "packages/contracts/src/profile.ts (InstanceProfileSchema)",
+          "apps/edge/src/models.ts (resolveChatModel)",
           "Evaluations view: model comparison",
-          "docs/decisions/ADR-005",
+          "docs/decisions/ADR-009",
         ],
         resources: [R.gptOss20b, R.gptOssRepo, R.harmony, R.workersAi, R.aiGateway],
       },

@@ -10,3 +10,7 @@ dist/
 
 # Local Agentforce preview sessions (transcripts and traces)
 .sfdx/
+
+/workbench.profile.json
+/.workbench/
+/apps/edge/src/generated/

@@ -1,5 +1,5 @@
 import { env, SELF } from "cloudflare:test";
-import { PHASE_2_CURATED_TOOLS, classifyPolicyIntent } from "@northstar/contracts";
+import { classifyPolicyIntent, PHASE_2_CURATED_TOOLS } from "@northstar/contracts";
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { routingCases, routingHoldout } from "../../../packages/evals/src/cases";
@@ -54,11 +54,11 @@ describe("edge runtime", () => {
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "NOT_FOUND" } });
   });
-  it("reports configured proof bindings", async () => {
+  it("reports configured bindings", async () => {
     const response = await SELF.fetch("https://example.test/api/ready");
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      checks: { durableObject: true, workersAi: true, d1: true, r2: true },
+      checks: { durableObject: true, chatProvider: "ollama", d1: true, r2: true },
     });
   });
   it("isolates agent keys by authenticated subject and workspace", async () => {

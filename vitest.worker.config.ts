@@ -1,6 +1,6 @@
+import { fileURLToPath, URL } from "node:url";
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
-import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig({
   resolve: {
@@ -17,7 +17,14 @@ export default defineConfig({
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },
       remoteBindings: false,
-      miniflare: { bindings: { ENVIRONMENT: "local", AUTH_MODE: "development" } },
+      miniflare: {
+        bindings: {
+          ENVIRONMENT: "local",
+          AUTH_MODE: "development",
+          CHAT_ENGINE: "fixture",
+          SALESFORCE_MCP_URL: "https://salesforce-mcp.example.test/mcp",
+        },
+      },
     }),
   ],
   test: { include: ["apps/edge/**/*.worker.test.ts"] },

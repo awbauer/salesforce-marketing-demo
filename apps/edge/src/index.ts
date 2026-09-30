@@ -10,12 +10,14 @@ import {
 } from "../../../packages/knowledge-graph/src/index.ts";
 import { type AuthBindings, AuthError, deriveAgentKey, resolvePrincipal } from "./auth";
 import { createCampaignContextMcpServer } from "./campaign-context/server";
+import { INSTANCE_PROFILE } from "./generated/profile";
 import { createKnowledgeGraphMcpServer, knowledgeGraphBackend } from "./knowledge-graph/server";
+import type { ModelBindings } from "./models";
 import { pruneConfirmationAudit } from "./orchestrator";
 
 export { MarketingOrchestrator } from "./orchestrator";
 
-type Env = CloudflareBindings & AuthBindings;
+type Env = CloudflareBindings & AuthBindings & ModelBindings;
 
 function json(value: unknown, init: ResponseInit = {}) {
   const headers = new Headers(init.headers);
@@ -113,7 +115,7 @@ export default {
           checks: {
             durableObject: true,
             staticAssets: Boolean(env.ASSETS),
-            workersAi: Boolean(env.AI),
+            chatProvider: INSTANCE_PROFILE.models.chat.provider,
             d1: Boolean(env.APP_DB),
             r2: Boolean(env.CAMPAIGN_ASSETS),
           },

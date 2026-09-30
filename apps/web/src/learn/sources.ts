@@ -27,7 +27,13 @@ export const SECTION_SOURCES: Record<string, readonly string[]> = {
     "scripts/seed-knowledge-graph.mjs",
     "scripts/check-knowledge-graph.mjs",
   ],
-  orchestrator: ["apps/edge/src/orchestrator.ts", "apps/edge/src/index.ts"],
+  orchestrator: [
+    "apps/edge/src/orchestrator.ts",
+    "apps/edge/src/index.ts",
+    "apps/edge/src/models.ts",
+    "packages/contracts/src/profile.ts",
+    "scripts/build-profile.mjs",
+  ],
   workspace: [
     "apps/edge/src/working-set.ts",
     "apps/edge/src/focus.ts",

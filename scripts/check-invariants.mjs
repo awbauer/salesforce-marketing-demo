@@ -4,14 +4,11 @@ import { report } from "./lib/report.mjs";
 
 const wrangler = await readFile("wrangler.jsonc", "utf8");
 const catalog = JSON.parse(await readFile("packages/contracts/src/tool-catalog.json", "utf8"));
-const required = [
-  PROOF_DEFAULTS.imageModel,
-  '"new_sqlite_classes"',
-  '"CAMPAIGN_ASSETS"',
-  '"APP_DB"',
-  '"database_id": "120cf689-0652-476c-9e4e-8af5b83e3627"',
-  '"bucket_name": "northstar-marketing-workbench-pot-campaign-assets"',
-];
+const cloudflareTemplate = await readFile(
+  "templates/cloudflare/wrangler.cloudflare.jsonc.tmpl",
+  "utf8",
+);
+const required = ['"new_sqlite_classes"', '"CAMPAIGN_ASSETS"', '"APP_DB"'];
 const forbidden = [
   "publish",
   "send",
@@ -25,12 +22,25 @@ const orchestratorSource = await readFile("apps/edge/src/orchestrator.ts", "utf8
 // The latest migration that rebuilds the confirmation audit defines its allowed actions.
 const confirmationMigration = await readFile("migrations/0005_inventory_case_action.sql", "utf8");
 const failures = required
-  .filter((value) => !wrangler.includes(value))
+  .flatMap((value) => [
+    ...(wrangler.includes(value) ? [] : [`wrangler.jsonc is missing ${value}`]),
+    ...(cloudflareTemplate.includes(value) ? [] : [`Cloudflare template is missing ${value}`]),
+  ])
   .map((value) => `Missing config invariant: ${value}`);
-if (/ORCHESTRATOR_MODEL/.test(wrangler))
-  failures.push("Orchestrator model must be set only in PROOF_DEFAULTS, not wrangler.jsonc");
-if (!orchestratorSource.includes("workersAI(PROOF_DEFAULTS.orchestratorModel)"))
-  failures.push("Orchestrator must read its model from PROOF_DEFAULTS.orchestratorModel");
+// The checked-in local config must run with no account: no ids, routes, or hosted bindings.
+for (const [label, pattern] of [
+  ["a database_id", /"database_id"/],
+  ["an account_id", /"account_id"/],
+  ["routes", /"routes?"\s*:/],
+  ["an AI binding", /"ai"\s*:/],
+  ["a model id", /ORCHESTRATOR_MODEL|@cf\//],
+])
+  if (pattern.test(wrangler))
+    failures.push(`wrangler.jsonc must stay account-free: found ${label}`);
+if (!/resolveChatModel\(INSTANCE_PROFILE/.test(orchestratorSource))
+  failures.push("Orchestrator must resolve its chat model from the instance profile");
+if (/@cf\//.test(orchestratorSource))
+  failures.push("Orchestrator must not hard-code a model id; set it in the instance profile");
 for (const value of forbidden)
   if (PROOF_DEFAULTS.allowedWrites.some((item) => item.includes(value)))
     failures.push(`Forbidden write exposed: ${value}`);

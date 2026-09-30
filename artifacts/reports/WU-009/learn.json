@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-29T19:27:12.903Z",
-  "status": "passed",
+  "generatedAt": "2026-09-30T16:09:27.887Z",
+  "status": "failed",
   "baseRef": "origin/main",
-  "mergeBase": "b1c62d067164b14b754ec7efa392278e9293f26b",
+  "mergeBase": "d623dd13b0ceda72f843ae2ba37ed8506d349826",
   "inventory": {
     "Tool": 40,
     "Write action": 5,
@@ -13,157 +13,26 @@
   },
   "drift": [
     {
-      "section": "campaign-context",
-      "status": "updated",
-      "paths": [
-        "apps/edge/src/campaign-context/open-meteo.ts",
-        "apps/edge/src/campaign-context/restaurant-profile.ts",
-        "packages/knowledge-graph/src/coastline.ts"
-      ]
-    },
-    {
-      "section": "mcp",
-      "status": "updated",
-      "paths": [
-        "apps/edge/src/campaign-context/server.ts"
-      ]
-    },
-    {
-      "section": "use-cases",
-      "status": "updated",
-      "paths": [
-        "apps/edge/src/campaign-context/store-inventory.ts",
-        "apps/edge/src/external-services/fed-news.ts",
-        "apps/edge/src/external-services/nager-date.ts",
-        "apps/edge/src/external-services/nws-alerts.ts",
-        "apps/edge/src/external-services/server.ts",
-        "apps/edge/src/inventory-risk.ts",
-        "apps/web/src/usecases/UseCasesView.tsx",
-        "apps/web/src/usecases/catalog.ts",
-        "apps/web/src/usecases/usecases.css",
-        "packages/knowledge-graph/src/harborstone.ts",
-        "salesforce/force-app/main/default/classes/NorthstarCreateInventoryCase.cls"
-      ]
-    },
-    {
-      "section": "reliability",
-      "status": "updated",
-      "paths": [
-        "apps/edge/src/forced-tool-middleware.ts",
-        "apps/edge/src/turn-trace.ts"
-      ]
-    },
-    {
-      "section": "marketing-cloud",
-      "status": "updated",
-      "paths": [
-        "apps/edge/src/marketing-writes.ts"
-      ]
-    },
-    {
       "section": "orchestrator",
-      "status": "updated",
+      "status": "stale",
       "paths": [
-        "apps/edge/src/orchestrator.ts"
-      ]
-    },
-    {
-      "section": "routing",
-      "status": "updated",
-      "paths": [
-        "apps/edge/src/turn-policy.ts"
-      ]
-    },
-    {
-      "section": "workspace",
-      "status": "updated",
-      "paths": [
-        "apps/edge/src/working-set.ts",
-        "apps/web/src/ActionCards.tsx",
-        "apps/web/src/WorkspacePanel.tsx"
-      ]
-    },
-    {
-      "section": "ui",
-      "status": "updated",
-      "paths": [
-        "apps/web/src/App.tsx",
-        "apps/web/src/WriteProgress.tsx"
-      ]
-    },
-    {
-      "section": "evaluations",
-      "status": "updated",
-      "paths": [
-        "apps/web/src/EvaluationView.tsx",
-        "packages/evals/src/calibration.ts",
-        "packages/evals/src/cases.ts",
-        "packages/evals/src/pricing.ts",
-        "packages/evals/src/quality.ts",
-        "packages/evals/src/report.ts",
-        "packages/evals/src/rubric.ts",
-        "packages/evals/src/scoring.ts",
-        "scripts/calibrate-judge.mjs",
-        "scripts/lib/eval-estimate.mjs",
-        "scripts/lib/eval-judge.mjs",
-        "scripts/lib/eval-methodology.mjs",
-        "scripts/lib/eval-provider.mjs",
-        "scripts/lib/eval-simulated-agent.mjs",
-        "scripts/lib/eval-summary.mjs",
-        "scripts/lib/eval-throttle.mjs",
-        "scripts/rescore-evals.mjs",
-        "scripts/run-live-evals.mjs"
-      ]
-    },
-    {
-      "section": "observability",
-      "status": "updated",
-      "paths": [
-        "apps/web/src/HistoryView.tsx",
-        "apps/web/src/turn-stats.ts",
-        "apps/web/src/turn-trace.ts"
-      ]
-    },
-    {
-      "section": "long-term-memory",
-      "status": "updated",
-      "paths": [
-        "apps/web/src/MemoryPanel.tsx"
-      ]
-    },
-    {
-      "section": "graphrag-here",
-      "status": "updated",
-      "paths": [
-        "apps/web/src/graph/GraphCanvas.tsx",
-        "apps/web/src/graph/GraphView.tsx",
-        "apps/web/src/graph/graph-model.ts",
-        "apps/web/src/graph/graph.css",
-        "packages/knowledge-graph/src/dataset.ts",
-        "packages/knowledge-graph/src/explorer.ts",
-        "packages/knowledge-graph/src/index.ts",
-        "packages/knowledge-graph/src/tools.ts",
-        "scripts/check-knowledge-graph.mjs"
+        "apps/edge/src/index.ts",
+        "apps/edge/src/models.ts",
+        "apps/edge/src/orchestrator.ts",
+        "packages/contracts/src/profile.ts",
+        "scripts/build-profile.mjs"
       ]
     },
     {
       "section": "governance",
-      "status": "updated",
+      "status": "reviewed",
       "paths": [
-        "packages/contracts/src/index.ts",
-        "salesforce/force-app/main/default/classes/NorthstarCheckWriteAccess.cls",
-        "salesforce/force-app/main/default/permissionsets/Northstar_Marketing_Workbench_Evaluator.permissionset-meta.xml"
-      ]
-    },
-    {
-      "section": "salesforce",
-      "status": "updated",
-      "paths": [
-        "packages/contracts/src/tool-catalog.json",
-        "salesforce/force-app/main/default/mcpServerDefinitions/NorthstarMarketingWorkbench.mcpServerDefinition-meta.xml"
+        "packages/contracts/src/index.ts"
       ]
     }
   ],
   "notices": [],
-  "failures": []
+  "failures": [
+    "Learn drift: this branch changes code that these Learn sections explain, but the sections didn't change:\n  • orchestrator (“The orchestrator agent”) ← apps/edge/src/index.ts, apps/edge/src/models.ts, apps/edge/src/orchestrator.ts, packages/contracts/src/profile.ts, scripts/build-profile.mjs\nUpdate each section in apps/web/src/learn/content.ts (or its lesson or reference entries) so it teaches the change.\nIf nothing a reader learns has changed, say so in a commit trailer:\n  Learn-Reviewed: orchestrator (why no Learn update is needed)"
+  ]
 }

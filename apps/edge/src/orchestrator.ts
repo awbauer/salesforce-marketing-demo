@@ -42,7 +42,6 @@ import {
   type UIMessageChunk,
   wrapLanguageModel,
 } from "ai";
-import { createWorkersAI } from "workers-ai-provider";
 import {
   forgetMemory,
   type GraphBackend,
@@ -64,6 +63,7 @@ import {
 } from "./external-services/server";
 import { applyFocusUpdate, type FocusInput, focusFromAnswer } from "./focus";
 import { forcedToolCallMiddleware } from "./forced-tool-middleware";
+import { INSTANCE_PROFILE } from "./generated/profile";
 import {
   assessInventoryRisk,
   type DemandResult,
@@ -102,6 +102,14 @@ import {
   memoryStamp,
   memorySubjects,
 } from "./memory";
+import {
+  chatModelReachable,
+  DEFAULT_WORKERS_AI_IMAGE_MODEL,
+  type ModelBindings,
+  needsToolCallRepair,
+  placeholderImage,
+  resolveChatModel,
+} from "./models";
 import { buildTurnRecord } from "./turn-history";
 import {
   type DraftIntent,
@@ -143,18 +151,20 @@ export {
 } from "./turn-policy";
 
 export type AgentProps = { principalSubject: string; workspaceId: string };
-type OrchestratorBindings = CloudflareBindings & {
-  SALESFORCE_MCP_URL?: string;
-  CONFIRMATION_SIGNING_KEY?: string;
-  // Operator kill switches, set as Worker secrets so deploys do not reset them.
-  WRITES_ENABLED?: string;
-  DISABLED_TOOLS?: string;
-  MEMORY_ENABLED?: string;
-  // Neo4j Aura Query API credentials (Worker secrets); without them the fixture graph is used.
-  NEO4J_QUERY_URL?: string;
-  NEO4J_USERNAME?: string;
-  NEO4J_PASSWORD?: string;
-};
+type OrchestratorBindings = CloudflareBindings &
+  ModelBindings & {
+    CHAT_ENGINE?: string;
+    SALESFORCE_MCP_URL?: string;
+    CONFIRMATION_SIGNING_KEY?: string;
+    // Operator kill switches, set as Worker secrets so deploys do not reset them.
+    WRITES_ENABLED?: string;
+    DISABLED_TOOLS?: string;
+    MEMORY_ENABLED?: string;
+    // Neo4j Aura Query API credentials (Worker secrets); without them the fixture graph is used.
+    NEO4J_QUERY_URL?: string;
+    NEO4J_USERNAME?: string;
+    NEO4J_PASSWORD?: string;
+  };
 
 /** The store inventory mock's count date in local development. */
 const LOCAL_FIXTURE_COUNT_DATE = "2026-09-27";
@@ -656,6 +666,7 @@ function scriptedTurnStream(
 }
 
 const POLICY_ROUTER = "Northstar policy router";
+const ORCHESTRATOR_MODEL = INSTANCE_PROFILE.models.chat.model;
 const TURN_HISTORY_LIMIT = 200;
 type TurnPipeResult = Awaited<ReturnType<ReturnType<typeof createTurnTracer>["pipe"]>>;
 
@@ -723,6 +734,52 @@ export class MarketingOrchestrator extends AIChatAgent<
   } = {};
   /** Local development's Marketing Cloud records, created by the local agent stand-in. */
   private localMarketing = new Map<string, MarketingReadBack>();
+
+  /** Renders a 1024×1024 PNG with the profile's image provider; null when it returns nothing. */
+  private async renderImage(
+    prompt: string,
+    seed: number | undefined,
+  ): Promise<{ png: Uint8Array; model: string } | null> {
+    const { provider, model, baseUrl } = INSTANCE_PROFILE.models.image;
+    if (provider === "placeholder") return placeholderImage(prompt);
+    if (provider === "openai-compatible") {
+      const response = await fetch(`${(baseUrl ?? "").replace(/\/$/, "")}/images/generations`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model,
+          prompt,
+          size: "1024x1024",
+          n: 1,
+          response_format: "b64_json",
+        }),
+        signal: AbortSignal.timeout(120_000),
+      });
+      const body = (await response.json().catch(() => null)) as {
+        data?: { b64_json?: string }[];
+      } | null;
+      const image = body?.data?.[0]?.b64_json;
+      return response.ok && image ? { png: decodeBase64(image), model: model ?? provider } : null;
+    }
+    const form = new FormData();
+    form.append("prompt", prompt);
+    form.append("width", String(1024));
+    form.append("height", String(1024));
+    if (seed !== undefined) form.append("seed", String(seed));
+    const encoded = new Response(form);
+    if (!this.env.AI) return null;
+    const result = await (
+      this.env.AI as unknown as {
+        run: (model: string, input: unknown) => Promise<{ image?: string }>;
+      }
+    ).run(model ?? DEFAULT_WORKERS_AI_IMAGE_MODEL, {
+      multipart: {
+        body: encoded.body ?? undefined,
+        contentType: encoded.headers.get("content-type") ?? undefined,
+      },
+    });
+    return result.image ? { png: decodeBase64(result.image), model: model ?? provider } : null;
+  }
 
   private async productionChatResponse(
     messages: UIMessage[],
@@ -792,10 +849,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       briefSaved: this.state.workingSet.focus?.saved?.objectType === "Brief",
     };
     this.agentBriefThisTurn = false;
-    const workersAI = createWorkersAI({
-      binding: this.env.AI,
-      gateway: { id: this.env.AI_GATEWAY_ID },
-    });
+    const chatModel = resolveChatModel(INSTANCE_PROFILE, this.env as ModelBindings);
     const workspace = workingSetPrompt(this.state.workingSet);
     const prompt = latestUserText(turnMessages);
     const focus = this.state.workingSet.focus;
@@ -837,7 +891,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         const tracer = createTurnTracer(writer, {
-          model: PROOF_DEFAULTS.orchestratorModel,
+          model: ORCHESTRATOR_MODEL,
           toolCount: Object.keys(tools).length,
           requiredTool,
           route: "model",
@@ -848,10 +902,9 @@ export class MarketingOrchestrator extends AIChatAgent<
         });
         try {
           const result = streamText({
-            model: wrapLanguageModel({
-              model: workersAI(PROOF_DEFAULTS.orchestratorModel),
-              middleware: forcedToolCallMiddleware,
-            }),
+            model: needsToolCallRepair(INSTANCE_PROFILE)
+              ? wrapLanguageModel({ model: chatModel, middleware: forcedToolCallMiddleware })
+              : chatModel,
             system: orchestratorSystemPrompt(workspace, toolPlan),
             messages: await convertToModelMessages(turnMessages),
             tools: pinnedTools,
@@ -897,7 +950,7 @@ export class MarketingOrchestrator extends AIChatAgent<
             await this.refreshPreview();
           await this.recordTurn(
             prompt,
-            { model: PROOF_DEFAULTS.orchestratorModel, route: "model", requiredTool },
+            { model: ORCHESTRATOR_MODEL, route: "model", requiredTool },
             turn,
           );
         } catch (error) {
@@ -911,7 +964,7 @@ export class MarketingOrchestrator extends AIChatAgent<
           );
           await this.recordTurn(
             prompt,
-            { model: PROOF_DEFAULTS.orchestratorModel, route: "model", requiredTool },
+            { model: ORCHESTRATOR_MODEL, route: "model", requiredTool },
             turn,
           );
         } finally {
@@ -1086,40 +1139,37 @@ export class MarketingOrchestrator extends AIChatAgent<
     )
       .bind(this.state.workspaceId)
       .first<{ count: number }>();
-    if ((usage?.count ?? 0) >= 100)
+    if ((usage?.count ?? 0) >= INSTANCE_PROFILE.caps.images)
       return json(
-        { error: { code: "RATE_LIMITED", message: "The 100-image proof cap has been reached." } },
+        {
+          error: {
+            code: "RATE_LIMITED",
+            message: "The image cap for this workbench instance has been reached.",
+          },
+        },
         { status: 429 },
       );
 
     this.imageGenerationInFlight = true;
+    let imageModelUsed =
+      INSTANCE_PROFILE.models.image.model ?? INSTANCE_PROFILE.models.image.provider;
     try {
       const prompt = [
-        "Create a polished square campaign image for the fictional Northstar outdoor lifestyle brand.",
+        `Create a polished square campaign image for the fictional ${INSTANCE_PROFILE.client.brand} brand (${INSTANCE_PROFILE.client.industry}).`,
         `Channel: ${body.channel}.`,
         `Creative concept: ${concept}.`,
         "Editorial photography, warm natural light, inclusive but no identifiable real person, no text, no logo, no product claims.",
       ].join(" ");
-      const form = new FormData();
-      form.append("prompt", prompt);
-      form.append("width", String(1024));
-      form.append("height", String(1024));
-      if (seed !== undefined) form.append("seed", String(seed));
-      const encoded = new Response(form);
-      const result = await this.env.AI.run("@cf/black-forest-labs/flux-2-klein-4b", {
-        multipart: {
-          body: encoded.body ?? undefined,
-          contentType: encoded.headers.get("content-type") ?? undefined,
-        },
-      });
-      if (!result.image)
+      const generated = await this.renderImage(prompt, seed);
+      if (!generated)
         return json(
           {
             error: { code: "UPSTREAM_UNAVAILABLE", message: "The image model returned no image." },
           },
           { status: 502 },
         );
-      const bytes = decodeBase64(result.image);
+      const bytes = generated.png;
+      imageModelUsed = generated.model;
       const dimensions = pngDimensions(bytes);
       if (
         bytes.byteLength > IMAGE_MAX_BYTES ||
@@ -1165,7 +1215,7 @@ export class MarketingOrchestrator extends AIChatAgent<
           body.channel,
           concept,
           IMAGE_PROMPT_VERSION,
-          this.env.CAMPAIGN_IMAGE_MODEL,
+          imageModelUsed,
           dimensions.width,
           dimensions.height,
           contentHash,
@@ -1185,7 +1235,7 @@ export class MarketingOrchestrator extends AIChatAgent<
           width: dimensions.width,
           height: dimensions.height,
           contentHash,
-          model: this.env.CAMPAIGN_IMAGE_MODEL,
+          model: imageModelUsed,
           lifecycle: "draft",
           expiresAt,
         }),
@@ -3602,6 +3652,12 @@ export class MarketingOrchestrator extends AIChatAgent<
         },
       );
     }
+    // With a reachable model, anything the fixtures do not cover goes to the configured model.
+    if (
+      (this.env.CHAT_ENGINE as string | undefined) !== "fixture" &&
+      (await chatModelReachable(INSTANCE_PROFILE, this.env as ModelBindings))
+    )
+      return this.productionChatResponse(this.messages, abortSignal);
     return scriptedResponse(
       [
         "I reviewed the fictional Northstar sample campaign. The **strongest signal is stable engagement**.\n\n",
