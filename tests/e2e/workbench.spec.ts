@@ -133,7 +133,7 @@ test("builds the workspace from the chat and completes a durable turn", async ({
   const running = page.getByRole("region", { name: "Running the confirmed write" });
   await expect(running).toBeVisible();
   await expect(page.getByRole("button", { name: "Working…" })).toBeDisabled();
-  await expect(running).toContainText("NorthstarCreateCampaignReviewRequest");
+  await expect(running).toContainText("WorkbenchCreateCampaignReviewRequest");
   await expect(running).toBeInViewport({ ratio: 0.9 });
   await page.screenshot({
     path: `artifacts/evidence/WU-048/write-progress-${testInfo.project.name}.png`,
@@ -200,7 +200,7 @@ test("renders the accessible native fallback when the HXL resource is unavailabl
   await expect(readiness).toHaveAttribute("data-render-mode", "native");
   await expect(readiness).toHaveAttribute(
     "data-hxl-resource",
-    "ui://widget/lightningType/c__northstarCampaignReadinessOutput",
+    "ui://widget/lightningType/c__workbenchCampaignReadinessOutput",
   );
   await expect(readiness.getByText("Native fallback")).toBeVisible();
   await expect(readiness.getByRole("heading", { name: "Fall Loyalty Reactivation" })).toBeVisible();
@@ -281,7 +281,7 @@ test("checks inventory against the forecast and opens a store-manager case only 
     .fill("Check inventory for our Sacramento store against the forecast");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(page.locator(".message.assistant").last()).toContainText(
-    "Inventory check for Coastline Kitchen Sacramento",
+    "Inventory check for Sample Kitchen Sacramento",
   );
   const workspace = page.getByRole("complementary", { name: "Workspace" });
   await expect(workspace.getByText("Store inventory · randomized mock")).toBeVisible();
@@ -389,7 +389,7 @@ test("attaches a selected image draft only after an explicit confirmation", asyn
           recordId: "069jV000000AbCdQAK",
           contentVersionId: "068jV000000AbCdQAK",
           campaignId: "701jV000004GglIQAS",
-          title: "Northstar email campaign image",
+          title: "Workbench email campaign image",
           contentSize: 1_482_113,
           contentHash,
           readBack: true,
@@ -834,14 +834,14 @@ test("filters the graph explorer to one brand's own nodes", async ({ page }) => 
     .click();
   await expect(page.getByRole("heading", { name: "Graph explorer" })).toBeVisible();
   const all = page.getByRole("button", { name: "All brands", exact: true });
-  const coastline = page.getByRole("button", { name: "Coastline Kitchen", exact: true });
-  const northstar = page.getByRole("button", { name: "Northstar", exact: true });
+  const sample kitchen = page.getByRole("button", { name: "Sample Kitchen", exact: true });
+  const workbench = page.getByRole("button", { name: "Workbench", exact: true });
   await expect(all).toHaveAttribute("aria-pressed", "true");
 
-  await coastline.click();
-  await expect(coastline).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByText(/loaded nodes connect to Coastline Kitchen/)).toContainText(
-    "Northstar, its parent brand, is hidden",
+  await restaurant.click();
+  await expect(sample kitchen).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText(/loaded nodes connect to Sample Kitchen/)).toContainText(
+    "Workbench, its parent brand, is hidden",
   );
   await expect(
     page.getByRole("img", { name: /Knowledge graph drawing with 83 nodes/ }),
@@ -850,14 +850,14 @@ test("filters the graph explorer to one brand's own nodes", async ({ page }) => 
   // Search only reaches nodes in scope.
   await page.getByLabel("Find a node").fill("acme");
   await expect(page.getByText(/No loaded node matches/)).toBeVisible();
-  await page.getByLabel("Find a node").fill("coastline weather");
+  await page.getByLabel("Find a node").fill("sample kitchen weather");
   await page
     .getByRole("list", { name: "Matching nodes" })
-    .getByRole("button", { name: "Coastline Weather Moments Campaign" })
+    .getByRole("button", { name: "Sample Kitchen Weather Moments Campaign" })
     .click();
   await expect(
     page.getByRole("complementary", { name: "Node details" }).getByRole("heading", {
-      name: "Coastline Weather Moments",
+      name: "Sample Kitchen Weather Moments",
     }),
   ).toBeVisible();
 
@@ -868,15 +868,15 @@ test("filters the graph explorer to one brand's own nodes", async ({ page }) => 
     page.getByRole("img", { name: /Knowledge graph drawing with 339 nodes/ }),
   ).toBeVisible();
 
-  await northstar.click();
-  await expect(northstar).toHaveAttribute("aria-pressed", "true");
+  await workbench.click();
+  await expect(workbench).toHaveAttribute("aria-pressed", "true");
   await expect(
     page.getByRole("img", { name: /Knowledge graph drawing with 115 nodes/ }),
   ).toBeVisible();
 
-  // Harborstone Wealth keeps its regulated content, deal, and clients, not Coastline's menu.
-  const harborstone = page.getByRole("button", { name: "Harborstone Wealth", exact: true });
-  await harborstone.click();
+  // Sample Wealth keeps its regulated content, deal, and clients, not Sample Kitchen's menu.
+  const sample wealth = page.getByRole("button", { name: "Sample Wealth", exact: true });
+  await wealth.click();
   await expect(
     page.getByRole("img", { name: /Knowledge graph drawing with 158 nodes/ }),
   ).toBeVisible();
@@ -900,10 +900,10 @@ test("has the Marketing Cloud agent save the brief, then create the campaign and
   const focus = page.getByTestId("workspace-focus");
 
   // The Campaign Creation agent drafts the brief; it becomes the focus.
-  await composer.fill("Draft a push notification for Coastline Kitchen's lunch crowd");
+  await composer.fill("Draft a push notification for Sample Kitchen's lunch crowd");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(page.locator(".message.assistant").last()).toContainText(
-    "Northstar Campaign Creation",
+    "Workbench Campaign Creation",
   );
   await expect(focus).toContainText("Rainy-day comfort: Spicy Tortilla Soup");
   await expect(focus).toContainText("Brief");
@@ -943,7 +943,7 @@ test("has the Marketing Cloud agent save the brief, then create the campaign and
   await card.getByRole("button", { name: "Confirm save" }).click();
   const banner = page.locator(".success-banner");
   await expect(banner.getByText("Brief saved in Marketing Cloud")).toBeVisible();
-  await expect(banner).toContainText("By the Northstar Campaign Creation agent");
+  await expect(banner).toContainText("By the Workbench Campaign Creation agent");
 
   // The workspace shows the brief and its preview as Salesforce read them back.
   const records = page.getByTestId("workspace-record");
@@ -984,7 +984,7 @@ test("remembers a draft, recalls it in a new chat, and forgets it", async ({ pag
   await page.getByRole("button", { name: "New chat" }).click();
   const composer = page.getByLabel("Message the orchestrator");
   const send = page.getByRole("button", { name: "Send message" });
-  await composer.fill("Draft a push notification for Coastline Kitchen's lunch crowd");
+  await composer.fill("Draft a push notification for Sample Kitchen's lunch crowd");
   await send.click();
   await expect(page.getByTestId("workspace-focus")).toContainText(
     "Rainy-day comfort: Spicy Tortilla Soup",

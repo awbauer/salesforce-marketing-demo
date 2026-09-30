@@ -1,0 +1,148 @@
+{
+  "generatedAt": "2026-09-30T23:46:41.311Z",
+  "status": "passed",
+  "fixedDefaults": {
+    "workspaceId": "workbench-demo",
+    "orchestratorModel": "@cf/openai/gpt-oss-20b",
+    "imageModel": "@cf/black-forest-labs/flux-2-klein-4b",
+    "imageSize": 1024,
+    "imageCap": 100,
+    "spendCapUsd": 25,
+    "transcriptRetentionHours": 24,
+    "imageRetentionDays": 7,
+    "roles": [
+      "evaluator",
+      "demo-admin"
+    ],
+    "browsers": [
+      "chrome",
+      "edge"
+    ],
+    "allowedWrites": [
+      "save-marketing-brief",
+      "create-marketing-campaign",
+      "create-review-task",
+      "attach-generated-image",
+      "create-inventory-case"
+    ]
+  },
+  "toolCatalog": {
+    "version": 2,
+    "tools": [
+      {
+        "name": "draft_campaign_brief",
+        "riskClass": "draft",
+        "source": "salesforce-agentforce",
+        "autonomous": true
+      },
+      {
+        "name": "refine_campaign_preview",
+        "riskClass": "draft",
+        "source": "salesforce-agentforce",
+        "autonomous": true
+      },
+      {
+        "name": "summarize_campaign",
+        "riskClass": "read",
+        "source": "salesforce-agentforce",
+        "autonomous": true
+      },
+      {
+        "name": "generate_campaign_insights",
+        "riskClass": "read",
+        "source": "salesforce-agentforce",
+        "autonomous": true
+      },
+      {
+        "name": "draft_campaign_content",
+        "riskClass": "draft",
+        "source": "salesforce-agentforce",
+        "autonomous": true
+      },
+      {
+        "name": "create_content_section",
+        "riskClass": "draft",
+        "source": "salesforce-agentforce",
+        "autonomous": true
+      },
+      {
+        "name": "validate_content_against_brand",
+        "riskClass": "read",
+        "source": "salesforce-agentforce",
+        "autonomous": true
+      },
+      {
+        "name": "get_account_marketing_signals",
+        "riskClass": "read",
+        "source": "salesforce-agentforce",
+        "autonomous": true
+      },
+      {
+        "name": "recommend_buyer_group_members",
+        "riskClass": "read",
+        "source": "salesforce-agentforce",
+        "autonomous": true
+      },
+      {
+        "name": "summarize_account_engagement",
+        "riskClass": "read",
+        "source": "salesforce-agentforce",
+        "autonomous": true
+      },
+      {
+        "name": "check_campaign_readiness",
+        "riskClass": "read",
+        "source": "salesforce-agentforce",
+        "autonomous": true
+      },
+      {
+        "name": "save_marketing_brief",
+        "riskClass": "write",
+        "source": "salesforce-agentforce",
+        "autonomous": false,
+        "allowedWrite": "save-marketing-brief"
+      },
+      {
+        "name": "create_marketing_campaign",
+        "riskClass": "write",
+        "source": "salesforce-agentforce",
+        "autonomous": false,
+        "allowedWrite": "create-marketing-campaign"
+      },
+      {
+        "name": "create_campaign_review_request",
+        "riskClass": "write",
+        "source": "salesforce-apex",
+        "autonomous": false,
+        "allowedWrite": "create-review-task"
+      },
+      {
+        "name": "create_inventory_case",
+        "riskClass": "write",
+        "source": "salesforce-apex",
+        "autonomous": false,
+        "allowedWrite": "create-inventory-case"
+      },
+      {
+        "name": "attach_campaign_image",
+        "riskClass": "write",
+        "source": "salesforce-apex",
+        "autonomous": false,
+        "allowedWrite": "attach-generated-image"
+      },
+      {
+        "name": "check_write_access",
+        "riskClass": "read",
+        "source": "salesforce-apex",
+        "autonomous": false
+      },
+      {
+        "name": "get_marketing_records",
+        "riskClass": "read",
+        "source": "salesforce-apex",
+        "autonomous": true
+      }
+    ]
+  },
+  "failures": []
+}

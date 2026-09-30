@@ -25,7 +25,6 @@
   "vars": {
     "ENVIRONMENT": "local",
     "AUTH_MODE": "development",
-    "PROOF_WORKSPACE_ID": "northstar-demo",
     "CHAT_ENGINE": "auto"
   }
 }

@@ -5,7 +5,7 @@
     <botDialogs>
         <botSteps>
             <botMessages>
-                <message>I can assess a Northstar sample campaign and explain its readiness evidence.</message>
+                <message>I can assess a Workbench sample campaign and explain its readiness evidence.</message>
                 <messageIdentifier>9957da23-9da6-43bb-b5d4-2f12b7b057a1</messageIdentifier>
             </botMessages>
             <stepIdentifier>92bb6a7a-adbe-4071-9a27-901856101b56</stepIdentifier>

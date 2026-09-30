@@ -3,8 +3,8 @@ import {
   MARKETING_BRIEF_FIELDS,
   SALESFORCE_TOOL_DETAILS,
   WRITE_TOOL_BY_ACTION,
-} from "@northstar/contracts";
-import { relativeTime, salesforceRecordUrl } from "@northstar/ui";
+} from "@workbench/contracts";
+import { relativeTime, salesforceRecordUrl } from "@workbench/ui";
 import { AgentDetail } from "./SalesforceAgents";
 
 /**

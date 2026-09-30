@@ -5,7 +5,7 @@ import {
   TURN_TRACE_PART_TYPE,
   type TurnTrace,
   TurnTraceSchema,
-} from "@northstar/contracts";
+} from "@workbench/contracts";
 import type { UIMessage } from "ai";
 import { turnStats } from "./turn-stats";
 

@@ -26,7 +26,7 @@ function sf(args, label) {
 
 if (!targetOrg) {
   failures.push(
-    "SF_TARGET_ORG must identify the supplied Northstar Salesforce sandbox explicitly.",
+    "SF_TARGET_ORG must identify the supplied Workbench Salesforce sandbox explicitly.",
   );
 } else {
   const org = sf(["org", "display"], "authorized org");
@@ -44,7 +44,7 @@ if (!targetOrg) {
   const organizationRecord = organization?.records?.[0];
   const isSandbox = organizationRecord?.IsSandbox === true;
   const isApprovedProofOrg =
-    targetOrg === "northstar-pot" &&
+    targetOrg === "workbench-pot" &&
     Boolean(approvedProofOrgId) &&
     approvedProofOrgId === organizationRecord?.Id;
   checks.push({

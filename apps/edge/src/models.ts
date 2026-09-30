@@ -1,6 +1,6 @@
 import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { type InstanceProfile, isGptOss } from "@northstar/contracts";
+import { type InstanceProfile, isGptOss } from "@workbench/contracts";
 import type { LanguageModel } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 

@@ -1,10 +1,10 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { report } from "./lib/report.mjs";
 
-const widgetRoot = "salesforce/force-app/main/default/uiWidgets/northstarCampaignReadiness";
+const widgetRoot = "salesforce/force-app/main/default/uiWidgets/workbenchCampaignReadiness";
 const typeRoot =
-  "salesforce/force-app/main/default/lightningTypes/northstarCampaignReadinessOutput";
-const resourceUri = "ui://widget/lightningType/c__northstarCampaignReadinessOutput";
+  "salesforce/force-app/main/default/lightningTypes/workbenchCampaignReadinessOutput";
+const resourceUri = "ui://widget/lightningType/c__workbenchCampaignReadinessOutput";
 const failures = [];
 
 async function json(path) {
@@ -19,12 +19,12 @@ async function json(path) {
 }
 
 const [composition, widgetSchema, typeSchema, renderer, apex, contracts] = await Promise.all([
-  json(`${widgetRoot}/northstarCampaignReadiness.json`),
+  json(`${widgetRoot}/workbenchCampaignReadiness.json`),
   json(`${widgetRoot}/schema.json`),
   json(`${typeRoot}/schema.json`),
   json(`${typeRoot}/renderer.json`),
   readFile(
-    "salesforce/force-app/main/default/classes/NorthstarValidateCampaignContent.cls",
+    "salesforce/force-app/main/default/classes/WorkbenchValidateCampaignContent.cls",
     "utf8",
   ),
   readFile("packages/contracts/src/index.ts", "utf8"),
@@ -43,12 +43,12 @@ const serializedComposition = JSON.stringify(composition);
 if (!serializedComposition.includes("{!$attrs.blockers}"))
   failures.push("Widget composition missing the blockers binding.");
 
-if (typeSchema["lightning:type"] !== "@apexClassType/c__NorthstarValidateCampaignContent$Output")
+if (typeSchema["lightning:type"] !== "@apexClassType/c__WorkbenchValidateCampaignContent$Output")
   failures.push("Lightning type does not reference the bounded readiness Apex output.");
 
 const override = renderer.renderer?.componentOverrides?.$;
-if (override?.definition !== "@widget/c/northstarCampaignReadiness")
-  failures.push("Renderer does not reference the Northstar readiness widget.");
+if (override?.definition !== "@widget/c/workbenchCampaignReadiness")
+  failures.push("Renderer does not reference the Workbench readiness widget.");
 if (override?.attributes?.passed !== "{!$attrs.passed}")
   failures.push("Renderer does not map the passed field.");
 if (override?.attributes?.blockers !== "{!$attrs.blockersJson}")
@@ -68,8 +68,8 @@ for (const [root, files] of await Promise.all([
 
 await report("hxl", {
   status: failures.length ? "failed" : "passed",
-  widget: "northstarCampaignReadiness",
-  lightningType: "northstarCampaignReadinessOutput",
+  widget: "workbenchCampaignReadiness",
+  lightningType: "workbenchCampaignReadinessOutput",
   resourceUri,
   fallback: "native",
   failures,

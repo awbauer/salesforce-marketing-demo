@@ -6,7 +6,7 @@ import { fetchCurrentWeather, fetchForecast, LOCATION_IDS, LOCATIONS } from "./o
 import { RESTAURANT_IDS, RESTAURANT_PROFILES } from "./restaurant-profile.ts";
 import { locationInventory } from "./store-inventory.ts";
 
-export const CAMPAIGN_CONTEXT_MCP_NAME = "northstar-campaign-context";
+export const CAMPAIGN_CONTEXT_MCP_NAME = "workbench-campaign-context";
 /** Tool keys in the orchestrator carry this prefix, mirroring the Salesforce MCP naming. */
 export const CAMPAIGN_CONTEXT_TOOL_PREFIX = "context_";
 
@@ -26,7 +26,7 @@ export function createCampaignContextMcpServer(dependencies: CampaignContextDepe
       description:
         "Mocked profile for a fictional California fast-casual restaurant: concept, 24/7 hours, location city ID for weather, menu with prices, dayparts, and tags, customer favorites, brand voice, aggregate audience facts, and promotion rules.",
       inputSchema: z.object({
-        restaurant: z.enum(RESTAURANT_IDS).describe("Restaurant to look up; use coastline-kitchen"),
+        restaurant: z.enum(RESTAURANT_IDS).describe("Restaurant to look up; use restaurant-brand"),
       }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -112,9 +112,9 @@ export function createCampaignContextMcpServer(dependencies: CampaignContextDepe
     {
       title: "Get location inventory",
       description:
-        "Stock counts for a Coastline Kitchen restaurant from its store inventory system (a randomized mock): each inventory item's on-hand amount, deliveries on order for the next three days, par level, typical daily use, and days of cover. Read-only.",
+        "Stock counts for a Sample Kitchen restaurant from its store inventory system (a randomized mock): each inventory item's on-hand amount, deliveries on order for the next three days, par level, typical daily use, and days of cover. Read-only.",
       inputSchema: z.object({
-        location: z.enum(LOCATION_IDS).describe("Coastline Kitchen location (city id)"),
+        location: z.enum(LOCATION_IDS).describe("Sample Kitchen location (city id)"),
       }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -142,7 +142,7 @@ export function createCampaignContextMcpServer(dependencies: CampaignContextDepe
  */
 export async function connectCampaignContextTools(dependencies: CampaignContextDependencies = {}) {
   const server = createCampaignContextMcpServer(dependencies);
-  const client = new Client({ name: "northstar-orchestrator", version: "1.0.0" });
+  const client = new Client({ name: "workbench-orchestrator", version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   await client.connect(clientTransport);

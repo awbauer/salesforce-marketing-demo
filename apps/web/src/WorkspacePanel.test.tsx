@@ -1,5 +1,5 @@
-import { emptyWorkingSet, type FocusItem, type WorkingRecord } from "@northstar/contracts";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { emptyWorkingSet, type FocusItem, type WorkingRecord } from "@workbench/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   FocusCard,
@@ -40,9 +40,9 @@ describe("workspace panel", () => {
         system: "restaurant-data",
         systemLabel: "Restaurant data",
         objectType: "Restaurant",
-        recordId: "coastline-kitchen",
-        key: "restaurant-data:Restaurant:coastline-kitchen",
-        title: "Coastline Kitchen",
+        recordId: "restaurant-brand",
+        key: "restaurant-data:Restaurant:restaurant-brand",
+        title: "Sample Kitchen",
         via: "get_restaurant_profile",
       }),
       record({
@@ -140,7 +140,7 @@ describe("workspace panel", () => {
       versions: [
         {
           version: 2,
-          title: "Coastline afternoon email",
+          title: "Sample Kitchen afternoon email",
           summary: "A weather-aware email.",
           fields: [{ label: "Key Message", value: "A sunny afternoon treat" }],
           changeNote: "Approved draft",

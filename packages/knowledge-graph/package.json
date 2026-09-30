@@ -1,5 +1,5 @@
 {
-  "name": "@northstar/knowledge-graph",
+  "name": "@workbench/knowledge-graph",
   "private": true,
   "type": "module",
   "exports": {

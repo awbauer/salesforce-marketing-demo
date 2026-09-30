@@ -27,7 +27,7 @@ type AnyGraphToolSpec = {
   ) => Promise<Record<string, unknown>>;
 };
 
-export const KNOWLEDGE_GRAPH_MCP_NAME = "northstar-knowledge-graph";
+export const KNOWLEDGE_GRAPH_MCP_NAME = "workbench-knowledge-graph";
 export const KNOWLEDGE_GRAPH_TOOL_PREFIX = "graph_";
 
 type GraphEnv = { NEO4J_QUERY_URL?: string; NEO4J_USERNAME?: string; NEO4J_PASSWORD?: string };
@@ -111,7 +111,7 @@ export async function connectKnowledgeGraphTools(
   memory?: MemoryToolContext,
 ) {
   const server = createKnowledgeGraphMcpServer(backend, memory);
-  const client = new Client({ name: "northstar-orchestrator", version: "1.0.0" });
+  const client = new Client({ name: "workbench-orchestrator", version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   await client.connect(clientTransport);

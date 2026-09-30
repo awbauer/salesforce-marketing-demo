@@ -1,15 +1,11 @@
 import { z } from "zod";
 
-export const PROOF_DEFAULTS = Object.freeze({
-  workspaceId: "northstar-demo",
-  // The only place the orchestrator model is set; the Worker reads it from here. See ADR-005.
-  orchestratorModel: "@cf/openai/gpt-oss-20b",
-  imageModel: "@cf/black-forest-labs/flux-2-klein-4b",
+/**
+ * Defaults every instance shares. Models, caps and retention are per-instance and live in the
+ * instance profile (see profile.ts and ADR-009); only the safety-relevant constants are fixed here.
+ */
+export const DEFAULTS = Object.freeze({
   imageSize: 1024,
-  imageCap: 100,
-  spendCapUsd: 25,
-  transcriptRetentionHours: 24,
-  imageRetentionDays: 7,
   roles: ["evaluator", "demo-admin"] as const,
   browsers: ["chrome", "edge"] as const,
   allowedWrites: [
@@ -24,7 +20,7 @@ export const PROOF_DEFAULTS = Object.freeze({
 export const PrincipalSchema = z.object({
   subject: z.string().min(1),
   email: z.email(),
-  role: z.enum(PROOF_DEFAULTS.roles),
+  role: z.enum(DEFAULTS.roles),
   tenantId: z.string().min(1),
 });
 export type Principal = z.infer<typeof PrincipalSchema>;
@@ -124,10 +120,10 @@ export type MarketingWrite = z.infer<typeof MarketingWriteSchema>;
 
 export const ConfirmationSchema = z.object({
   id: z.string().uuid(),
-  action: z.enum(PROOF_DEFAULTS.allowedWrites),
+  action: z.enum(DEFAULTS.allowedWrites),
   /**
    * The record the write is bound to: the campaign, the brief a campaign comes from, "new", or,
-   * for an inventory case, the Coastline Kitchen location it's about.
+   * for an inventory case, the Sample Kitchen location it's about.
    */
   recordId: z.string().regex(/^(?:[a-zA-Z0-9]{15,18}|new|location:[a-z-]{2,40})$/),
   /** An inventory case's contents, bound by the request hash so Salesforce can verify them. */
@@ -179,10 +175,10 @@ export const GeneratedCampaignImageSchema = z.object({
   imageUrl: z.string().startsWith("/agent/images/"),
   promptSummary: z.string().min(1).max(280),
   channel: z.enum(["email", "web", "social"]),
-  width: z.literal(PROOF_DEFAULTS.imageSize),
-  height: z.literal(PROOF_DEFAULTS.imageSize),
+  width: z.literal(DEFAULTS.imageSize),
+  height: z.literal(DEFAULTS.imageSize),
   contentHash: z.string().regex(/^[a-f0-9]{64}$/),
-  model: z.literal(PROOF_DEFAULTS.imageModel),
+  model: z.string().min(1),
   lifecycle: z.enum(["draft", "attached", "rejected"]),
   expiresAt: z.string().datetime(),
 });
@@ -223,18 +219,18 @@ export const PHASE_2_CURATED_TOOLS = Object.freeze([
 
 /** The Salesforce agents behind the Hosted MCP tools, as published in the org. */
 export const SALESFORCE_AGENTS = Object.freeze({
-  Northstar_Campaign_Creation: {
-    label: "Northstar Campaign Creation",
+  Workbench_Campaign_Creation: {
+    label: "Workbench Campaign Creation",
     kind: "Marketing Cloud Next Campaign Creation agent",
     template: "MktCloud__CampaignCreationAgent",
   },
-  Northstar_Content_Builder: {
-    label: "Northstar Content Builder",
+  Workbench_Content_Builder: {
+    label: "Workbench Content Builder",
     kind: "Marketing Cloud Next Content Builder agent",
     template: "sfdc_cms__ContentBuilderAgent",
   },
-  Northstar_Account_Discovery: {
-    label: "Northstar Account Discovery",
+  Workbench_Account_Discovery: {
+    label: "Workbench Account Discovery",
     kind: "Marketing account discovery agent",
     template: null,
   },
@@ -300,63 +296,63 @@ const apex = (name: string, label: string) => ({ label, target: `apex://${name}`
  */
 export const SALESFORCE_TOOL_DETAILS: Record<string, SalesforceToolDetail> = {
   draft_campaign_brief: {
-    agent: "Northstar_Campaign_Creation",
+    agent: "Workbench_Campaign_Creation",
     subagent: "Marketing Campaigns",
     actions: [MC.draftBrief],
   },
   save_marketing_brief: {
-    agent: "Northstar_Campaign_Creation",
+    agent: "Workbench_Campaign_Creation",
     subagent: "Marketing Campaigns",
     actions: [MC.saveBrief, MC.preview],
     creates: ["Brief", "BriefPlanStep"],
   },
   refine_campaign_preview: {
-    agent: "Northstar_Campaign_Creation",
+    agent: "Workbench_Campaign_Creation",
     subagent: "Campaign Refinement",
     actions: [MC.refine],
   },
   create_marketing_campaign: {
-    agent: "Northstar_Campaign_Creation",
+    agent: "Workbench_Campaign_Creation",
     subagent: "Marketing Campaigns",
     actions: [MC.createCampaign, MC.saveCampaign],
     creates: ["Campaign", "Campaign flow"],
   },
   draft_campaign_content: {
-    agent: "Northstar_Content_Builder",
+    agent: "Workbench_Content_Builder",
     subagent: "Content Creation",
     actions: [MC.draftContent],
   },
   create_content_section: {
-    agent: "Northstar_Content_Builder",
+    agent: "Workbench_Content_Builder",
     subagent: "Content Creation",
     actions: [MC.section],
   },
   summarize_campaign: {
     agent: "Campaign_Readiness_Governance",
     subagent: "Campaign Intake",
-    actions: [apex("NorthstarGetCampaignContext", "Get Campaign Context")],
+    actions: [apex("WorkbenchGetCampaignContext", "Get Campaign Context")],
   },
   generate_campaign_insights: {
     agent: "Campaign_Readiness_Governance",
     subagent: "Campaign Intake",
-    actions: [apex("NorthstarGetCampaignContext", "Get Campaign Context")],
+    actions: [apex("WorkbenchGetCampaignContext", "Get Campaign Context")],
   },
   check_campaign_readiness: {
     agent: "Campaign_Readiness_Governance",
     subagent: "Campaign Intake, Audience and Consent, Brand and Content",
     actions: [
-      apex("NorthstarGetCampaignContext", "Get Campaign Context"),
-      apex("NorthstarGetConsentSummary", "Get Audience and Consent Summary"),
-      apex("NorthstarValidateCampaignContent", "Validate Campaign Content"),
+      apex("WorkbenchGetCampaignContext", "Get Campaign Context"),
+      apex("WorkbenchGetConsentSummary", "Get Audience and Consent Summary"),
+      apex("WorkbenchValidateCampaignContent", "Validate Campaign Content"),
     ],
   },
   validate_content_against_brand: {
     agent: "Campaign_Readiness_Governance",
     subagent: "Brand and Content",
-    actions: [apex("NorthstarValidateCampaignContent", "Validate Campaign Content")],
+    actions: [apex("WorkbenchValidateCampaignContent", "Validate Campaign Content")],
   },
   get_account_marketing_signals: {
-    agent: "Northstar_Account_Discovery",
+    agent: "Workbench_Account_Discovery",
     subagent: "Account Activity Summary",
     actions: [
       {
@@ -367,7 +363,7 @@ export const SALESFORCE_TOOL_DETAILS: Record<string, SalesforceToolDetail> = {
     ],
   },
   summarize_account_engagement: {
-    agent: "Northstar_Account_Discovery",
+    agent: "Workbench_Account_Discovery",
     subagent: "Account Activity Summary",
     actions: [
       {
@@ -381,7 +377,7 @@ export const SALESFORCE_TOOL_DETAILS: Record<string, SalesforceToolDetail> = {
     ],
   },
   recommend_buyer_group_members: {
-    agent: "Northstar_Account_Discovery",
+    agent: "Workbench_Account_Discovery",
     subagent: "Buyer Group Recommendations",
     actions: [
       {
@@ -391,19 +387,19 @@ export const SALESFORCE_TOOL_DETAILS: Record<string, SalesforceToolDetail> = {
     ],
   },
   get_marketing_records: {
-    actions: [apex("NorthstarGetMarketingRecords", "Get Marketing Records")],
+    actions: [apex("WorkbenchGetMarketingRecords", "Get Marketing Records")],
   },
-  check_write_access: { actions: [apex("NorthstarCheckWriteAccess", "Check Write Access")] },
+  check_write_access: { actions: [apex("WorkbenchCheckWriteAccess", "Check Write Access")] },
   create_inventory_case: {
-    actions: [apex("NorthstarCreateInventoryCase", "Create Inventory Case")],
+    actions: [apex("WorkbenchCreateInventoryCase", "Create Inventory Case")],
     creates: ["Case"],
   },
   create_campaign_review_request: {
-    actions: [apex("NorthstarCreateCampaignReviewRequest", "Create Campaign Review Request")],
+    actions: [apex("WorkbenchCreateCampaignReviewRequest", "Create Campaign Review Request")],
     creates: ["Task"],
   },
   attach_campaign_image: {
-    actions: [apex("NorthstarAttachCampaignImage", "Attach Campaign Image")],
+    actions: [apex("WorkbenchAttachCampaignImage", "Attach Campaign Image")],
     creates: ["ContentVersion"],
   },
 };
@@ -656,7 +652,7 @@ export const WORKSPACE_CATALOG: ReadonlyArray<RecordRef & { title: string }> = O
 /** The deployed HXL card for campaign readiness results. */
 export const READINESS_PRESENTATION = {
   kind: "hxl",
-  resourceUri: "ui://widget/lightningType/c__northstarCampaignReadinessOutput",
+  resourceUri: "ui://widget/lightningType/c__workbenchCampaignReadinessOutput",
   sourceStatus: "deployed",
   fallback: "native",
 } as const satisfies PortableTilePresentation;
@@ -686,7 +682,7 @@ export const SuggestedActionSchema = z.object({
 export type SuggestedAction = z.infer<typeof SuggestedActionSchema>;
 
 /**
- * Weather-driven low stock at one Coastline Kitchen location, computed by code from the forecast,
+ * Weather-driven low stock at one Sample Kitchen location, computed by code from the forecast,
  * the graph's weather → dish → inventory mapping, and the store's stock counts.
  */
 export const InventoryRiskSchema = z.object({
@@ -725,7 +721,7 @@ export const WriteProgressSchema = z.object({
   /** Preparing a confirmation (plan, permission check), or running a confirmed write. */
   phase: z.enum(["prepare", "execute"]).default("execute"),
   confirmationId: z.string().optional(),
-  action: z.enum(PROOF_DEFAULTS.allowedWrites),
+  action: z.enum(DEFAULTS.allowedWrites),
   title: z.string(),
   startedAt: z.string(),
   finishedAt: z.string().optional(),
@@ -740,7 +736,7 @@ export const OrchestratorStateSchema = z.object({
   suggestions: z.array(SuggestedActionSchema).default([]),
   /** The latest weather-driven inventory check in this chat, which a case can be opened from. */
   inventoryRisk: InventoryRiskSchema.nullable().default(null),
-  workspaceId: z.literal(PROOF_DEFAULTS.workspaceId),
+  workspaceId: z.string().min(1),
   workingSet: WorkingSetSchema,
   activity: z.array(ActivityEventSchema),
   sourcesConnected: z.number().int().nonnegative(),
@@ -955,8 +951,6 @@ export function parseOperationControls(env: {
 }
 
 /** Turn history and the confirmation audit are kept for 24 hours. */
-export const AUDIT_RETENTION_HOURS = PROOF_DEFAULTS.transcriptRetentionHours;
-export const AUDIT_RETENTION_MS = AUDIT_RETENTION_HOURS * 3_600_000;
 
 /** Long-term memory (drafts and decisions in the graph) is kept for 14 days. See ADR-007. */
 export const MEMORY_RETENTION_DAYS = 14;
@@ -1008,7 +1002,7 @@ export const SessionSchema = z.object({
 
 export const HealthSchema = z.object({
   status: z.enum(["ok", "degraded"]),
-  service: z.literal("northstar-edge"),
+  service: z.literal("workbench-edge"),
   environment: z.string(),
   correlationId: z.string(),
 });
@@ -1018,7 +1012,7 @@ export const ErrorEnvelopeSchema = z.object({
 });
 
 export const initialOrchestratorState: OrchestratorState = {
-  workspaceId: "northstar-demo",
+  workspaceId: "workbench-demo",
   writeProgress: null,
   inventoryRisk: null,
   sourcesConnected: 3,

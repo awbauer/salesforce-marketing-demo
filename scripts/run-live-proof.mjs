@@ -1,4 +1,5 @@
 import { report } from "./lib/report.mjs";
+
 const required = ["PROOF_BASE_URL"];
 const missing = required.filter((name) => !process.env[name]);
 if (missing.length) {

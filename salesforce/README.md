@@ -1,8 +1,8 @@
 # Salesforce Phase 2 source
 
-This directory is an API 67.0 Salesforce DX package for the Northstar proof environment. It is not authorized for deployment to business production orgs.
+This directory is an API 67.0 Salesforce DX package for the Workbench proof environment. It is not authorized for deployment to business production orgs.
 
-The target org must be passed explicitly through `SF_TARGET_ORG`; no default org is accepted by the validation or deployment scripts. Before any mutation, `pnpm sf:validate` verifies that the target is either reported as a sandbox or matches the exact user-approved proof-org ID supplied through `SF_APPROVED_PROOF_ORG_ID`, and that the required proof capabilities and sample records are visible to the evaluator. The second path exists only because the dedicated `northstar-pot` demo org is production-classified by Salesforce; it does not authorize another non-sandbox org or weaken the exact-target check.
+The target org must be passed explicitly through `SF_TARGET_ORG`; no default org is accepted by the validation or deployment scripts. Before any mutation, `pnpm sf:validate` verifies that the target is either reported as a sandbox or matches the exact user-approved proof-org ID supplied through `SF_APPROVED_PROOF_ORG_ID`, and that the required proof capabilities and sample records are visible to the evaluator. The second path exists only because the dedicated `workbench-pot` demo org is production-classified by Salesforce; it does not authorize another non-sandbox org or weaken the exact-target check.
 
 Agentforce authoring bundles live under `force-app/main/default/aiAuthoringBundles`. Deterministic actions and their tests live under `classes` and `flows`. `specs/hosted-mcp-server.json` is the reviewed source catalog for the custom Hosted MCP server; Salesforce currently requires custom server composition and publication through Setup/API Catalog, so the proof captures the exact catalog and read-back instead of inventing unsupported metadata.
 
@@ -16,4 +16,4 @@ Agentforce authoring bundles live under `force-app/main/default/aiAuthoringBundl
 6. Configure the focused custom Hosted MCP server and prove it directly with the checked-in Postman collection.
 7. Register the server in the Cloudflare portal with per-user OAuth, compare `tools/list` to the checked-in catalog, then enable the Worker connection.
 
-Steps 3–7 are blocked by design if the target is neither the supplied Northstar sandbox nor the exact user-approved Northstar proof org. A business production org or an unrelated sandbox is not an acceptable substitute.
+Steps 3–7 are blocked by design if the target is neither the supplied Workbench sandbox nor the exact user-approved Workbench proof org. A business production org or an unrelated sandbox is not an acceptable substitute.

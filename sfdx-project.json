@@ -5,7 +5,7 @@
       "default": true
     }
   ],
-  "name": "northstar-marketing-workbench",
+  "name": "marketing-workbench",
   "namespace": "",
   "sfdcLoginUrl": "https://test.salesforce.com",
   "sourceApiVersion": "67.0"

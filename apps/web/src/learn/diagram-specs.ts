@@ -1327,7 +1327,7 @@ export const DIAGRAM_SPECS: Record<DiagramId, DiagramSpec> = {
     ],
   },
   "push-plan": {
-    label: "The Coastline campaign tool plan",
+    label: "The Sample Kitchen campaign tool plan",
     caption:
       "Four forced tools in order: context, past results, then the content draft. The model presents the draft, and the workspace saves it as the focus.",
     blocks: [

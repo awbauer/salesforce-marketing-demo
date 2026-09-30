@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { report } from "./lib/report.mjs";
+
 const mode = process.argv[2] ?? "full";
 const commands =
   mode === "fast"
@@ -37,7 +38,7 @@ for (const [command, ...args] of commands) {
     env: {
       ...process.env,
       CI: "true",
-      XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME ?? "/tmp/northstar-wrangler",
+      XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME ?? "/tmp/workbench-wrangler",
     },
   });
   results.push({ command: [command, ...args].join(" "), exitCode: result.status ?? 1 });

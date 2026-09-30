@@ -1,5 +1,5 @@
 import { runInDurableObject, SELF } from "cloudflare:test";
-import { emptyWorkingSet, type WorkingSet, type WriteProgress } from "@northstar/contracts";
+import { emptyWorkingSet, type WorkingSet, type WriteProgress } from "@workbench/contracts";
 import { describe, expect, it } from "vitest";
 import type { MemoryView } from "../../../packages/knowledge-graph/src/index.ts";
 import { connectCampaignContextTools } from "./campaign-context/server";
@@ -23,7 +23,7 @@ describe("working set", () => {
     expect(baseToolName("context_get_current_weather")).toBe("get_current_weather");
     expect(baseToolName("graph_find_similar_past_pushes")).toBe("find_similar_past_pushes");
     expect(
-      baseToolName("tool_salesforce_northstar-marketing-salesforce_check_campaign_readiness"),
+      baseToolName("tool_salesforce_workbench-marketing-salesforce_check_campaign_readiness"),
     ).toBe("check_campaign_readiness");
     expect(baseToolName("something_else")).toBeNull();
   });
@@ -51,7 +51,7 @@ describe("working set", () => {
       );
     let set: WorkingSet = emptyWorkingSet();
     const steps: Array<[Record<string, unknown>, string, unknown]> = [
-      [context.tools, "context_get_restaurant_profile", { restaurant: "coastline-kitchen" }],
+      [context.tools, "context_get_restaurant_profile", { restaurant: "restaurant-brand" }],
       [context.tools, "context_get_current_weather", { location: "los-angeles" }],
       [
         graph.tools,
@@ -81,8 +81,8 @@ describe("working set", () => {
         system: "restaurant-data",
         systemLabel: "Restaurant data",
         objectType: "Restaurant",
-        recordId: "coastline-kitchen",
-        title: "Coastline Kitchen",
+        recordId: "restaurant-brand",
+        title: "Sample Kitchen",
         relation: "read",
       }),
     ]);
@@ -147,7 +147,7 @@ describe("working set", () => {
       title: "Fall Loyalty Reactivation",
     });
     expect(salesforceRecordsIn("How is the fall loyalty reactivation doing?")).toHaveLength(1);
-    expect(salesforceRecordsIn("Draft a push for Coastline Kitchen")).toEqual([]);
+    expect(salesforceRecordsIn("Draft a push for Sample Kitchen")).toEqual([]);
 
     const readiness = ingestToolResult(emptyWorkingSet(), {
       toolName: "tool_salesforce_x_check_campaign_readiness",

@@ -1,4 +1,4 @@
-import type { Confirmation } from "@northstar/contracts";
+import type { Confirmation } from "@workbench/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { MarketingWriteDetails, PermissionDetails } from "./ConfirmationDetails";
@@ -40,7 +40,7 @@ describe("confirmation details", () => {
     const html = renderToStaticMarkup(<MarketingWriteDetails confirmation={confirmation()} />);
     expect(html).toContain("Save the brief “Rainy-day comfort” in Marketing Cloud");
     expect(html).toContain("Soup&#x27;s on.");
-    expect(html).toContain("Northstar Campaign Creation");
+    expect(html).toContain("Workbench Campaign Creation");
     expect(html).toContain("Marketing Cloud Next Campaign Creation agent");
     expect(html).toContain("MktCloud__CampaignCreationAgent");
     expect(html).toContain("Marketing Cloud: Save Campaign Brief");

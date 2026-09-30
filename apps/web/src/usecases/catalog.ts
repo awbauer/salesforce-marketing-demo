@@ -26,7 +26,7 @@ export type UseCase = {
   id: string;
   title: string;
   team: Team;
-  /** Set for scenarios built on an industry brand, such as Harborstone Wealth. */
+  /** Set for scenarios built on an industry brand, such as Sample Wealth. */
   industry?: Industry;
   status: "available" | "coming-soon";
   /** One sentence for the card. */
@@ -47,7 +47,7 @@ export type UseCase = {
 };
 
 const SF_CAMPAIGN_AGENT: UseCaseSystem = {
-  name: "Northstar Campaign Creation",
+  name: "Workbench Campaign Creation",
   kind: "Salesforce agent",
   role: "Marketing Cloud Next Campaign Creation agent: drafts and saves the brief, previews, creates the campaign and flow",
 };
@@ -62,7 +62,7 @@ const READINESS_AGENT: UseCaseSystem = {
   role: "Custom agent: campaign context, consent summary, content validation (Apex)",
 };
 const ORCHESTRATOR: UseCaseSystem = {
-  name: "Northstar orchestrator (gpt-oss-20b)",
+  name: "Workbench orchestrator (gpt-oss-20b)",
   kind: "Workers AI",
   role: "Routes the request, calls the tools in order, writes the answer",
 };
@@ -74,9 +74,9 @@ const FED_NEWS: UseCaseSystem = {
 };
 
 const EMAIL_PROMPT =
-  "Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
+  "Draft an email campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
 const PUSH_PROMPT =
-  "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
+  "Draft a push notification campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
 
 export const USE_CASES: UseCase[] = [
   // ------------------------------------------------------------------------------------------
@@ -89,7 +89,7 @@ export const USE_CASES: UseCase[] = [
     summary:
       "Turn today's weather, the menu, and past results into a Marketing Cloud Next brief, then a campaign with its flow.",
     scenario:
-      "A Coastline Kitchen marketer wants a lunch campaign that fits today's weather in Los Angeles and what has worked before, built the way Marketing Cloud Next builds campaigns: brief first, then a campaign with a flow.",
+      "A Sample Kitchen marketer wants a lunch campaign that fits today's weather in Los Angeles and what has worked before, built the way Marketing Cloud Next builds campaigns: brief first, then a campaign with a flow.",
     prompts: [
       {
         text: EMAIL_PROMPT,
@@ -205,7 +205,7 @@ export const USE_CASES: UseCase[] = [
       ORCHESTRATOR,
       READINESS_AGENT,
       {
-        name: "NorthstarCreateCampaignReviewRequest",
+        name: "WorkbenchCreateCampaignReviewRequest",
         kind: "Salesforce action",
         role: "Creates the review Task after a signed confirmation",
       },
@@ -229,7 +229,7 @@ export const USE_CASES: UseCase[] = [
     status: "available",
     summary:
       "Draft copy with the Marketing Cloud Content Builder agent, then check it against brand rules.",
-    scenario: "A copywriter needs subject lines and a hero section that fit the Northstar brand.",
+    scenario: "A copywriter needs subject lines and a hero section that fit the Workbench brand.",
     prompts: [
       {
         text: "Draft campaign content for the sample audience",
@@ -239,12 +239,12 @@ export const USE_CASES: UseCase[] = [
         text: "Create a draft hero section for the email",
         demonstrates: "Create Section with Content",
       },
-      { text: "Check this content against the Northstar brand", demonstrates: "Brand validation" },
+      { text: "Check this content against the Workbench brand", demonstrates: "Brand validation" },
     ],
     systems: [
       ORCHESTRATOR,
       {
-        name: "Northstar Content Builder",
+        name: "Workbench Content Builder",
         kind: "Salesforce agent",
         role: "Marketing Cloud Next Content Builder agent",
       },
@@ -279,7 +279,7 @@ export const USE_CASES: UseCase[] = [
       ORCHESTRATOR,
       GRAPH,
       {
-        name: "Northstar Account Discovery",
+        name: "Workbench Account Discovery",
         kind: "Salesforce agent",
         role: "Account engagement and buyer-group signals",
       },
@@ -359,7 +359,7 @@ export const USE_CASES: UseCase[] = [
     summary:
       "When weather alerts hit a location, see which customers are affected, who can be notified, and what to pause.",
     scenario:
-      "A service lead hears there are weather alerts near a Coastline Kitchen location and needs to know who's affected, what to tell customers, and which campaigns to hold.",
+      "A service lead hears there are weather alerts near a Sample Kitchen location and needs to know who's affected, what to tell customers, and which campaigns to hold.",
     prompts: [
       {
         text: "There are weather alerts near our San Diego location. Which customers are affected and what should we tell them?",
@@ -425,7 +425,7 @@ export const USE_CASES: UseCase[] = [
     summary:
       "Check each restaurant's stock against the dishes the forecast will lift, and open a Salesforce case for the store manager when something is running low.",
     scenario:
-      "Before a hot or rainy stretch, operations wants to know whether each Coastline Kitchen has enough of what the weather will sell, and to get a case to the store manager for anything that won't last.",
+      "Before a hot or rainy stretch, operations wants to know whether each Sample Kitchen has enough of what the weather will sell, and to get a case to the store manager for anything that won't last.",
     prompts: [
       {
         text: "Check inventory for our Sacramento store against the forecast",
@@ -512,7 +512,7 @@ export const USE_CASES: UseCase[] = [
     summary:
       "When the Fed moves rates, find the compliance-approved content that's ready to send, who can get it, and what's blocked.",
     scenario:
-      "The Fed just announced a rate decision. Harborstone Wealth prepared compliance-approved content for each outcome, and past responses sent within hours of the news opened far better than next-day ones. Marketing needs to know now what's approved to send, to whom, and what isn't, without writing a word of new regulated copy.",
+      "The Fed just announced a rate decision. Sample Wealth prepared compliance-approved content for each outcome, and past responses sent within hours of the news opened far better than next-day ones. Marketing needs to know now what's approved to send, to whom, and what isn't, without writing a word of new regulated copy.",
     prompts: [
       {
         text: "The Fed just announced its rate decision. What pre-approved content can we send clients today?",
@@ -585,7 +585,7 @@ export const USE_CASES: UseCase[] = [
     summary:
       "Line up the embargoed, pre-approved announcement package in release order, with who each piece can reach and what's still blocked.",
     scenario:
-      "Harborstone Wealth announces its acquisition of Bayview Retirement Advisors tomorrow at 8:00 ET. Legal and compliance approved the package under embargo. The team needs the release order, the audience and consent basis for each piece, and anything that can't go out, before the announcement, not after.",
+      "Sample Wealth announces its acquisition of Bayview Retirement Advisors tomorrow at 8:00 ET. Legal and compliance approved the package under embargo. The team needs the release order, the audience and consent basis for each piece, and anything that can't go out, before the announcement, not after.",
     prompts: [
       {
         text: "We announce the Bayview acquisition tomorrow at 8am. What approved content is ready to release, in what order, and who can we send it to?",
@@ -634,7 +634,7 @@ export const USE_CASES: UseCase[] = [
     summary:
       "Turn a client's signals, holdings, and peers into ranked plays, then activate them with approved content on consented channels.",
     scenario:
-      "An institutional consultant at Harborstone Wealth has 90 days to grow a foundation client's assets. Some of its money is still at another custodian, the board just raised its payout, and rates moved. They need a plan that says which products to lead with and why, who to talk to on which channel, and which approved content to use, then a campaign to run it.",
+      "An institutional consultant at Sample Wealth has 90 days to grow a foundation client's assets. Some of its money is still at another custodian, the board just raised its payout, and rates moved. They need a plan that says which products to lead with and why, who to talk to on which channel, and which approved content to use, then a campaign to run it.",
     prompts: [
       {
         text: "Build an account plan to grow AUM with Cedar Valley Community Foundation",
@@ -779,7 +779,7 @@ export const USE_CASES: UseCase[] = [
     systems: [
       { name: "Workers AI (FLUX)", kind: "Workers AI", role: "Image generation" },
       {
-        name: "NorthstarAttachCampaignImage",
+        name: "WorkbenchAttachCampaignImage",
         kind: "Salesforce action",
         role: "Attaches the confirmed image after a hash check",
       },
@@ -806,7 +806,7 @@ export const USE_CASES: UseCase[] = [
         demonstrates: "The server stores the focus in long-term memory",
       },
       {
-        text: "What did we decide about the Coastline rainy-day push?",
+        text: "What did we decide about the Sample Kitchen rainy-day push?",
         demonstrates: "Recall in a new chat, with provenance",
       },
     ],

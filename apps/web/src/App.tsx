@@ -11,13 +11,13 @@ import {
   OrchestratorStateSchema,
   PHASE_2_CURATED_TOOLS,
   WRITE_TOOL_BY_ACTION,
-} from "@northstar/contracts";
+} from "@workbench/contracts";
 import {
   normalizeAssistantText,
   salesforceRecordUrl,
   shouldShowChatError,
   unwrapAssistantText,
-} from "@northstar/ui";
+} from "@workbench/ui";
 import { useAgent } from "agents/react";
 import type { UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
@@ -118,8 +118,8 @@ function InventoryCaseDetails({ confirmation }: { confirmation: Confirmation }) 
   return (
     <div className="inventory-case">
       <p>
-        <strong>For {details.manager.name}</strong>, store manager, Coastline Kitchen {details.city}{" "}
-        · forecast: {details.conditions.join(", ")}
+        <strong>For {details.manager.name}</strong>, store manager, Sample Kitchen {details.city} ·
+        forecast: {details.conditions.join(", ")}
       </p>
       <table>
         <caption className="sr-only">Items that won't cover the forecast</caption>
@@ -612,7 +612,7 @@ export function App() {
       <header className="topbar">
         <div className="brand-mark">N</div>
         <div>
-          <p>Northstar</p>
+          <p>Workbench</p>
           <h1>Marketing workbench</h1>
         </div>
         <div className="top-actions">
@@ -886,9 +886,9 @@ export function App() {
           </div>
           <div className="messages" aria-live="polite">
             <article className="message assistant">
-              <div className="message-author">Northstar orchestrator</div>
+              <div className="message-author">Workbench orchestrator</div>
               <p>
-                Explore the fictional Northstar campaign with governed Salesforce data. I can
+                Explore the fictional Workbench campaign with governed Salesforce data. I can
                 summarize context, draft content, check readiness, and prepare a review task for
                 your confirmation. Nothing is published or sent.
               </p>
@@ -896,7 +896,7 @@ export function App() {
             {messages.map((message) => (
               <article key={message.id} className={`message ${message.role}`}>
                 <div className="message-author">
-                  {message.role === "user" ? "You" : "Northstar orchestrator"}
+                  {message.role === "user" ? "You" : "Workbench orchestrator"}
                 </div>
                 {message.role === "assistant" ? (
                   <Markdown text={unwrapAssistantText(rawMessageText(message))} />
@@ -917,7 +917,7 @@ export function App() {
               <section className="live-trace" aria-live="polite">
                 <div className="trace-pulse" />
                 <div className="live-trace-detail">
-                  <strong>Northstar orchestrator is working</strong>
+                  <strong>Workbench orchestrator is working</strong>
                   <span className="live-trace-copy">
                     Tool selection and Salesforce agent calls will appear in the trace.
                   </span>
@@ -1314,7 +1314,7 @@ export function App() {
               )}
               {generatedImage && (
                 <figure className="generated-image-card">
-                  <img src={generatedImage.imageUrl} alt="Generated Northstar campaign draft" />
+                  <img src={generatedImage.imageUrl} alt="Generated Workbench campaign draft" />
                   <figcaption>
                     <strong>
                       {generatedImage.lifecycle === "attached"

@@ -1,5 +1,5 @@
 import { createMcpHandler } from "@modelcontextprotocol/server";
-import { HealthSchema, PROOF_DEFAULTS } from "@northstar/contracts";
+import { DEFAULTS, HealthSchema } from "@workbench/contracts";
 import { getAgentByName } from "agents";
 import {
   EXPLORER_MAX_ROWS,
@@ -104,7 +104,7 @@ export default {
         return json(
           HealthSchema.parse({
             status: "ok",
-            service: "northstar-edge",
+            service: "workbench-edge",
             environment: env.ENVIRONMENT,
             correlationId: id,
           }),
@@ -123,8 +123,8 @@ export default {
         });
       if (url.pathname === "/api/session") {
         const principal = await resolvePrincipal(request, env);
-        const agentKey = await deriveAgentKey(principal, PROOF_DEFAULTS.workspaceId);
-        return json({ workspaceId: PROOF_DEFAULTS.workspaceId, principal, agentKey });
+        const agentKey = await deriveAgentKey(principal, INSTANCE_PROFILE.instance.id);
+        return json({ workspaceId: INSTANCE_PROFILE.instance.id, principal, agentKey });
       }
       if (url.pathname.startsWith("/api/graph/")) {
         await resolvePrincipal(request, env);
@@ -142,9 +142,9 @@ export default {
       }
       if (url.pathname === "/agent" || url.pathname.startsWith("/agent/")) {
         const principal = await resolvePrincipal(request, env);
-        const name = await deriveAgentKey(principal, PROOF_DEFAULTS.workspaceId);
+        const name = await deriveAgentKey(principal, INSTANCE_PROFILE.instance.id);
         const stub = await getAgentByName(env.MarketingOrchestrator, name, {
-          props: { principalSubject: principal.subject, workspaceId: PROOF_DEFAULTS.workspaceId },
+          props: { principalSubject: principal.subject, workspaceId: INSTANCE_PROFILE.instance.id },
         });
         return stub.fetch(request);
       }

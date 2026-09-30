@@ -1,0 +1,14 @@
+{
+  "generatedAt": "2026-09-30T23:47:53.879Z",
+  "status": "failed",
+  "results": [
+    {
+      "command": "pnpm types:worker",
+      "exitCode": 0
+    },
+    {
+      "command": "pnpm format:check",
+      "exitCode": 1
+    }
+  ]
+}

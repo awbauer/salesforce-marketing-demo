@@ -4,13 +4,12 @@ import process from "node:process";
 import catalog from "../packages/contracts/src/tool-catalog.json" with { type: "json" };
 
 const command = process.argv[2];
-const stateFile = process.env.SF_MCP_OAUTH_STATE_FILE ?? "/tmp/northstar-salesforce-mcp-oauth.json";
+const stateFile = process.env.SF_MCP_OAUTH_STATE_FILE ?? "/tmp/workbench-salesforce-mcp-oauth.json";
 const redirectUri = "https://oauth.pstmn.io/v1/callback";
 const authorizationUrl = "https://login.salesforce.com/services/oauth2/authorize";
 const tokenUrl = "https://login.salesforce.com/services/oauth2/token";
 const mcpUrl =
-  process.env.SF_MCP_URL ??
-  "https://api.salesforce.com/platform/mcp/v1/custom/NorthstarMarketingWorkbench";
+  process.env.SF_MCP_URL ?? "https://api.salesforce.com/platform/mcp/v1/custom/MarketingWorkbench";
 
 function base64url(value) {
   return Buffer.from(value).toString("base64url");
@@ -188,7 +187,7 @@ async function prove() {
     params: {
       protocolVersion: "2025-06-18",
       capabilities: {},
-      clientInfo: { name: "northstar-cli-gate", version: "1.0.0" },
+      clientInfo: { name: "workbench-cli-gate", version: "1.0.0" },
     },
   });
   if (initialized.error) throw new Error(`MCP initialize failed: ${initialized.error.message}`);

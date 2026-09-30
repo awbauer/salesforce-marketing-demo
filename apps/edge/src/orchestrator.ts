@@ -1,12 +1,11 @@
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import {
-  AUDIT_RETENTION_HOURS,
-  AUDIT_RETENTION_MS,
   type Confirmation,
   ConfirmationSchema,
   type ConnectorState,
   classifyPolicyIntent,
   currentFocusVersion,
+  DEFAULTS,
   emptyWorkingSet,
   FOCUS_KIND_LABELS,
   type FocusItem,
@@ -19,7 +18,6 @@ import {
   type PermissionReport,
   PHASE_2_AUTONOMOUS_TOOLS,
   PHASE_2_CURATED_TOOLS,
-  PROOF_DEFAULTS,
   parseOperationControls,
   policyResponse,
   referentFromReply,
@@ -29,7 +27,7 @@ import {
   type TurnRecord,
   TurnRecordSchema,
   WRITE_TOOL_BY_ACTION,
-} from "@northstar/contracts";
+} from "@workbench/contracts";
 import {
   convertToModelMessages,
   createUIMessageStream,
@@ -193,8 +191,10 @@ const FOUND_NOTES = {
   recovered: "the agent didn't answer in time, but Salesforce shows it was saved",
 } as const;
 /** The Marketing Cloud agent the workbench asks to save briefs and create campaigns. */
-const CAMPAIGN_AGENT = "Northstar_Campaign_Creation";
-const IMAGE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const CAMPAIGN_AGENT = "Workbench_Campaign_Creation";
+const AUDIT_RETENTION_HOURS = INSTANCE_PROFILE.retention.transcriptHours;
+const AUDIT_RETENTION_MS = AUDIT_RETENTION_HOURS * 3_600_000;
+const IMAGE_RETENTION_MS = INSTANCE_PROFILE.retention.imageDays * 24 * 60 * 60 * 1000;
 
 const SEMANTIC_FAILURE_PATTERN =
   /no business units|no (?:results|records|data)\b|cannot (?:access|summarize|find|retrieve)|can't (?:access|summarize|find|retrieve)|not (?:available|found)|permission denied|access denied/i;
@@ -328,13 +328,13 @@ function localAgentBrief(keyMessage: string) {
   return [
     "Here is a draft campaign brief (local fixture):",
     "Name: Rainy-day comfort: Spicy Tortilla Soup",
-    "Description: Lunch campaign for Coastline app users in Los Angeles, built from the weather and past rainy-day results.",
+    "Description: Lunch campaign for Sample Kitchen app users in Los Angeles, built from the weather and past rainy-day results.",
     `Key Message: ${keyMessage}`,
-    "Target Audience: Coastline Kitchen app users in Los Angeles who order at lunch.",
+    "Target Audience: Sample Kitchen app users in Los Angeles who order at lunch.",
     "Primary Goal: Drive lunch app orders on rainy days.",
     "Primary CTAs: Order now",
     "Primary KPI: Lunch orders from the campaign",
-    "Agent Guardrails: Coastline Kitchen brand voice; no discounts over 20 percent. Requested channel: Mobile app push.",
+    "Agent Guardrails: Sample Kitchen brand voice; no discounts over 20 percent. Requested channel: Mobile app push.",
     "Priority: High",
   ].join("\n");
 }
@@ -665,7 +665,7 @@ function scriptedTurnStream(
   });
 }
 
-const POLICY_ROUTER = "Northstar policy router";
+const POLICY_ROUTER = "Workbench policy router";
 const ORCHESTRATOR_MODEL = INSTANCE_PROFILE.models.chat.model;
 const TURN_HISTORY_LIMIT = 200;
 type TurnPipeResult = Awaited<ReturnType<ReturnType<typeof createTurnTracer>["pipe"]>>;
@@ -719,7 +719,7 @@ export class MarketingOrchestrator extends AIChatAgent<
   AgentProps
 > {
   static options = { sendIdentityOnConnect: false };
-  initialState = initialOrchestratorState;
+  initialState = { ...initialOrchestratorState, workspaceId: INSTANCE_PROFILE.instance.id };
   maxPersistedMessages = 100;
   waitForMcpConnections = false;
   private principalSubject = "unknown";
@@ -996,7 +996,7 @@ export class MarketingOrchestrator extends AIChatAgent<
   }
 
   private ensureTurnHistory() {
-    this.sql`CREATE TABLE IF NOT EXISTS northstar_turn_history (
+    this.sql`CREATE TABLE IF NOT EXISTS workbench_turn_history (
       id TEXT PRIMARY KEY,
       started_at INTEGER NOT NULL,
       record TEXT NOT NULL
@@ -1012,12 +1012,12 @@ export class MarketingOrchestrator extends AIChatAgent<
     try {
       const record = TurnRecordSchema.parse(buildTurnRecord({ utterance, ...context, result }));
       this.ensureTurnHistory();
-      this.sql`INSERT INTO northstar_turn_history (id, started_at, record)
+      this.sql`INSERT INTO workbench_turn_history (id, started_at, record)
         VALUES (${record.id}, ${Date.parse(record.startedAt)}, ${JSON.stringify(record)})`;
       const cutoff = Date.now() - AUDIT_RETENTION_MS;
-      this.sql`DELETE FROM northstar_turn_history WHERE started_at < ${cutoff}`;
-      this.sql`DELETE FROM northstar_turn_history WHERE id NOT IN (
-        SELECT id FROM northstar_turn_history ORDER BY started_at DESC LIMIT ${TURN_HISTORY_LIMIT}
+      this.sql`DELETE FROM workbench_turn_history WHERE started_at < ${cutoff}`;
+      this.sql`DELETE FROM workbench_turn_history WHERE id NOT IN (
+        SELECT id FROM workbench_turn_history ORDER BY started_at DESC LIMIT ${TURN_HISTORY_LIMIT}
       )`;
     } catch (error) {
       console.error("[orchestrator] could not record turn history", error);
@@ -1070,7 +1070,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         headers: {
           "content-type": "application/json; charset=utf-8",
           "cache-control": "no-store",
-          "content-disposition": `attachment; filename="northstar-audit-${exportedAt.slice(0, 10)}.json"`,
+          "content-disposition": `attachment; filename="workbench-audit-${exportedAt.slice(0, 10)}.json"`,
         },
       },
     );
@@ -1079,7 +1079,7 @@ export class MarketingOrchestrator extends AIChatAgent<
   private listTurns(): TurnRecord[] {
     this.ensureTurnHistory();
     const cutoff = Date.now() - AUDIT_RETENTION_MS;
-    return this.sql<{ record: string }>`SELECT record FROM northstar_turn_history
+    return this.sql<{ record: string }>`SELECT record FROM workbench_turn_history
       WHERE started_at >= ${cutoff} ORDER BY started_at DESC LIMIT ${TURN_HISTORY_LIMIT}`.flatMap(
       (row) => {
         const parsed = TurnRecordSchema.safeParse(JSON.parse(row.record));
@@ -1291,7 +1291,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     return {
       imageBase64: encodeBase64(bytes),
       contentHash: draft.content_hash,
-      title: `Northstar ${draft.channel} campaign image`,
+      title: `Workbench ${draft.channel} campaign image`,
       altText: `Generated campaign image: ${draft.prompt_summary}`,
     };
   }
@@ -1434,7 +1434,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     summary?: unknown;
     imageId?: unknown;
   }): Promise<Response> {
-    const action = PROOF_DEFAULTS.allowedWrites.find((write) => write === body.action);
+    const action = DEFAULTS.allowedWrites.find((write) => write === body.action);
     if (!action) return this.buildConfirmation(body);
     this.beginPrepareProgress(action);
     let response: Response;
@@ -1661,7 +1661,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       { id: "plan", label: plan },
       {
         id: "permissions",
-        label: "Salesforce checks your permissions as you (NorthstarCheckWriteAccess)",
+        label: "Salesforce checks your permissions as you (WorkbenchCheckWriteAccess)",
       },
       { id: "confirm", label: "Binding exactly what will be written to a one-time confirmation" },
     ];
@@ -1725,18 +1725,18 @@ export class MarketingOrchestrator extends AIChatAgent<
       ];
     if (current.action === "create-inventory-case")
       return signed(
-        "NorthstarCreateInventoryCase",
+        "WorkbenchCreateInventoryCase",
         `verifies the signature and the case contents, then opens the Case for ${current.inventoryCase?.manager.name ?? "the store manager"}`,
         "Case",
       );
     if (current.action === "attach-generated-image")
       return signed(
-        "NorthstarAttachCampaignImage",
+        "WorkbenchAttachCampaignImage",
         "verifies the signature and the image hash, then attaches the file",
         "file and its campaign link",
       );
     return signed(
-      "NorthstarCreateCampaignReviewRequest",
+      "WorkbenchCreateCampaignReviewRequest",
       "verifies the signature, then creates the review Task",
       "Task",
     );
@@ -2231,7 +2231,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         { error: { code: "CONFLICT", message: "The confirmation has no case contents." } },
         { status: 409 },
       );
-    const subject = `Low stock before forecast weather: Coastline Kitchen ${details.city}`;
+    const subject = `Low stock before forecast weather: Sample Kitchen ${details.city}`;
     let result: {
       source: "salesforce" | "local-fixture";
       caseId: string;
@@ -2523,7 +2523,7 @@ export class MarketingOrchestrator extends AIChatAgent<
   }
 
   private ensureAttempts() {
-    this.sql`CREATE TABLE IF NOT EXISTS northstar_marketing_attempts (
+    this.sql`CREATE TABLE IF NOT EXISTS workbench_marketing_attempts (
       key TEXT PRIMARY KEY,
       at INTEGER NOT NULL
     )`;
@@ -2533,22 +2533,22 @@ export class MarketingOrchestrator extends AIChatAgent<
   private rememberAttempt(key: string) {
     this.ensureAttempts();
     const now = Date.now();
-    this.sql`INSERT OR REPLACE INTO northstar_marketing_attempts (key, at) VALUES (${key}, ${now})`;
-    this.sql`DELETE FROM northstar_marketing_attempts WHERE at < ${now - AUDIT_RETENTION_MS}`;
+    this.sql`INSERT OR REPLACE INTO workbench_marketing_attempts (key, at) VALUES (${key}, ${now})`;
+    this.sql`DELETE FROM workbench_marketing_attempts WHERE at < ${now - AUDIT_RETENTION_MS}`;
   }
 
   /** Whether this exact write was sent to the agent before without being confirmed. */
   private sentBefore(key: string) {
     this.ensureAttempts();
     return (
-      this.sql<{ key: string }>`SELECT key FROM northstar_marketing_attempts WHERE key = ${key}`
+      this.sql<{ key: string }>`SELECT key FROM workbench_marketing_attempts WHERE key = ${key}`
         .length > 0
     );
   }
 
   private forgetAttempt(key: string) {
     this.ensureAttempts();
-    this.sql`DELETE FROM northstar_marketing_attempts WHERE key = ${key}`;
+    this.sql`DELETE FROM workbench_marketing_attempts WHERE key = ${key}`;
   }
 
   /** Asks the Campaign Creation agent to do a confirmed write; local development uses a stand-in. */
@@ -2928,7 +2928,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     const risk = this.state.inventoryRisk;
     if (!risk) return "The inventory check could not complete locally.";
     return [
-      `**Inventory check for Coastline Kitchen ${risk.city}** (local fixture forecast: ${risk.conditions.join(", ")}).\n\n`,
+      `**Inventory check for Sample Kitchen ${risk.city}** (local fixture forecast: ${risk.conditions.join(", ")}).\n\n`,
       risk.lowItems.length
         ? `${risk.lowItems.length} item${risk.lowItems.length === 1 ? "" : "s"} won't cover the forecast:\n\n${risk.lowItems
             .map(
@@ -3075,7 +3075,7 @@ export class MarketingOrchestrator extends AIChatAgent<
   }
 
   private ensureMemoryAudit() {
-    this.sql`CREATE TABLE IF NOT EXISTS northstar_memory_audit (
+    this.sql`CREATE TABLE IF NOT EXISTS workbench_memory_audit (
       id TEXT PRIMARY KEY,
       at INTEGER NOT NULL,
       action TEXT NOT NULL,
@@ -3093,9 +3093,9 @@ export class MarketingOrchestrator extends AIChatAgent<
     try {
       this.ensureMemoryAudit();
       const now = Date.now();
-      this.sql`INSERT INTO northstar_memory_audit (id, at, action, memory_id, detail)
+      this.sql`INSERT INTO workbench_memory_audit (id, at, action, memory_id, detail)
         VALUES (${crypto.randomUUID()}, ${now}, ${action}, ${memoryId}, ${detail.slice(0, 240)})`;
-      this.sql`DELETE FROM northstar_memory_audit WHERE at < ${now - AUDIT_RETENTION_MS}`;
+      this.sql`DELETE FROM workbench_memory_audit WHERE at < ${now - AUDIT_RETENTION_MS}`;
     } catch (error) {
       console.warn("[memory] audit row failed", error instanceof Error ? error.message : error);
     }
@@ -3104,7 +3104,7 @@ export class MarketingOrchestrator extends AIChatAgent<
   private listMemoryAudit() {
     this.ensureMemoryAudit();
     return this.sql<{ at: number; action: string; memory_id: string; detail: string }>`
-      SELECT at, action, memory_id, detail FROM northstar_memory_audit
+      SELECT at, action, memory_id, detail FROM workbench_memory_audit
       WHERE at >= ${Date.now() - AUDIT_RETENTION_MS} ORDER BY at DESC LIMIT 200`.map((row) => ({
       at: new Date(row.at).toISOString(),
       action: row.action,
@@ -3618,7 +3618,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       await this.refreshPreview();
       return scriptedResponse(
         [
-          "The **Northstar Campaign Creation** agent refined the campaign preview (local fixture): the first email's subject is now “Rain outside? Warm soup is waiting.”\n\n",
+          "The **Workbench Campaign Creation** agent refined the campaign preview (local fixture): the first email's subject is now “Rain outside? Warm soup is waiting.”\n\n",
           "The workspace reloaded the preview from the brief. Nothing was sent or activated.",
         ],
         {
@@ -3638,7 +3638,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       const current = currentFocusVersion(focus);
       return scriptedResponse(
         [
-          `The **Northstar Campaign Creation** agent (Marketing Cloud Next) drafted **${current.title}** (version ${current.version}) with its Draft a Campaign Brief action:\n\n`,
+          `The **Workbench Campaign Creation** agent (Marketing Cloud Next) drafted **${current.title}** (version ${current.version}) with its Draft a Campaign Brief action:\n\n`,
           ...current.fields.map((field) => `- **${field.label}:** ${field.value}\n`),
           "\nIt's a draft brief: nothing is saved in Marketing Cloud until you confirm.",
         ],
@@ -3660,7 +3660,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       return this.productionChatResponse(this.messages, abortSignal);
     return scriptedResponse(
       [
-        "I reviewed the fictional Northstar sample campaign. The **strongest signal is stable engagement**.\n\n",
+        "I reviewed the fictional Workbench sample campaign. The **strongest signal is stable engagement**.\n\n",
         "**Readiness blockers**\n\n- Accessibility copy\n- Commercial-consent scope\n\n",
         "I have not changed, published, or sent anything.",
       ],

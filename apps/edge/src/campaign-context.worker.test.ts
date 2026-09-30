@@ -14,7 +14,7 @@ import {
 } from "./turn-policy";
 
 const PUSH_PROMPT =
-  "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
+  "Draft a push notification campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
 
 const openMeteo =
   (current: Record<string, number | string> = {}) =>
@@ -65,9 +65,9 @@ describe("campaign-context MCP", () => {
         "context_get_weather_forecast",
       ]);
       const profile = (await tools.context_get_restaurant_profile?.execute?.(
-        { restaurant: "coastline-kitchen" },
+        { restaurant: "restaurant-brand" },
         callOptions,
-      )) as { structuredContent: (typeof RESTAURANT_PROFILES)["coastline-kitchen"] };
+      )) as { structuredContent: (typeof RESTAURANT_PROFILES)["restaurant-brand"] };
       expect(profile.structuredContent).toMatchObject({
         hours: "Open 24 hours, 7 days a week",
         location: { id: "los-angeles" },
@@ -121,7 +121,7 @@ describe("campaign-context MCP", () => {
     expect(text).toContain("get_current_weather");
   });
 
-  it("plans Coastline campaigns as profile, weather, past pushes, then the agent's brief", () => {
+  it("plans Sample Kitchen campaigns as profile, weather, past pushes, then the agent's brief", () => {
     const names = [
       "context_get_restaurant_profile",
       "context_get_current_weather",
@@ -135,7 +135,7 @@ describe("campaign-context MCP", () => {
     expect(stepToolChoice(plan, 4)).toEqual({ toolChoice: "none", activeTools: [] });
     expect(
       selectToolPlan(
-        "Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
+        "Draft an email campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
         names,
       ),
     ).toEqual(names);
@@ -146,7 +146,7 @@ describe("campaign-context MCP", () => {
   it("marks drafting and revision turns so their drafts are saved to the focus", () => {
     // Campaign requests end with the Marketing Cloud Campaign Creation agent's brief.
     expect(draftIntent(PUSH_PROMPT)).toEqual({ mode: "draft", kind: "brief" });
-    expect(draftIntent("Draft an email campaign for Coastline Kitchen")).toEqual({
+    expect(draftIntent("Draft an email campaign for Sample Kitchen")).toEqual({
       mode: "draft",
       kind: "brief",
     });
@@ -184,7 +184,7 @@ describe("channel-aware consent", () => {
   it("reads the campaign's channel from the request, or else the draft in focus", () => {
     expect(requestedChannel(PUSH_PROMPT)).toBe("push");
     expect(
-      requestedChannel("Draft an email campaign for Coastline Kitchen tailored to the weather"),
+      requestedChannel("Draft an email campaign for Sample Kitchen tailored to the weather"),
     ).toBe("email");
     expect(requestedChannel("Write a text message for the lunch rush")).toBe("sms");
     // The first channel named wins: an email that mentions notifications is still an email.
@@ -204,16 +204,16 @@ describe("channel-aware consent", () => {
       location: "los-angeles",
       channel: "push",
     });
-    await pinned.context_get_restaurant_profile.execute({ restaurant: "coastline-kitchen" });
+    await pinned.context_get_restaurant_profile.execute({ restaurant: "restaurant-brand" });
     expect(seen).toEqual([
       { location: "los-angeles", channel: "email" },
-      { restaurant: "coastline-kitchen" },
+      { restaurant: "restaurant-brand" },
     ]);
     expect(pinCampaignChannel(tools, null)).toBe(tools);
   });
 
   it("reports the restaurant's opt-ins by channel", () => {
-    const profile = RESTAURANT_PROFILES["coastline-kitchen"];
+    const profile = RESTAURANT_PROFILES["restaurant-brand"];
     expect(profile.locations.find((location) => location.id === "los-angeles")?.optIns).toEqual({
       push: 11900,
       email: 13100,

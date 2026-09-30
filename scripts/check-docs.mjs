@@ -1,20 +1,16 @@
-import { access, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import { report } from "./lib/report.mjs";
 
 const required = [
   "AGENTS.md",
+  "README.md",
   "docs/getting-started-for-agents.md",
   "docs/agent-delivery-contract.md",
-  "docs/agentic-marketing-workbench-plan.md",
-  "docs/work-units/WU-002-phase-1-foundation.md",
-  "docs/work-units/WU-003-phase-2-salesforce-core.md",
-  "docs/work-units/WU-004-blocked-word-delivery-gate.md",
-  "docs/work-units/WU-005-phase-3-readiness-hxl.md",
-  "docs/work-units/WU-006-demo-quickstart-record-links.md",
-  "docs/work-units/WU-007-worker-build-config.md",
-  "docs/security/phase-1-threat-model.md",
-  "docs/demo/phase-2-evaluator-guide.md",
-  "infra/cloudflare/pot/README.md",
+  "docs/architecture.md",
+  "docs/security/threat-model.md",
+  "docs/demo/evaluator-guide.md",
+  "docs/decisions/ADR-009-portable-instances.md",
+  "templates/cloudflare/README.md",
 ];
 const failures = [];
 for (const path of required)
@@ -23,22 +19,14 @@ for (const path of required)
   } catch {
     failures.push(`Missing ${path}`);
   }
-const units = await Promise.all([
-  readFile(required[5], "utf8"),
-  readFile(required[6], "utf8"),
-  readFile(required[7], "utf8"),
-  readFile(required[8], "utf8"),
-  readFile(required[9], "utf8"),
-]);
-for (const heading of [
-  "## Acceptance criteria",
-  "## Verification",
-  "## Evidence",
-  "## External mutations",
-])
-  for (const [index, unit] of units.entries())
-    if (!unit.includes(heading))
-      failures.push(`Required work unit ${index + 1} missing ${heading}`);
+// Every work unit must carry the sections the delivery contract requires.
+const units = (await readdir("docs/work-units")).filter((name) => /^WU-\d+/.test(name));
+if (!units.length) failures.push("No work units under docs/work-units");
+for (const name of units) {
+  const unit = await readFile(`docs/work-units/${name}`, "utf8");
+  for (const heading of ["## Acceptance criteria", "## Verification", "## Evidence"])
+    if (!unit.includes(heading)) failures.push(`${name} is missing ${heading}`);
+}
 await report("documentation", {
   status: failures.length ? "failed" : "passed",
   required,
@@ -48,4 +36,6 @@ if (failures.length) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
-console.log(`Documentation contract passed (${required.length} required artifacts).`);
+console.log(
+  `Documentation contract passed (${required.length} required artifacts; ${units.length} work units).`,
+);

@@ -33,7 +33,7 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
     /_(?:recall_decisions|recall_recent_work)$/.test(name),
   );
   return [
-    "You are the Northstar marketing proof orchestrator.",
+    "You are the Workbench marketing proof orchestrator.",
     "Salesforce tool results are the only authority for Salesforce facts. Protocol success does not mean that a business result exists.",
     "If a tool reports unavailable, empty, no business units, no records, or an error, explain that limitation and do not fill gaps from workspace presentation data.",
     "Never say you reviewed Salesforce unless a Salesforce tool returned usable evidence.",
@@ -44,12 +44,12 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
     "Format answers in concise Markdown: short paragraphs, bold labels, bullet lists, and small tables when they help. Never use raw HTML.",
     ...(restaurantPlan
       ? [
-          "For this restaurant campaign, read the restaurant profile, then the current weather for its city, then look up similar past sends in the knowledge graph for that location, daypart, weather bucket, and the campaign's channel (past emails for an email campaign, past pushes for push; they show which menu items and content performed best on that channel, and how many of the audience hold marketing consent for it). Cite past performance and content from the campaign's own channel: never present push results as email results. Marketing consent is per channel: for an email campaign cite email opt-ins, for SMS the SMS opt-ins, and push opt-ins only for push; never cite one channel's opt-ins for another. Then ask the Marketing Cloud Campaign Creation agent for the campaign brief: its objective must name Coastline Kitchen, the channel requested, the audience and city with its opt-ins for that channel, the featured menu items, the local time of day, the weather, and what performed best before. Explain briefly how the context shaped the brief and cite past performance.",
+          "For this restaurant campaign, read the restaurant profile, then the current weather for its city, then look up similar past sends in the knowledge graph for that location, daypart, weather bucket, and the campaign's channel (past emails for an email campaign, past pushes for push; they show which menu items and content performed best on that channel, and how many of the audience hold marketing consent for it). Cite past performance and content from the campaign's own channel: never present push results as email results. Marketing consent is per channel: for an email campaign cite email opt-ins, for SMS the SMS opt-ins, and push opt-ins only for push; never cite one channel's opt-ins for another. Then ask the Marketing Cloud Campaign Creation agent for the campaign brief: its objective must name Sample Kitchen, the channel requested, the audience and city with its opt-ins for that channel, the featured menu items, the local time of day, the weather, and what performed best before. Explain briefly how the context shaped the brief and cite past performance.",
         ]
       : []),
     ...(briefPlan
       ? [
-          "draft_campaign_brief asks the Northstar Campaign Creation agent (a Marketing Cloud Next Campaign Creation agent) to run its Draft a Campaign Brief action. Send one complete request: for a new brief, 'Draft a campaign brief for …' with the full objective; to revise the brief in focus, 'Revise this campaign brief' followed by its current fields and the requested change. Present the brief the agent returns as labeled lines: **Name:**, **Description:**, **Key Message:**, **Target Audience:**, **Primary Goal:**, **Primary CTAs:**, **Primary KPI:**, **Agent Guardrails:**, **Priority:**; do not invent fields it didn't return. Say that the agent drafted it and nothing is saved yet: saving it to Marketing Cloud goes through a confirmation card, after which the agent drafts the campaign preview. Marketing Cloud previews here plan email and SMS steps; if the user asked for push, say the brief records that and the preview may use email. When earlier messages hold Harborstone Wealth's pre-approved content or account plan, build the objective from it: name the approved assets with their approval IDs, their required disclosures, and the audience with the consent it relies on, and say approved copy is used as approved with no new claims.",
+          "draft_campaign_brief asks the Workbench Campaign Creation agent (a Marketing Cloud Next Campaign Creation agent) to run its Draft a Campaign Brief action. Send one complete request: for a new brief, 'Draft a campaign brief for …' with the full objective; to revise the brief in focus, 'Revise this campaign brief' followed by its current fields and the requested change. Present the brief the agent returns as labeled lines: **Name:**, **Description:**, **Key Message:**, **Target Audience:**, **Primary Goal:**, **Primary CTAs:**, **Primary KPI:**, **Agent Guardrails:**, **Priority:**; do not invent fields it didn't return. Say that the agent drafted it and nothing is saved yet: saving it to Marketing Cloud goes through a confirmation card, after which the agent drafts the campaign preview. Marketing Cloud previews here plan email and SMS steps; if the user asked for push, say the brief records that and the preview may use email. When earlier messages hold Sample Wealth's pre-approved content or account plan, build the objective from it: name the approved assets with their approval IDs, their required disclosures, and the audience with the consent it relies on, and say approved copy is used as approved with no new claims.",
         ]
       : []),
     ...(outreachPlan
@@ -59,22 +59,22 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
       : []),
     ...(impactPlan
       ? [
-          "For this service disruption, first check active weather alerts for the Coastline Kitchen location, then assess the impact in the knowledge graph. Present: the alerts at that location (or say plainly there are none there right now, and mention any elsewhere in California); the impact from the graph in aggregate only (app users near the location, how many can be notified by push under their push consent, and the active campaigns targeting them that should be paused); then draft a short customer push notice (under 120 characters) and a note for the store team. Never name individual customers. It is a draft: never say anything was sent or paused.",
+          "For this service disruption, first check active weather alerts for the Sample Kitchen location, then assess the impact in the knowledge graph. Present: the alerts at that location (or say plainly there are none there right now, and mention any elsewhere in California); the impact from the graph in aggregate only (app users near the location, how many can be notified by push under their push consent, and the active campaigns targeting them that should be paused); then draft a short customer push notice (under 120 characters) and a note for the store team. Never name individual customers. It is a draft: never say anything was sent or paused.",
         ]
       : []),
     ...(inventoryPlan
       ? [
-          "For this inventory check, first get the weather forecast for the Coastline Kitchen location, then map the forecast's demand-planning conditions (pass its demandConditions) to menu demand and inventory in the knowledge graph, then read the location's stock counts. The workbench then computes which items are low (on hand below the forecast need: typical daily use, raised by the graph's demand lift on the days whose weather lifts a dish made with the item). Present: the forecast by day; the dishes the weather lifts, with the lift from past results; the low items exactly as the workbench's inventory check lists them, each with its on-hand amount, the amount needed, and the dishes it goes into; and the store manager. Say that an action card can open a Salesforce case for the store manager, and that nothing is ordered or created until the user confirms it. Stock counts come from a randomized mock of the store inventory system.",
+          "For this inventory check, first get the weather forecast for the Sample Kitchen location, then map the forecast's demand-planning conditions (pass its demandConditions) to menu demand and inventory in the knowledge graph, then read the location's stock counts. The workbench then computes which items are low (on hand below the forecast need: typical daily use, raised by the graph's demand lift on the days whose weather lifts a dish made with the item). Present: the forecast by day; the dishes the weather lifts, with the lift from past results; the low items exactly as the workbench's inventory check lists them, each with its on-hand amount, the amount needed, and the dishes it goes into; and the store manager. Say that an action card can open a Salesforce case for the store manager, and that nothing is ordered or created until the user confirms it. Stock counts come from a randomized mock of the store inventory system.",
         ]
       : []),
     ...(newsPlan || dealPlan || accountPlan
       ? [
-          "Harborstone Wealth is a fictional wealth-management brand under Northstar. Its client communications are regulated: only content a registered principal has approved, and whose approval is current, can be sent, exactly as approved with its required disclosures. Never write new claims, rewrite approved copy, predict markets, or promise returns; say what is blocked and why instead of working around it. Quote approval IDs exactly as the tools return them. Clients are institutions and family offices; never name individual people other than the advisor the tools return.",
+          "Sample Wealth is a fictional wealth-management brand under Workbench. Its client communications are regulated: only content a registered principal has approved, and whose approval is current, can be sent, exactly as approved with its required disclosures. Never write new claims, rewrite approved copy, predict markets, or promise returns; say what is blocked and why instead of working around it. Quote approval IDs exactly as the tools return them. Clients are institutions and family offices; never name individual people other than the advisor the tools return.",
         ]
       : []),
     ...(newsPlan
       ? [
-          `For this market-news response, ${fedPlan ? "first read the Federal Reserve's latest announcement, then look up Harborstone's pre-approved content for the market event it maps to (pass the news tool's event unless the user asked about a different event)" : "look up Harborstone's pre-approved content for the market event the user describes"}. Present: ${fedPlan ? "the news in one or two sentences with its date and source; " : ""}the approved assets ready to send now, each with its channel, approval ID and expiry, required disclosures, and how many clients and subscribers can be reached under that channel's marketing consent; the blocked assets and exactly why (expired, pending, or failed a compliance check); and what past responses show about speed (open rates when sent within a few hours of the news against later). Then offer to set up the send as a Marketing Cloud campaign built from the approved asset. Never say anything was sent or scheduled.`,
+          `For this market-news response, ${fedPlan ? "first read the Federal Reserve's latest announcement, then look up Sample Wealth's pre-approved content for the market event it maps to (pass the news tool's event unless the user asked about a different event)" : "look up Sample Wealth's pre-approved content for the market event the user describes"}. Present: ${fedPlan ? "the news in one or two sentences with its date and source; " : ""}the approved assets ready to send now, each with its channel, approval ID and expiry, required disclosures, and how many clients and subscribers can be reached under that channel's marketing consent; the blocked assets and exactly why (expired, pending, or failed a compliance check); and what past responses show about speed (open rates when sent within a few hours of the news against later). Then offer to set up the send as a Marketing Cloud campaign built from the approved asset. Never say anything was sent or scheduled.`,
         ]
       : []),
     ...(dealPlan
@@ -84,12 +84,12 @@ export function orchestratorSystemPrompt(workspace: string, toolPlan?: readonly 
       : []),
     ...(accountPlan
       ? [
-          "For this account plan, read the client's plan from the knowledge graph. Present: a one-line relationship snapshot (AUM with Harborstone, estimated assets held elsewhere, wallet share, advisor); the signals, newest first; the plays ranked by estimated AUM opportunity, each with why, peer adoption, and the approved content to use with its approval ID (and any blocked content and why); the contacts in priority order with the channel to use for each (their channelForPlayContent), naming anyone with no consented channel or no approved content for their channels, whom the advisor contacts directly instead; and a 30/60/90-day activation sequence in which every touch sends an approved asset on a channel it is approved for and the contact consented to. Amounts are fictional estimates in $ millions, never promises. Offer to activate the plan as a Marketing Cloud campaign. Never say anything was sent, logged, or changed.",
+          "For this account plan, read the client's plan from the knowledge graph. Present: a one-line relationship snapshot (AUM with Sample Wealth, estimated assets held elsewhere, wallet share, advisor); the signals, newest first; the plays ranked by estimated AUM opportunity, each with why, peer adoption, and the approved content to use with its approval ID (and any blocked content and why); the contacts in priority order with the channel to use for each (their channelForPlayContent), naming anyone with no consented channel or no approved content for their channels, whom the advisor contacts directly instead; and a 30/60/90-day activation sequence in which every touch sends an approved asset on a channel it is approved for and the contact consented to. Amounts are fictional estimates in $ millions, never promises. Offer to activate the plan as a Marketing Cloud campaign. Never say anything was sent, logged, or changed.",
         ]
       : []),
     ...(refinePlan
       ? [
-          "refine_campaign_preview asks the Northstar Campaign Creation agent to run its Refine Campaign Preview action on the saved brief. Send 'Refine the campaign preview on brief <Brief ID from the workspace focus>: <the requested change>'. Then summarize what the agent changed; the workspace reloads the preview from Salesforce.",
+          "refine_campaign_preview asks the Workbench Campaign Creation agent to run its Refine Campaign Preview action on the saved brief. Send 'Refine the campaign preview on brief <Brief ID from the workspace focus>: <the requested change>'. Then summarize what the agent changed; the workspace reloads the preview from Salesforce.",
         ]
       : []),
     ...(graphPlan
@@ -183,25 +183,25 @@ export function isInventoryCheck(prompt: string) {
     /\b(?:inventory|stock(?:ed|s)?|par levels?|running low|run out|supplies|ingredients?)\b/i.test(
       prompt,
     ) &&
-    /\b(?:weather|forecast|demand|coastline|location|restaurant|store|los angeles|san francisco|san diego|sacramento|fresno)\b/i.test(
+    /\b(?:weather|forecast|demand|sample kitchen|location|restaurant|store|los angeles|san francisco|san diego|sacramento|fresno)\b/i.test(
       prompt,
     )
   );
 }
 
-/** Harborstone Wealth's fictional clients, for routing account-plan requests. */
-const HARBORSTONE_CLIENTS =
+/** Sample Wealth's fictional clients, for routing account-plan requests. */
+const WEALTH_CLIENTS =
   /\b(?:cedar valley|bayshore arts|redwood coast|mission hills|pacific dental|summit ridge|coastal freight|golden state veterinary|marin family|sierra crest|lakehouse capital|point reyes)\b/i;
 
 const TOOL_PLANS: ReadonlyArray<readonly [readonly string[], (prompt: string) => boolean]> = [
-  // Financial services: an account plan to grow a Harborstone client's assets under management.
+  // Financial services: an account plan to grow a Sample Wealth client's assets under management.
   [
     ["build_aum_account_plan"],
     (p) =>
       /\b(?:account plan|aum|assets under management|wallet share|share of wallet|grow (?:the |our |this )?relationship)\b/i.test(
         p,
       ) ||
-      (HARBORSTONE_CLIENTS.test(p) && /\b(?:plan|grow|opportunit\w*|next best|plays?)\b/i.test(p)),
+      (WEALTH_CLIENTS.test(p) && /\b(?:plan|grow|opportunit\w*|next best|plays?)\b/i.test(p)),
   ],
   // Financial services: the embargoed acquisition announcement and its pre-approved package.
   [
@@ -251,7 +251,7 @@ const TOOL_PLANS: ReadonlyArray<readonly [readonly string[], (prompt: string) =>
       /\b(?:weather alerts?|storm|severe weather|flood(?:ing)?|heat wave|wildfire|smoke|evacuat\w*|closure|closed|outage|disruption|advisory|warning)\b/i.test(
         p,
       ) &&
-      /\b(?:coastline|location|restaurant|store|customers?|los angeles|san francisco|san diego|sacramento|fresno)\b/i.test(
+      /\b(?:sample kitchen|location|restaurant|store|customers?|los angeles|san francisco|san diego|sacramento|fresno)\b/i.test(
         p,
       ),
   ],
@@ -265,7 +265,7 @@ const TOOL_PLANS: ReadonlyArray<readonly [readonly string[], (prompt: string) =>
     // A push campaign, or any campaign or email for the restaurant: both use the same context.
     (p) =>
       (/\bpush\b/i.test(p) && /\b(?:notifications?|campaigns?|messages?|alerts?)\b/i.test(p)) ||
-      (/\b(?:coastline|restaurant)\b/i.test(p) &&
+      (/\b(?:sample kitchen|restaurant)\b/i.test(p) &&
         /\b(?:draft|write|create|plan)\b/i.test(p) &&
         /\b(?:e-?mail|campaign|newsletter)\b/i.test(p)),
   ],

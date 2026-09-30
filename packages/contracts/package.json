@@ -1,5 +1,5 @@
 {
-  "name": "@northstar/contracts",
+  "name": "@workbench/contracts",
   "private": true,
   "type": "module",
   "exports": {

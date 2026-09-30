@@ -1,13 +1,13 @@
 /**
  * Monetary policy news from the Federal Reserve Board's public press release feed
  * (https://www.federalreserve.gov/feeds/feeds.htm), free and keyless. The latest FOMC statement
- * is read for its rate decision, which names the market event Harborstone's approved content is
+ * is read for its rate decision, which names the market event Sample Wealth's approved content is
  * prepared for.
  */
 
 export const FED_FEED_URL = "https://www.federalreserve.gov/feeds/press_monetary.xml";
 const FED_ORIGIN = "https://www.federalreserve.gov/";
-const USER_AGENT = "northstar-marketing-workbench (fictional demo; no customer data)";
+const USER_AGENT = "marketing-workbench (fictional demo; no customer data)";
 
 export type FedRelease = { title: string; publishedAt: string; url: string };
 export type RateDecision = {

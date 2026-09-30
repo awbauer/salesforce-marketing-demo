@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2026-09-30T23:47:49.906Z",
+  "status": "passed",
+  "required": [
+    "AGENTS.md",
+    "README.md",
+    "docs/getting-started-for-agents.md",
+    "docs/agent-delivery-contract.md",
+    "docs/architecture.md",
+    "docs/security/threat-model.md",
+    "docs/demo/evaluator-guide.md",
+    "docs/decisions/ADR-009-portable-instances.md",
+    "templates/cloudflare/README.md"
+  ],
+  "failures": []
+}

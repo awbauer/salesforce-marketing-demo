@@ -1,5 +1,0 @@
-{
-  "title": "Northstar Campaign Readiness Output",
-  "description": "Structured bounded output from Northstar campaign content validation.",
-  "lightning:type": "@apexClassType/c__NorthstarValidateCampaignContent$Output"
-}

@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { PROOF_DEFAULTS } from "../packages/contracts/src/index.ts";
+import { DEFAULTS } from "../packages/contracts/src/index.ts";
 import { report } from "./lib/report.mjs";
 
 const wrangler = await readFile("wrangler.jsonc", "utf8");
@@ -42,13 +42,13 @@ if (!/resolveChatModel\(INSTANCE_PROFILE/.test(orchestratorSource))
 if (/@cf\//.test(orchestratorSource))
   failures.push("Orchestrator must not hard-code a model id; set it in the instance profile");
 for (const value of forbidden)
-  if (PROOF_DEFAULTS.allowedWrites.some((item) => item.includes(value)))
+  if (DEFAULTS.allowedWrites.some((item) => item.includes(value)))
     failures.push(`Forbidden write exposed: ${value}`);
 const auditActionClause = confirmationMigration.match(/action IN \(([\s\S]*?)\)\s*\)/)?.[1] ?? "";
 const auditedActions = [...auditActionClause.matchAll(/'([^']+)'/g)]
   .map((match) => match[1])
   .sort();
-const allowedActions = [...PROOF_DEFAULTS.allowedWrites].sort();
+const allowedActions = [...DEFAULTS.allowedWrites].sort();
 // Retired actions stay in the audit's CHECK so rows written before they were retired remain valid.
 const RETIRED_ACTIONS = ["save-brief", "save-campaign", "save-draft-campaign", "save-message"];
 const expectedAudit = [...allowedActions, ...RETIRED_ACTIONS].sort();
@@ -61,13 +61,15 @@ for (const tool of catalog.tools) {
     failures.push(`Unapproved tool risk: ${tool.name}/${tool.riskClass}`);
   if (tool.riskClass === "write") {
     if (tool.autonomous !== false) failures.push(`Write tool is autonomous: ${tool.name}`);
-    if (!PROOF_DEFAULTS.allowedWrites.includes(tool.allowedWrite))
-      failures.push(`Write tool is outside Section 17: ${tool.name}/${tool.allowedWrite}`);
+    if (!DEFAULTS.allowedWrites.includes(tool.allowedWrite))
+      failures.push(
+        `Write tool is outside DEFAULTS.allowedWrites: ${tool.name}/${tool.allowedWrite}`,
+      );
   }
 }
 await report("contracts", {
   status: failures.length ? "failed" : "passed",
-  fixedDefaults: PROOF_DEFAULTS,
+  fixedDefaults: DEFAULTS,
   toolCatalog: catalog,
   failures,
 });

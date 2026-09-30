@@ -1,5 +1,5 @@
+import { DEFAULTS, type Principal, PrincipalSchema } from "@workbench/contracts";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { PrincipalSchema, PROOF_DEFAULTS, type Principal } from "@northstar/contracts";
 
 export type AuthBindings = {
   AUTH_MODE: string;
@@ -21,9 +21,9 @@ export async function resolvePrincipal(request: Request, env: AuthBindings): Pro
   if (env.AUTH_MODE === "development" && env.ENVIRONMENT === "local")
     return {
       subject: "local-evaluator",
-      email: "evaluator@northstar.example",
+      email: "evaluator@workbench.example",
       role: "evaluator",
-      tenantId: "northstar-pot",
+      tenantId: "workbench-pot",
     };
   const token = request.headers.get("Cf-Access-Jwt-Assertion");
   if (!token)
@@ -40,9 +40,9 @@ export async function resolvePrincipal(request: Request, env: AuthBindings): Pro
     subject: result.payload.sub,
     email: result.payload.email,
     role: result.payload.role ?? "evaluator",
-    tenantId: result.payload.tenant_id ?? "northstar-pot",
+    tenantId: result.payload.tenant_id ?? "workbench-pot",
   });
-  if (!parsed.success || !PROOF_DEFAULTS.roles.includes(parsed.data.role))
+  if (!parsed.success || !DEFAULTS.roles.includes(parsed.data.role))
     throw new AuthError("FORBIDDEN", "The Access identity is not allowed in this workspace.");
   return parsed.data;
 }

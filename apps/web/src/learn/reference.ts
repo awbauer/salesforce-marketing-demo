@@ -84,7 +84,7 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   tool(
     "validate_content_against_brand",
     "salesforce",
-    "Checks copy against Northstar brand rules and reports what passed or failed.",
+    "Checks copy against Workbench brand rules and reports what passed or failed.",
   ),
   tool(
     "get_account_marketing_signals",
@@ -140,7 +140,7 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   tool(
     "get_restaurant_profile",
     "campaign-context",
-    "Coastline Kitchen's locations, menu, favorites, dayparts, and brand voice from the restaurant system.",
+    "Sample Kitchen's locations, menu, favorites, dayparts, and brand voice from the restaurant system.",
   ),
   tool(
     "get_current_weather",
@@ -155,7 +155,7 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   tool(
     "get_location_inventory",
     "use-cases",
-    "Stock counts for a Coastline Kitchen restaurant from a randomized store inventory mock.",
+    "Stock counts for a Sample Kitchen restaurant from a randomized store inventory mock.",
   ),
   // External-services MCP tools.
   tool(
@@ -166,7 +166,7 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   tool(
     "get_weather_alerts",
     "use-cases",
-    "Active National Weather Service alerts at a Coastline Kitchen location, most severe first.",
+    "Active National Weather Service alerts at a Sample Kitchen location, most severe first.",
   ),
   tool(
     "get_fed_announcements",
@@ -197,7 +197,7 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   tool(
     "find_similar_past_pushes",
     "graphrag-here",
-    "Past Coastline sends on the campaign's channel (emails or pushes) for a location, daypart, and weather, which menu items and content performed best, and the audience's opt-ins for that channel.",
+    "Past Sample Kitchen sends on the campaign's channel (emails or pushes) for a location, daypart, and weather, which menu items and content performed best, and the audience's opt-ins for that channel.",
   ),
   tool(
     "plan_account_outreach",
@@ -217,7 +217,7 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   tool(
     "match_news_to_approved_content",
     "use-cases",
-    "Harborstone's pre-approved content for a market event: what's ready to send, what's blocked and why, reach by consent, and past response speed.",
+    "Sample Wealth's pre-approved content for a market event: what's ready to send, what's blocked and why, reach by consent, and past response speed.",
   ),
   tool(
     "prepare_deal_release",
@@ -227,7 +227,7 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   tool(
     "build_aum_account_plan",
     "use-cases",
-    "A Harborstone client's signals, ranked plays with peer adoption and approved content, and contacts with consented channels.",
+    "A Sample Wealth client's signals, ranked plays with peer adoption and approved content, and contacts with consented channels.",
   ),
   tool(
     "trace_content_lineage",
@@ -284,12 +284,12 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   // Graph nodes: the demo dataset.
   node(
     "Brand",
-    "Northstar and its brands: Coastline Kitchen (restaurants) and Harborstone Wealth (wealth management).",
+    "Workbench and its brands: Sample Kitchen (restaurants) and Sample Wealth (wealth management).",
   ),
   node("Channel", "Email, SMS, and the mobile app."),
   node("ConsentScope", "A consent a person or segment holds for a channel."),
   node("BrandRule", "A brand rule that content passes or fails."),
-  node("Campaign", "A marketing campaign, for Northstar or Coastline Kitchen."),
+  node("Campaign", "A marketing campaign, for Workbench or Sample Kitchen."),
   node("Brief", "The brief a campaign's content is built from."),
   node("ContentAsset", "An email, push, or other piece of campaign content."),
   node("Segment", "An audience a campaign targets."),
@@ -305,30 +305,30 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
     "A weather bucket: clear, cloudy, fog, rain, or heat.",
     "campaign-context",
   ),
-  node("Menu", "Coastline Kitchen's menu.", "campaign-context"),
+  node("Menu", "Sample Kitchen's menu.", "campaign-context"),
   node("MenuItem", "A dish on the menu, with its order rate.", "campaign-context"),
-  node("Location", "A Coastline Kitchen restaurant in California.", "campaign-context"),
+  node("Location", "A Sample Kitchen restaurant in California.", "campaign-context"),
   node("InventoryItem", "Stock a restaurant keeps, counted in kitchen units.", "use-cases"),
   node("StoreManager", "A restaurant's store manager, by name only.", "use-cases"),
   node("PushSend", "One past push notification send and how it performed."),
-  node("EmailSend", "One past Coastline email send: its opens, clicks, and orders."),
+  node("EmailSend", "One past Sample Kitchen email send: its opens, clicks, and orders."),
   node(
     "Approval",
     "A compliance approval record: approved, expired, or pending, with its dates and any embargo.",
     "use-cases",
   ),
   node("Disclosure", "Required disclosure text a regulated asset must carry.", "use-cases"),
-  node("MarketEvent", "A market event Harborstone prepares approved content for.", "use-cases"),
+  node("MarketEvent", "A market event Sample Wealth prepares approved content for.", "use-cases"),
   node(
     "ClientSend",
-    "A past Harborstone response: hours after the news, opens, clicks.",
+    "A past Sample Wealth response: hours after the news, opens, clicks.",
     "use-cases",
   ),
-  node("Deal", "Harborstone's embargoed acquisition.", "use-cases"),
+  node("Deal", "Sample Wealth's embargoed acquisition.", "use-cases"),
   node("Firm", "The firm being acquired.", "use-cases"),
-  node("Client", "A Harborstone client: a foundation, business, or family office.", "use-cases"),
-  node("Advisor", "The Harborstone advisor who covers a client.", "use-cases"),
-  node("Product", "A Harborstone product or service a client can hold.", "use-cases"),
+  node("Client", "A Sample Wealth client: a foundation, business, or family office.", "use-cases"),
+  node("Advisor", "The Sample Wealth advisor who covers a client.", "use-cases"),
+  node("Product", "A Sample Wealth product or service a client can hold.", "use-cases"),
   node("Signal", "Something the relationship team noticed about a client.", "use-cases"),
   // Graph nodes: long-term memory.
   node("Workspace", "The workspace that owns a memory.", "long-term-memory"),
@@ -430,38 +430,38 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
   // Salesforce components.
   ...(
     [
-      ["NorthstarCheckWriteAccess", "Apex: the read-only permission check run as the user."],
-      ["NorthstarConfirmationVerifier", "Apex: verifies the signed confirmation before any write."],
+      ["WorkbenchCheckWriteAccess", "Apex: the read-only permission check run as the user."],
+      ["WorkbenchConfirmationVerifier", "Apex: verifies the signed confirmation before any write."],
       [
-        "NorthstarGetMarketingRecords",
+        "WorkbenchGetMarketingRecords",
         "Apex: reads back the Brief, preview steps, Campaign, and flow the agent created.",
       ],
       [
-        "NorthstarCreateCampaignReviewRequest",
+        "WorkbenchCreateCampaignReviewRequest",
         "Apex action behind create_campaign_review_request.",
       ],
       [
-        "NorthstarCreateInventoryCase",
+        "WorkbenchCreateInventoryCase",
         "Apex action behind create_inventory_case; checks the contents' hash.",
       ],
       [
-        "NorthstarAttachCampaignImage",
+        "WorkbenchAttachCampaignImage",
         "Apex action behind attach_campaign_image; checks the hash.",
       ],
       [
-        "NorthstarGetCampaignContext",
+        "WorkbenchGetCampaignContext",
         "Apex action: bounded campaign context for the readiness check.",
       ],
       [
-        "NorthstarGetConsentSummary",
+        "WorkbenchGetConsentSummary",
         "Apex action: aggregate consent evidence, no customer fields.",
       ],
       [
-        "NorthstarValidateCampaignContent",
+        "WorkbenchValidateCampaignContent",
         "Apex action: readiness checks on campaign fields, including instruction-like text.",
       ],
       [
-        "Northstar_Confirmation_Config__c",
+        "Workbench_Confirmation_Config__c",
         "Custom setting holding the key Apex uses to verify signed confirmations.",
       ],
     ] as const
@@ -471,9 +471,9 @@ export const LEARN_REFERENCE: ReferenceEntry[] = [
       name,
       summary,
       section:
-        name === "NorthstarGetMarketingRecords"
+        name === "WorkbenchGetMarketingRecords"
           ? "marketing-cloud"
-          : name.startsWith("Northstar_") || /Verifier|CheckWrite/.test(name)
+          : name.startsWith("Workbench_") || /Verifier|CheckWrite/.test(name)
             ? "governance"
             : "salesforce",
     }),

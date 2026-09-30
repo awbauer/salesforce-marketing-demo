@@ -1,4 +1,4 @@
-import { EXAMPLE_PROFILE, InstanceProfileSchema } from "@northstar/contracts";
+import { EXAMPLE_PROFILE, InstanceProfileSchema } from "@workbench/contracts";
 import { describe, expect, it } from "vitest";
 import {
   chatModelReachable,

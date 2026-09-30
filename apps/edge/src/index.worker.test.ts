@@ -1,5 +1,5 @@
 import { env, SELF } from "cloudflare:test";
-import { classifyPolicyIntent, PHASE_2_CURATED_TOOLS } from "@northstar/contracts";
+import { classifyPolicyIntent, PHASE_2_CURATED_TOOLS } from "@workbench/contracts";
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { routingCases, routingHoldout } from "../../../packages/evals/src/cases";
@@ -37,7 +37,7 @@ describe("edge runtime", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       status: "ok",
-      service: "northstar-edge",
+      service: "workbench-edge",
       correlationId: "test-correlation",
     });
   });
@@ -63,15 +63,15 @@ describe("edge runtime", () => {
   });
   it("isolates agent keys by authenticated subject and workspace", async () => {
     const first = await deriveAgentKey(
-      { subject: "evaluator-a", email: "a@northstar.example", role: "evaluator", tenantId: "pot" },
-      "northstar-demo",
+      { subject: "evaluator-a", email: "a@workbench.example", role: "evaluator", tenantId: "pot" },
+      "workbench-demo",
     );
     const otherUser = await deriveAgentKey(
-      { subject: "evaluator-b", email: "b@northstar.example", role: "evaluator", tenantId: "pot" },
-      "northstar-demo",
+      { subject: "evaluator-b", email: "b@workbench.example", role: "evaluator", tenantId: "pot" },
+      "workbench-demo",
     );
     const otherWorkspace = await deriveAgentKey(
-      { subject: "evaluator-a", email: "a@northstar.example", role: "evaluator", tenantId: "pot" },
+      { subject: "evaluator-a", email: "a@workbench.example", role: "evaluator", tenantId: "pot" },
       "other-workspace",
     );
     expect(new Set([first, otherUser, otherWorkspace]).size).toBe(3);
@@ -259,7 +259,7 @@ describe("edge runtime", () => {
           input: {},
           output: { stale: true },
         },
-        { type: "text" as const, text: "Here is the push campaign draft for Coastline Kitchen." },
+        { type: "text" as const, text: "Here is the push campaign draft for Sample Kitchen." },
       ],
     } as unknown as UIMessage;
     const window = conversationWindow([
@@ -269,7 +269,7 @@ describe("edge runtime", () => {
     ] as UIMessage[]);
     expect(window.map((message) => message.id)).toEqual(["u1", "draft", "u2"]);
     expect(window[1]?.parts).toEqual([
-      { type: "text", text: "Here is the push campaign draft for Coastline Kitchen." },
+      { type: "text", text: "Here is the push campaign draft for Sample Kitchen." },
     ]);
   });
 

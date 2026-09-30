@@ -136,5 +136,5 @@ export function inventoryRiskPrompt(risk: InventoryRisk | null) {
         `${item.name}: ${item.onHand} ${item.unit} on hand and ${item.onOrder} on order, ${item.projectedNeed} needed for ${item.menuItems.join(", ")}`,
     )
     .join("; ");
-  return `Inventory check computed by the workbench for Coastline Kitchen ${risk.city} (${risk.window.from} to ${risk.window.to}, ${risk.conditions.join(", ")}; store manager ${risk.manager.name}): ${risk.lowItems.length ? `low items: ${items}.` : `no weather-driven item is low (${risk.checkedItems} checked).`}`;
+  return `Inventory check computed by the workbench for Sample Kitchen ${risk.city} (${risk.window.from} to ${risk.window.to}, ${risk.conditions.join(", ")}; store manager ${risk.manager.name}): ${risk.lowItems.length ? `low items: ${items}.` : `no weather-driven item is low (${risk.checkedItems} checked).`}`;
 }

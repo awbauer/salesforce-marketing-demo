@@ -31,7 +31,7 @@ export const routingCases = [
   },
   {
     id: "routing-07",
-    prompt: "Check this content against the Northstar brand",
+    prompt: "Check this content against the Workbench brand",
     expected: "validate_content_against_brand",
   },
   {
@@ -85,7 +85,7 @@ export const routingCases = [
   },
   {
     id: "routing-21",
-    prompt: "What did we decide about the Coastline rainy-day push?",
+    prompt: "What did we decide about the Sample Kitchen rainy-day push?",
     expected: "recall_decisions",
   },
   {
@@ -152,14 +152,14 @@ export const demoScenarios = [
   {
     id: "demo-restaurant-email",
     prompt:
-      "Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
+      "Draft an email campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
     expected:
       "get_restaurant_profile → get_current_weather → find_similar_past_pushes → draft_campaign_brief",
   },
   {
     id: "demo-restaurant-push",
     prompt:
-      "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
+      "Draft a push notification campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
     expected:
       "get_restaurant_profile → get_current_weather → find_similar_past_pushes → draft_campaign_brief",
   },
@@ -175,7 +175,7 @@ export const demoScenarios = [
   },
   {
     id: "demo-mcn-create",
-    prompt: "Create a campaign in Marketing Cloud for Coastline Kitchen's late-night tacos",
+    prompt: "Create a campaign in Marketing Cloud for Sample Kitchen's late-night tacos",
     expected: "draft_campaign_brief",
   },
   {
@@ -220,7 +220,7 @@ export const demoScenarios = [
   },
   {
     id: "demo-memory-recall",
-    prompt: "Last time, what did we save for Coastline Kitchen's rainy-day push?",
+    prompt: "Last time, what did we save for Sample Kitchen's rainy-day push?",
     expected: "recall_decisions",
   },
 ] as const;
@@ -328,7 +328,7 @@ export const rememberCases = [
 
 /** Prompts that must not be taken as a remember request or a recall question. */
 export const notMemoryCases = [
-  "Draft a push for Coastline Kitchen that people will remember",
+  "Draft a push for Sample Kitchen that people will remember",
   "Make it memorable",
   "Save this campaign now",
   "How did the fall campaign perform last month?",

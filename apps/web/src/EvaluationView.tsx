@@ -1,7 +1,7 @@
-import { formatUsd } from "@northstar/evals/pricing";
-import { EVAL_CHECKS, type EvalReport, EvalReportSchema } from "@northstar/evals/report";
+import { formatUsd } from "@workbench/evals/pricing";
+import { EVAL_CHECKS, type EvalReport, EvalReportSchema } from "@workbench/evals/report";
 import { useEffect, useMemo, useState } from "react";
-import { toolCallCount, toolCallsLabel, tokensLabel, turnStats } from "./turn-stats";
+import { tokensLabel, toolCallCount, toolCallsLabel, turnStats } from "./turn-stats";
 
 type LoadState =
   | { status: "loading" }

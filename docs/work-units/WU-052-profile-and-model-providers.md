@@ -2,7 +2,6 @@
 id: WU-052
 title: Instance profile, model providers, and an account-free local default
 status: active
-plan_sections: [3, 10, 17]
 owners: [agent]
 ---
 

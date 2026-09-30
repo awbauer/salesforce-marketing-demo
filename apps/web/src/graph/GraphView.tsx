@@ -53,12 +53,12 @@ export const TOURS: Tour[] = [
     target: () => "segment-camp-fall",
   },
   {
-    id: "coastline",
-    title: "Coastline Kitchen under Northstar",
-    question: "How does Coastline's weather campaign reach app users?",
+    id: "sample kitchen",
+    title: "Sample Kitchen under Workbench",
+    question: "How does Sample Kitchen's weather campaign reach app users?",
     explain:
-      "Coastline Kitchen is a brand under Northstar. Its weather campaign runs on the mobile app channel, targets an app segment near each location with aggregate push consent, and uses push content checked against Coastline's own brand rules.",
-    target: () => "camp-coastline-weather",
+      "Sample Kitchen is a brand under Workbench. Its weather campaign runs on the mobile app channel, targets an app segment near each location with aggregate push consent, and uses push content checked against Sample Kitchen's own brand rules.",
+    target: () => "camp-restaurant-weather",
   },
   {
     id: "rain",
@@ -72,16 +72,16 @@ export const TOURS: Tour[] = [
   {
     id: "wealth-news",
     title: "Approved content for market news",
-    question: "What can Harborstone send when the Fed raises rates?",
+    question: "What can Sample Wealth send when the Fed raises rates?",
     explain:
-      "Harborstone Wealth is a brand under Northstar. Content about a market event is approved ahead of time: each asset links to its approval record (approved, expired, or pending) and the disclosures it must carry, so the graph can say what's ready to send and why the rest is blocked.",
+      "Sample Wealth is a brand under Workbench. Content about a market event is approved ahead of time: each asset links to its approval record (approved, expired, or pending) and the disclosures it must carry, so the graph can say what's ready to send and why the rest is blocked.",
     target: () => "event-rate-increase",
     expand: true,
   },
   {
     id: "wealth-client",
     title: "An account plan from the graph",
-    question: "How could Harborstone grow Cedar Valley Community Foundation?",
+    question: "How could Sample Wealth grow Cedar Valley Community Foundation?",
     explain:
       "A client's signals suggest products it doesn't hold yet, peers of the same type show what's typical, and each product links to approved content. Its contacts carry consent by channel, so the plan names who to reach, how, and with what.",
     target: () => "client-cedar-valley-community-foundation",
@@ -258,9 +258,8 @@ export function GraphView({ onClose }: { onClose: () => void }) {
           <p className="kicker">Knowledge graph</p>
           <h2 id="graph-title">Graph explorer</h2>
           <p className="graph-lede">
-            The fictional Northstar, Coastline Kitchen, and Harborstone Wealth graph that the
-            orchestrator's graph tools read. Pick a tour, search, or click any node to see how it
-            connects.
+            The fictional Workbench, Sample Kitchen, and Sample Wealth graph that the orchestrator's
+            graph tools read. Pick a tour, search, or click any node to see how it connects.
           </p>
         </div>
         <button type="button" className="text-button" onClick={onClose}>
@@ -557,7 +556,7 @@ function GraphPrimer() {
       <ol>
         <li>
           <strong>Colors are node types</strong>, grouped into brands and campaigns, audience and
-          consent, and Coastline Kitchen's restaurants.
+          consent, and Sample Kitchen's restaurants.
         </li>
         <li>
           <strong>Size is connectedness</strong>: bigger nodes take part in more relationships.

@@ -1,8 +1,8 @@
+import { fileURLToPath, URL } from "node:url";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import react from "@vitejs/plugin-react";
 import agents from "agents/vite";
 import { defineConfig } from "vite";
-import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig({
   root: "apps/web",
@@ -10,22 +10,22 @@ export default defineConfig({
     agents(),
     react(),
     cloudflare({
-      configPath: process.env.NORTHSTAR_E2E ? "../../wrangler.e2e.jsonc" : "../../wrangler.jsonc",
+      configPath: process.env.WORKBENCH_E2E ? "../../wrangler.e2e.jsonc" : "../../wrangler.jsonc",
     }),
   ],
   resolve: {
     alias: {
-      "@northstar/contracts": fileURLToPath(
+      "@workbench/contracts": fileURLToPath(
         new URL("./packages/contracts/src/index.ts", import.meta.url),
       ),
-      "@northstar/knowledge-graph": fileURLToPath(
+      "@workbench/knowledge-graph": fileURLToPath(
         new URL("./packages/knowledge-graph/src/index.ts", import.meta.url),
       ),
-      "@northstar/ui": fileURLToPath(new URL("./packages/ui/src/index.tsx", import.meta.url)),
-      "@northstar/evals/report": fileURLToPath(
+      "@workbench/ui": fileURLToPath(new URL("./packages/ui/src/index.tsx", import.meta.url)),
+      "@workbench/evals/report": fileURLToPath(
         new URL("./packages/evals/src/report.ts", import.meta.url),
       ),
-      "@northstar/evals/pricing": fileURLToPath(
+      "@workbench/evals/pricing": fileURLToPath(
         new URL("./packages/evals/src/pricing.ts", import.meta.url),
       ),
     },

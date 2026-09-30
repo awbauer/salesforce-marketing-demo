@@ -1,5 +1,5 @@
 import { runInDurableObject, SELF } from "cloudflare:test";
-import { emptyWorkingSet, type FocusItem, type WorkingSet } from "@northstar/contracts";
+import { emptyWorkingSet, type FocusItem, type WorkingSet } from "@workbench/contracts";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { applyFocusUpdate, type FocusInput } from "./focus";
@@ -23,7 +23,7 @@ import { agentStubFor } from "./worker.test-helpers";
 const at = new Date("2026-09-26T18:00:00Z");
 // The Campaign Creation agent's Draft a Campaign Brief reply, as observed in the proof org.
 const AGENT_BRIEF = [
-  "Here is a draft campaign brief for Coastline Kitchen's rainy-day lunch email:",
+  "Here is a draft campaign brief for Sample Kitchen's rainy-day lunch email:",
   "",
   "Name: Rainy Day Lunch Email Campaign",
   "Description: Increase engagement with app users during rainy weather.",
@@ -131,7 +131,7 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
     const save = agentRequest({
       kind: "brief",
       brief: {
-        name: "Coastline Late-Night Tacos",
+        name: "Sample Kitchen Late-Night Tacos",
         description: "Late-night email.",
         keyMessage: "Tacos until 2 a.m.",
         targetAudience: "Night owls",
@@ -139,11 +139,11 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
     });
     expect(save).toContain("Save it exactly as written with Save Campaign Brief");
     expect(save).toContain("Do not create or save the campaign yet");
-    expect(save).toContain("Name: Coastline Late-Night Tacos");
+    expect(save).toContain("Name: Sample Kitchen Late-Night Tacos");
     const create = agentRequest({
       kind: "campaign",
       briefId: "21yjV0000002NJtQAM",
-      briefName: "Coastline Late-Night Tacos",
+      briefName: "Sample Kitchen Late-Night Tacos",
     });
     expect(create).toContain("brief 21yjV0000002NJtQAM");
     expect(create).toContain("Create Campaign, then save it with Save Campaign");
@@ -306,7 +306,7 @@ describe("Marketing Cloud writes through the Campaign Creation agent", () => {
       result: { agent: { name: string; kind: string }; actions: Array<{ label: string }> };
     };
     expect(briefResult.result.agent).toMatchObject({
-      name: "Northstar_Campaign_Creation",
+      name: "Workbench_Campaign_Creation",
       kind: "Marketing Cloud Next Campaign Creation agent",
     });
     expect(briefResult.result.actions.map((item) => item.label)).toEqual([

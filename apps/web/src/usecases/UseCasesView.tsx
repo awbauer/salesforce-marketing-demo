@@ -58,7 +58,7 @@ export function UseCasesView({
         <p className="usecases-intro">
           Each use case is a scenario the demo can run end to end: what it's for, the prompts that
           drive it, the systems involved, and how data flows between them. Everything uses fictional
-          Northstar data; writes always wait for your confirmation, and nothing is published or
+          Workbench data; writes always wait for your confirmation, and nothing is published or
           sent.
         </p>
         <fieldset className="usecases-teams">

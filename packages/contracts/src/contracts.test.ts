@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { routingCases } from "../../evals/src/cases";
 import {
   classifyPolicyIntent,
+  DEFAULTS,
   initialOrchestratorState,
   OrchestratorStateSchema,
   POLICY_RESPONSES,
-  PROOF_DEFAULTS,
   policyResponse,
   RecordRefSchema,
   recordKey,
@@ -29,17 +29,17 @@ describe("proof contracts", () => {
     const ref = {
       system: "restaurant-data",
       objectType: "Restaurant",
-      recordId: "coastline-kitchen",
+      recordId: "restaurant-brand",
     };
     expect(RecordRefSchema.parse(ref)).toEqual(ref);
-    expect(recordKey(ref)).toBe("restaurant-data:Restaurant:coastline-kitchen");
+    expect(recordKey(ref)).toBe("restaurant-data:Restaurant:restaurant-brand");
     expect(systemLabel("restaurant-data")).toBe("Restaurant data");
     expect(systemLabel("some-new-system")).toBe("some-new-system");
     expect(RecordRefSchema.safeParse({ ...ref, system: "Not A Slug" }).success).toBe(false);
   });
   it("keeps the proof's forbidden write classes out", () => {
-    expect(PROOF_DEFAULTS.allowedWrites).not.toContain("publish");
-    expect(PROOF_DEFAULTS.allowedWrites).not.toContain("delete");
+    expect(DEFAULTS.allowedWrites).not.toContain("publish");
+    expect(DEFAULTS.allowedWrites).not.toContain("delete");
   });
   it("keeps every Salesforce write outside autonomous model execution", () => {
     const writes = catalog.tools.filter((tool) => tool.riskClass === "write");
@@ -134,12 +134,12 @@ describe("policy intent routing", () => {
 describe("follow-up policy replies", () => {
   it("names what a follow-up refers to from the previous reply", () => {
     expect(
-      referentFromReply("**Draft push campaign – Coastline Kitchen (Los Angeles)**\n\nClear, 71°F"),
-    ).toBe("Draft push campaign – Coastline Kitchen (Los Angeles)");
+      referentFromReply("**Draft push campaign – Sample Kitchen (Los Angeles)**\n\nClear, 71°F"),
+    ).toBe("Draft push campaign – Sample Kitchen (Los Angeles)");
     expect(referentFromReply("## Readiness summary\nTwo blockers")).toBe("Readiness summary");
     expect(referentFromReply("")).toBeNull();
     expect(
-      referentFromReply("I reviewed the fictional Northstar sample campaign. The strongest…"),
+      referentFromReply("I reviewed the fictional Workbench sample campaign. The strongest…"),
     ).toBeNull();
     expect(policyResponse("confirmation-required", "Draft push campaign")).toContain(
       "I can't create “Draft push campaign” in Salesforce from chat",

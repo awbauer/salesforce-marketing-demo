@@ -1,7 +1,8 @@
 // Methodology text shared by the live runner and the offline rescore command.
+
+import { demoScenarios } from "../../packages/evals/src/cases.ts";
 import { PRICING_AS_OF } from "../../packages/evals/src/pricing.ts";
 import { DIMENSION_META, QUALITY_DIMENSIONS } from "../../packages/evals/src/quality.ts";
-import { demoScenarios } from "../../packages/evals/src/cases.ts";
 import { scenarioRubrics } from "../../packages/evals/src/rubric.ts";
 
 export function buildMethodology({ trialsDemo, trialsRouting }) {

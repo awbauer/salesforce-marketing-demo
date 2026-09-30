@@ -1,5 +1,5 @@
 import { runInDurableObject, SELF } from "cloudflare:test";
-import type { Confirmation, OrchestratorState } from "@northstar/contracts";
+import type { Confirmation, OrchestratorState } from "@workbench/contracts";
 import { describe, expect, it } from "vitest";
 import { demandCondition, fetchForecast } from "./campaign-context/open-meteo";
 import { locationInventory } from "./campaign-context/store-inventory";
@@ -145,7 +145,7 @@ describe("inventory check tools", () => {
       ];
       return (await agent.onChatMessage(() => undefined)).text();
     });
-    expect(text).toContain("Inventory check for Coastline Kitchen Sacramento");
+    expect(text).toContain("Inventory check for Sample Kitchen Sacramento");
     const state = await runInDurableObject(
       stub,
       (instance) => (instance as unknown as { state: OrchestratorState }).state,

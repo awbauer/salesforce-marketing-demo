@@ -47,7 +47,7 @@ export const DOMAINS: Domain[] = [
     id: "marketing",
     title: "Brands, campaigns, and content",
     blurb:
-      "Northstar and its Coastline Kitchen and Harborstone Wealth brands: what they plan, write, and check.",
+      "Workbench and its Sample Kitchen and Sample Wealth brands: what they plan, write, and check.",
     labels: ["Brand", "Campaign", "Brief", "ContentAsset", "BrandRule"],
   },
   {
@@ -58,7 +58,7 @@ export const DOMAINS: Domain[] = [
   },
   {
     id: "restaurant",
-    title: "Coastline Kitchen restaurants",
+    title: "Sample Kitchen restaurants",
     blurb:
       "Locations and their managers, the menu and what it's made with, and past pushes and emails with their context.",
     labels: [
@@ -75,7 +75,7 @@ export const DOMAINS: Domain[] = [
   },
   {
     id: "wealth",
-    title: "Harborstone Wealth",
+    title: "Sample Wealth",
     blurb:
       "Regulated content with its approvals and disclosures, an embargoed acquisition, and clients with their holdings and signals.",
     labels: [

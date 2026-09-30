@@ -1,4 +1,4 @@
-import type { SuggestedAction } from "@northstar/contracts";
+import type { SuggestedAction } from "@workbench/contracts";
 
 /**
  * Action cards in the chat: things the conversation suggests you approve, such as saving the

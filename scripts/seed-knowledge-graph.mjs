@@ -1,4 +1,4 @@
-// Loads the fictional Northstar knowledge graph into Neo4j through the Query API.
+// Loads the fictional Workbench knowledge graph into Neo4j through the Query API.
 // Usage: pnpm kg:seed --confirm [--reset]
 // Credentials: NEO4J_QUERY_URL, NEO4J_USERNAME, NEO4J_PASSWORD (never printed).
 import {
@@ -53,9 +53,9 @@ for (const label of labels)
     `CREATE CONSTRAINT kg_${safe(label).toLowerCase()}_id IF NOT EXISTS FOR (n:${safe(label)}) REQUIRE n.id IS UNIQUE`,
   );
 // --reset removes every version of the demo dataset, so renamed labels and ids leave nothing behind.
-// Long-term memory (dataset northstar-memory-*) is workspace data and survives a reseed.
+// Long-term memory (dataset workbench-memory-*) is workspace data and survives a reseed.
 if (args.has("--reset")) {
-  await write("MATCH (n) WHERE n.dataset STARTS WITH 'northstar-kg' DETACH DELETE n");
+  await write("MATCH (n) WHERE n.dataset STARTS WITH 'workbench-kg' DETACH DELETE n");
   console.log("Removed previous demo dataset versions.");
 }
 

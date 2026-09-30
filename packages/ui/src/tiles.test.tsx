@@ -1,5 +1,5 @@
-import { type InsightTile, READINESS_PRESENTATION } from "@northstar/contracts";
 import { cleanup, render, screen } from "@testing-library/react";
+import { type InsightTile, READINESS_PRESENTATION } from "@workbench/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   InsightBoard,

@@ -36,7 +36,7 @@ const stamp = (workspaceId: string, minutesAgo: number, days = 14) => {
     id: `10000000-0000-4000-8000-${String(sequence).padStart(12, "0")}`,
   };
 };
-const subjects = { salesforceIds: [], names: ["Coastline Kitchen"] };
+const subjects = { salesforceIds: [], names: ["Sample Kitchen"] };
 const draft = (version: number, headline: string) => ({
   focusId: "focus-1",
   kind: "push-message",
@@ -116,7 +116,7 @@ describe("long-term memory", () => {
     expect(await listMemory(backend, "workspace-b", now)).toEqual([]);
     const recalled = await tool("recall_decisions").run(
       backend,
-      { subject: "coastline", limit: 5 },
+      { subject: "sample kitchen", limit: 5 },
       context,
     );
     expect(recalled.count).toBe(0);
@@ -214,7 +214,7 @@ describe("long-term memory", () => {
       calls.find((call) => call.statement === REMEMBER_DRAFT_CYPHER)?.parameters,
     ).toMatchObject({
       workspaceId: "workspace-a",
-      names: ["coastline kitchen"],
+      names: ["sample kitchen"],
       fields: expect.any(String),
     });
   });

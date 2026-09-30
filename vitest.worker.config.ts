@@ -5,10 +5,10 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
-      "@northstar/contracts": fileURLToPath(
+      "@workbench/contracts": fileURLToPath(
         new URL("./packages/contracts/src/index.ts", import.meta.url),
       ),
-      "@northstar/knowledge-graph": fileURLToPath(
+      "@workbench/knowledge-graph": fileURLToPath(
         new URL("./packages/knowledge-graph/src/index.ts", import.meta.url),
       ),
     },

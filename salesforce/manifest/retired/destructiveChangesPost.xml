@@ -6,22 +6,22 @@
 -->
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <types>
-        <members>NorthstarRecordActionsTest</members>
-        <members>NorthstarSaveBrief</members>
-        <members>NorthstarSaveCampaign</members>
-        <members>NorthstarSaveCampaignBrief</members>
-        <members>NorthstarSaveMessage</members>
-        <members>NorthstarRecordWrites</members>
+        <members>WorkbenchRecordActionsTest</members>
+        <members>WorkbenchSaveBrief</members>
+        <members>WorkbenchSaveCampaign</members>
+        <members>WorkbenchSaveCampaignBrief</members>
+        <members>WorkbenchSaveMessage</members>
+        <members>WorkbenchRecordWrites</members>
         <name>ApexClass</name>
     </types>
     <types>
-        <members>Campaign.Northstar_Brand__c</members>
-        <members>Campaign.Northstar_Idempotency_Key__c</members>
+        <members>Campaign.Workbench_Brand__c</members>
+        <members>Campaign.Workbench_Idempotency_Key__c</members>
         <name>CustomField</name>
     </types>
     <types>
-        <members>Northstar_Brief__c</members>
-        <members>Northstar_Message__c</members>
+        <members>Workbench_Brief__c</members>
+        <members>Workbench_Message__c</members>
         <name>CustomObject</name>
     </types>
     <version>67.0</version>

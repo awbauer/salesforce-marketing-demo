@@ -1,4 +1,4 @@
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import catalog from "../packages/contracts/src/tool-catalog.json" with { type: "json" };
 import { report } from "./lib/report.mjs";
 
@@ -6,30 +6,30 @@ const root = "salesforce/force-app/main/default";
 const requiredFiles = [
   "aiAuthoringBundles/Campaign_Readiness_Governance/Campaign_Readiness_Governance.agent",
   "aiAuthoringBundles/Campaign_Readiness_Governance/Campaign_Readiness_Governance.bundle-meta.xml",
-  "classes/NorthstarGetCampaignContext.cls",
-  "classes/NorthstarGetConsentSummary.cls",
-  "classes/NorthstarValidateCampaignContent.cls",
-  "classes/NorthstarCreateCampaignReviewRequest.cls",
-  "classes/NorthstarAttachCampaignImage.cls",
-  "classes/NorthstarConfirmationVerifier.cls",
-  "classes/NorthstarCampaignActionsTest.cls",
-  "classes/NorthstarCheckWriteAccess.cls",
-  "classes/NorthstarGetMarketingRecords.cls",
-  "classes/NorthstarMarketingAgentTest.cls",
-  "aiAuthoringBundles/Northstar_Campaign_Creation/Northstar_Campaign_Creation.agent",
-  "objects/Activity/fields/Northstar_Idempotency_Key__c.field-meta.xml",
-  "objects/ContentVersion/fields/Northstar_Idempotency_Key__c.field-meta.xml",
-  "objects/Case/fields/Northstar_Idempotency_Key__c.field-meta.xml",
-  "classes/NorthstarCreateInventoryCase.cls",
-  "objects/Northstar_Confirmation_Config__c/Northstar_Confirmation_Config__c.object-meta.xml",
-  "objects/Northstar_Confirmation_Config__c/fields/Signing_Key__c.field-meta.xml",
-  "mcpServerDefinitions/NorthstarMarketingWorkbench.mcpServerDefinition-meta.xml",
-  "permissionsets/Northstar_Marketing_Workbench_Evaluator.permissionset-meta.xml",
+  "classes/WorkbenchGetCampaignContext.cls",
+  "classes/WorkbenchGetConsentSummary.cls",
+  "classes/WorkbenchValidateCampaignContent.cls",
+  "classes/WorkbenchCreateCampaignReviewRequest.cls",
+  "classes/WorkbenchAttachCampaignImage.cls",
+  "classes/WorkbenchConfirmationVerifier.cls",
+  "classes/WorkbenchCampaignActionsTest.cls",
+  "classes/WorkbenchCheckWriteAccess.cls",
+  "classes/WorkbenchGetMarketingRecords.cls",
+  "classes/WorkbenchMarketingAgentTest.cls",
+  "aiAuthoringBundles/Workbench_Campaign_Creation/Workbench_Campaign_Creation.agent",
+  "objects/Activity/fields/Workbench_Idempotency_Key__c.field-meta.xml",
+  "objects/ContentVersion/fields/Workbench_Idempotency_Key__c.field-meta.xml",
+  "objects/Case/fields/Workbench_Idempotency_Key__c.field-meta.xml",
+  "classes/WorkbenchCreateInventoryCase.cls",
+  "objects/Workbench_Confirmation_Config__c/Workbench_Confirmation_Config__c.object-meta.xml",
+  "objects/Workbench_Confirmation_Config__c/fields/Signing_Key__c.field-meta.xml",
+  "mcpServerDefinitions/MarketingWorkbench.mcpServerDefinition-meta.xml",
+  "permissionsets/Marketing_Workbench_Evaluator.permissionset-meta.xml",
 ];
 const supportingFiles = [
   "salesforce/specs/hosted-mcp-server.json",
   "salesforce/specs/phase-2-smoke.json",
-  "salesforce/postman/Northstar-Marketing-Workbench.postman_collection.json",
+  "salesforce/postman/Marketing-Workbench.postman_collection.json",
   "migrations/0001_phase2_confirmation_audit.sql",
 ];
 const failures = [];
@@ -48,9 +48,9 @@ for (const path of supportingFiles)
 
 const agent = await readFile(`${root}/${requiredFiles[0]}`, "utf8");
 for (const target of [
-  "apex://NorthstarGetCampaignContext",
-  "apex://NorthstarGetConsentSummary",
-  "apex://NorthstarValidateCampaignContent",
+  "apex://WorkbenchGetCampaignContext",
+  "apex://WorkbenchGetConsentSummary",
+  "apex://WorkbenchValidateCampaignContent",
 ])
   if (!agent.includes(target)) failures.push(`Agent Script missing action target: ${target}`);
 for (const forbidden of ["publish", "send", "activate", "delete", "suppress"])
@@ -63,7 +63,7 @@ const writeTools = catalog.tools.filter((tool) => tool.riskClass === "write");
 if (writeTools.some((tool) => tool.autonomous !== false))
   failures.push("Every Salesforce write tool must be excluded from autonomous execution.");
 const mcpServer = await readFile(
-  `${root}/mcpServerDefinitions/NorthstarMarketingWorkbench.mcpServerDefinition-meta.xml`,
+  `${root}/mcpServerDefinitions/MarketingWorkbench.mcpServerDefinition-meta.xml`,
   "utf8",
 );
 const exposedToolNames = [...mcpServer.matchAll(/<toolName>([^<]+)<\/toolName>/g)].map(
@@ -91,11 +91,11 @@ if (!summaryToolBlock?.includes("<readOnly>true</readOnly>"))
 // custom Apex: those write tools must be bound to that agent, whose script runs the standard
 // Marketing Cloud actions.
 const campaignAgent = await readFile(
-  `${root}/aiAuthoringBundles/Northstar_Campaign_Creation/Northstar_Campaign_Creation.agent`,
+  `${root}/aiAuthoringBundles/Workbench_Campaign_Creation/Workbench_Campaign_Creation.agent`,
   "utf8",
 );
 if (!campaignAgent.includes('agent_template: "MktCloud__CampaignCreationAgent"'))
-  failures.push("Northstar_Campaign_Creation must be a Marketing Cloud Campaign Creation agent.");
+  failures.push("Workbench_Campaign_Creation must be a Marketing Cloud Campaign Creation agent.");
 for (const target of [
   "flow://MktCloud__GenerateBrief",
   "standardInvocableAction://saveBrief",
@@ -115,15 +115,15 @@ for (const toolName of [
   const toolBlock = mcpServer
     .split("<tools>")
     .find((block) => block.includes(`<toolName>${toolName}</toolName>`));
-  if (!toolBlock?.includes("<apiIdentifier>ag:Northstar_Campaign_Creation</apiIdentifier>"))
+  if (!toolBlock?.includes("<apiIdentifier>ag:Workbench_Campaign_Creation</apiIdentifier>"))
     failures.push(`${toolName} must call the Marketing Cloud Campaign Creation agent.`);
 }
-for (const retired of ["Northstar_Brief__c", "Northstar_Message__c", "NorthstarSaveMessage"])
+for (const retired of ["Workbench_Brief__c", "Workbench_Message__c", "WorkbenchSaveMessage"])
   if (mcpServer.includes(retired))
     failures.push(`Hosted MCP server still references the retired custom write ${retired}.`);
 for (const [toolName, apexClass] of [
-  ["create_campaign_review_request", "NorthstarCreateCampaignReviewRequest"],
-  ["attach_campaign_image", "NorthstarAttachCampaignImage"],
+  ["create_campaign_review_request", "WorkbenchCreateCampaignReviewRequest"],
+  ["attach_campaign_image", "WorkbenchAttachCampaignImage"],
 ]) {
   const toolBlock = mcpServer
     .split("<tools>")
@@ -148,15 +148,15 @@ for (const [toolName, apexClass] of [
       failures.push(`${apexClass} is not globally discoverable: missing ${declaration}`);
   if (!apex.includes("Versioned, unexpired, same-user signed confirmation token"))
     failures.push(`${apexClass} does not declare the signed confirmation-token contract.`);
-  if (!apex.includes("NorthstarConfirmationVerifier.requireValid"))
+  if (!apex.includes("WorkbenchConfirmationVerifier.requireValid"))
     failures.push(`${apexClass} does not verify host-signed confirmation evidence.`);
 }
-const verifier = await readFile(`${root}/classes/NorthstarConfirmationVerifier.cls`, "utf8");
+const verifier = await readFile(`${root}/classes/WorkbenchConfirmationVerifier.cls`, "utf8");
 for (const invariant of [
   "HmacSHA256",
   "Crypto.generateMac",
   "MAX_FUTURE_SECONDS = 300",
-  "Northstar_Confirmation_Config__c.getOrgDefaults",
+  "Workbench_Confirmation_Config__c.getOrgDefaults",
 ])
   if (!verifier.includes(invariant))
     failures.push(`Confirmation verifier missing invariant: ${invariant}`);
