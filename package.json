@@ -45,7 +45,9 @@
     "verify": "node scripts/verify.mjs full",
     "verify:fast": "node scripts/verify.mjs fast",
     "profile:build": "node scripts/build-profile.mjs",
-    "template:check": "node scripts/check-template.mjs"
+    "template:check": "node scripts/check-template.mjs",
+    "workbench:init": "node scripts/workbench-init.mjs",
+    "workbench:script": "node scripts/make-demo-script.mjs"
   },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "5.0.101",
@@ -67,6 +69,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
+    "@clack/prompts": "1.8.1",
     "@cloudflare/vite-plugin": "1.56.0",
     "@cloudflare/vitest-plugin": "1.1.13",
     "@cloudflare/workers-types": "5.20260919.1",

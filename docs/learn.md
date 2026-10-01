@@ -599,7 +599,8 @@ An **industry pack** supplies what the profile can't invent safely: a vocabulary
 
 - **Tiers.** *Vertical* packs (restaurant, financial services) also switch on a module: extra graph data, tools and scenarios built for that industry, such as weather-driven inventory or pre-approved regulated content. *Core* packs (retail, healthcare, B2B technology, travel) run every core marketing flow with the industry's vocabulary. The *tour* pack turns everything on.
 - **Brand names.** The client brand becomes the vertical module's brand (and the parent is "Brand Group"), so the graph, tools, prompts and screens say the client's name. Other modules use sample names and stay off.
-- **Personalization.** The wizard can ask your local model to rename accounts and campaigns; the result is validated against the pack's schema and falls back to the pack's own values.
+- **The wizard.** `pnpm workbench:init` interviews you (audience, industry, sample client profile, use cases, models, Salesforce, where it runs), checks for a local Ollama, writes the profile, and generates `.workbench/demo-script.md`, a run-sheet with the prompts to say for each use case. `--answers file.json` runs it without prompts.
+- **Personalization.** The wizard can ask your local model to rename accounts and campaigns; the result is validated (counts, duplicates, PII-shaped text, the real client's name) and falls back to the pack's own values. The real client name goes only into your ignored blocked-words list, so the Git gate stops it from being committed.
 - **Safety.** The writes, confirmations and data rules do not change per pack. `pnpm template:check` fails if instance files or example-client names are tracked, and tests, evals and the e2e suite run the full-tour profile so every module stays covered.
 
 **Try it**
@@ -611,6 +612,7 @@ An **industry pack** supplies what the profile can't invent safely: a vocabulary
 - profiles/example.profile.json and profiles/demo-composite.profile.json
 - packages/contracts/src/profile.ts, packages/contracts/src/pack.ts
 - packages/industry-packs/src/index.ts
+- scripts/workbench-init.mjs (the wizard), scripts/make-demo-script.mjs
 - scripts/build-profile.mjs, scripts/check-template.mjs
 - docs/decisions/ADR-009-portable-instances.md
 

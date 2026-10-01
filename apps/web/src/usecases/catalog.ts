@@ -3,7 +3,7 @@ import {
   RESTAURANT_BRAND,
   SAMPLE_CAMPAIGN_ID,
   WEALTH_BRAND,
-} from "@workbench/contracts";
+} from "../../../../packages/contracts/src/index.ts";
 /**
  * The use-case library: each scenario the demo supports, the utterances that drive it, the
  * systems it touches, and how data flows between them. "Coming soon" entries are drafted
@@ -92,7 +92,7 @@ export const ALL_USE_CASES: UseCase[] = [
     status: "available",
     summary:
       "Turn today's weather, the menu, and past results into a Marketing Cloud Next brief, then a campaign with its flow.",
-    scenario: `A ${RESTAURANT_BRAND} marketer wants a lunch campaign that fits today's weather in Los Angeles and what has worked before, built the way Marketing Cloud Next builds campaigns: brief first, then a campaign with a flow.`,
+    scenario: `A marketer at ${RESTAURANT_BRAND} wants a lunch campaign that fits today's weather in Los Angeles and what has worked before, built the way Marketing Cloud Next builds campaigns: brief first, then a campaign with a flow.`,
     prompts: [
       {
         text: EMAIL_PROMPT,

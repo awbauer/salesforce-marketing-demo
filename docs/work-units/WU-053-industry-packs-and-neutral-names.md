@@ -20,7 +20,7 @@ owners: [agent]
 - Seven packs: `composite` (full tour), `retail`, `restaurant` and `financial-services` (vertical modules), `healthcare-payer`, `b2b-technology`, `travel-hospitality` (core flows with the industry's vocabulary).
 - `buildDataset({ pack })` swaps the vocabulary and builds the restaurant and wealth data only when the pack enables them. Tools that need a module are filtered out when it is off (`TOOL_MODULE`); graph tours, domains and use cases follow the pack.
 - Brand names come from the profile (`PARENT_BRAND`, `RESTAURANT_BRAND`, `WEALTH_BRAND`); the system prompt carries the client, industry context, voice and compliance rules; routing patterns use the restaurant brand.
-- Names: Northstar → Workbench, Coastline → restaurant, Harborstone → wealth (identifiers, ids, files, Apex, metadata); `PROOF_DEFAULTS` → `DEFAULTS`; the org-specific Salesforce campaign id → a fixture id (`SAMPLE_CAMPAIGN_ID`, overridable by `salesforce.sampleCampaignId`).
+- Names: the proof-era parent brand, restaurant brand and wealth brand become neutral names (identifiers, ids, files, Apex, metadata); `PROOF_DEFAULTS` → `DEFAULTS`; the org-specific Salesforce campaign id → a fixture id (`SAMPLE_CAMPAIGN_ID`, overridable by `salesforce.sampleCampaignId`).
 - Apex store lookup no longer depends on a brand name: managers are found by `Department = 'Store <city>'`.
 - Proof-era plan, work units 001–051, ADR-001–008 and gate reports moved to `docs/archive/proof/`. `AGENTS.md` and the guides use role-based wording. `salesforce.yml` is manual (`dry-run` by default).
 - `pnpm template:check` gate: no tracked instance files, no proof-era names outside the archive, every pack and shipped profile valid.
@@ -32,7 +32,7 @@ owners: [agent]
 - [x] Every pack's use cases exist in the catalog: `apps/web/src/usecases/packs.test.ts`.
 - [x] No proof-era name is tracked outside the archive: `pnpm template:check`.
 - [x] Tests, evals and the e2e suite run the full-tour profile, so every module stays covered.
-- [ ] `pnpm verify` passes.
+- [x] `pnpm verify` passes (14 gates).
 - [ ] The Apex rename and store-lookup change are deployed to a sandbox and their tests run (needs a sandbox; not done).
 - [x] Playwright e2e run against the renamed UI with the full-tour profile: 19 passed on the bundled Chromium (the Chrome and Edge channels are not installed in the authoring container; CI runs both).
 

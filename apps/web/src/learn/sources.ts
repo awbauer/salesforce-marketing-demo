@@ -40,6 +40,9 @@ export const SECTION_SOURCES: Record<string, readonly string[]> = {
     "scripts/build-profile.mjs",
     "scripts/lib/instance.mjs",
     "scripts/check-template.mjs",
+    "scripts/workbench-init.mjs",
+    "scripts/make-demo-script.mjs",
+    "scripts/lib/init.mjs",
   ],
   workspace: [
     "apps/edge/src/working-set.ts",

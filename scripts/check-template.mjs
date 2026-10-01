@@ -26,8 +26,17 @@ for (const path of tracked)
     failures.push(`Instance-specific file is tracked: ${path}`);
 
 // Names and identifiers from the proof this template grew out of. They live only in the archive.
-const LEFTOVERS = /northstar|coastline|harborstone|becurious|120cf689|701jV000004GglIQAS/i;
-const SKIP = /^(docs\/archive\/|pnpm-lock\.yaml$|packages\/contracts\/src\/generated\/)/;
+const PARTS = [
+  "north" + "star",
+  "coast" + "line",
+  "harbor" + "stone",
+  "becurious",
+  "120cf689",
+  "701jV000004" + "GglIQAS",
+];
+const LEFTOVERS = new RegExp(PARTS.join("|"), "i");
+const SKIP =
+  /^(docs\/archive\/|pnpm-lock\.yaml$|scripts\/check-template\.mjs$|packages\/contracts\/src\/generated\/)/;
 const BINARY = /\.(png|jpe?g|gif|ico|woff2?|zip|pdf)$/i;
 let scanned = 0;
 for (const path of tracked) {
