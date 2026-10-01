@@ -1,7 +1,7 @@
 // Fails if any metadata the workbench retired still exists in the target Salesforce org, so
 // source and org can't drift apart unnoticed. The retired list is the checked-in
 // salesforce/manifest/retired/destructiveChangesPost.xml; deploy it with that manifest to delete.
-// Usage: SF_TARGET_ORG=northstar-pot pnpm sf:retired:check
+// Usage: SF_TARGET_ORG=<sandbox-alias> pnpm sf:retired:check
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { report } from "./lib/report.mjs";

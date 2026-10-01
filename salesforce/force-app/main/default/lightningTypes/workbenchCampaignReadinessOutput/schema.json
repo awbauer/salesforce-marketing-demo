@@ -1,0 +1,5 @@
+{
+  "title": "Workbench Campaign Readiness Output",
+  "description": "Structured bounded output from Workbench campaign content validation.",
+  "lightning:type": "@apexClassType/c__WorkbenchValidateCampaignContent$Output"
+}

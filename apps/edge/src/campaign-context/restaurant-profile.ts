@@ -1,28 +1,28 @@
 import {
-  COASTLINE,
-  COASTLINE_LOCATIONS,
-  COASTLINE_MENU,
   DAYPART_HOURS,
   locationNodeId,
   menuItemId,
-} from "../../../../packages/knowledge-graph/src/coastline.ts";
+  RESTAURANT,
+  RESTAURANT_LOCATIONS,
+  RESTAURANT_MENU,
+} from "../../../../packages/knowledge-graph/src/restaurant.ts";
 
 /**
- * The restaurant system's view of Coastline Kitchen, a fictional brand under Northstar. It keeps
+ * The restaurant system's view of Sample Kitchen, a fictional brand under Workbench. It keeps
  * its own entities (brand, locations, menu, dayparts, app audience) and shares their ids with
  * the knowledge graph, so a location or menu item here is the same node there. All names and
  * figures are invented; audience facts are aggregates with no customer records.
  */
-const flagship = COASTLINE_LOCATIONS[0];
+const flagship = RESTAURANT_LOCATIONS[0];
 
 export const RESTAURANT_PROFILES = {
-  [COASTLINE.restaurantId]: {
-    id: COASTLINE.restaurantId,
-    graphId: COASTLINE.id,
-    name: COASTLINE.name,
-    parentBrand: COASTLINE.parentBrand.name,
-    concept: COASTLINE.concept,
-    hours: COASTLINE.hours,
+  [RESTAURANT.restaurantId]: {
+    id: RESTAURANT.restaurantId,
+    graphId: RESTAURANT.id,
+    name: RESTAURANT.name,
+    parentBrand: RESTAURANT.parentBrand.name,
+    concept: RESTAURANT.concept,
+    hours: RESTAURANT.hours,
     /** The flagship; its id is the weather-tool city id. */
     location: {
       id: flagship.id,
@@ -30,9 +30,9 @@ export const RESTAURANT_PROFILES = {
       city: flagship.city,
       neighborhood: flagship.neighborhood,
       address: flagship.address,
-      service: [...COASTLINE.services],
+      service: [...RESTAURANT.services],
     },
-    locations: COASTLINE_LOCATIONS.map((location) => ({
+    locations: RESTAURANT_LOCATIONS.map((location) => ({
       id: location.id,
       graphId: locationNodeId(location.id),
       city: location.city,
@@ -45,9 +45,9 @@ export const RESTAURANT_PROFILES = {
         sms: location.smsOptIns,
       },
     })),
-    brandVoice: COASTLINE.brandVoice,
-    menuId: COASTLINE.menu.id,
-    menu: COASTLINE_MENU.map((item) => ({
+    brandVoice: RESTAURANT.brandVoice,
+    menuId: RESTAURANT.menu.id,
+    menu: RESTAURANT_MENU.map((item) => ({
       id: menuItemId(item.name),
       item: item.name,
       price: item.price,
@@ -55,7 +55,7 @@ export const RESTAURANT_PROFILES = {
       serves: item.serves,
       tags: [...item.tags],
     })),
-    favorites: COASTLINE.favorites.map((favorite) => ({
+    favorites: RESTAURANT.favorites.map((favorite) => ({
       ...favorite,
       id: menuItemId(favorite.item),
     })),
@@ -63,21 +63,21 @@ export const RESTAURANT_PROFILES = {
       Object.entries(DAYPART_HOURS).map(([daypart, hours]) => [daypart.replace("-", " "), hours]),
     ),
     audience: {
-      appUsers: COASTLINE_LOCATIONS.reduce((sum, location) => sum + location.appUsers, 0),
+      appUsers: RESTAURANT_LOCATIONS.reduce((sum, location) => sum + location.appUsers, 0),
       marketingOptInsByChannel: {
-        push: COASTLINE_LOCATIONS.reduce((sum, location) => sum + location.pushOptIns, 0),
-        email: COASTLINE_LOCATIONS.reduce((sum, location) => sum + location.emailOptIns, 0),
-        sms: COASTLINE_LOCATIONS.reduce((sum, location) => sum + location.smsOptIns, 0),
+        push: RESTAURANT_LOCATIONS.reduce((sum, location) => sum + location.pushOptIns, 0),
+        email: RESTAURANT_LOCATIONS.reduce((sum, location) => sum + location.emailOptIns, 0),
+        sms: RESTAURANT_LOCATIONS.reduce((sum, location) => sum + location.smsOptIns, 0),
       },
       consentRule:
         "Count only the opt-ins for the campaign's channel: push opt-ins for a push, email opt-ins for an email, SMS opt-ins for a text.",
-      pushOpenRate: COASTLINE.pushOpenRate,
-      busiestDayparts: COASTLINE.busiestDayparts.map((daypart) => daypart.replace("-", " ")),
+      pushOpenRate: RESTAURANT.pushOpenRate,
+      busiestDayparts: RESTAURANT.busiestDayparts.map((daypart) => daypart.replace("-", " ")),
       note: "Aggregate, fictional figures. No individual customer data.",
     },
     promotionRules: [
       "Draft only; campaigns are never scheduled or sent from this tool.",
-      ...COASTLINE.promotionRules,
+      ...RESTAURANT.promotionRules,
     ],
   },
 } as const;

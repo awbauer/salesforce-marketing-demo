@@ -1,5 +1,5 @@
 import { env, SELF } from "cloudflare:test";
-import { PHASE_2_CURATED_TOOLS, classifyPolicyIntent } from "@northstar/contracts";
+import { classifyPolicyIntent, PHASE_2_CURATED_TOOLS } from "@workbench/contracts";
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { routingCases, routingHoldout } from "../../../packages/evals/src/cases";
@@ -37,7 +37,7 @@ describe("edge runtime", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       status: "ok",
-      service: "northstar-edge",
+      service: "workbench-edge",
       correlationId: "test-correlation",
     });
   });
@@ -54,24 +54,24 @@ describe("edge runtime", () => {
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "NOT_FOUND" } });
   });
-  it("reports configured proof bindings", async () => {
+  it("reports configured bindings", async () => {
     const response = await SELF.fetch("https://example.test/api/ready");
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      checks: { durableObject: true, workersAi: true, d1: true, r2: true },
+      checks: { durableObject: true, chatProvider: "ollama", d1: true, r2: true },
     });
   });
   it("isolates agent keys by authenticated subject and workspace", async () => {
     const first = await deriveAgentKey(
-      { subject: "evaluator-a", email: "a@northstar.example", role: "evaluator", tenantId: "pot" },
-      "northstar-demo",
+      { subject: "evaluator-a", email: "a@workbench.example", role: "evaluator", tenantId: "pot" },
+      "workbench-demo",
     );
     const otherUser = await deriveAgentKey(
-      { subject: "evaluator-b", email: "b@northstar.example", role: "evaluator", tenantId: "pot" },
-      "northstar-demo",
+      { subject: "evaluator-b", email: "b@workbench.example", role: "evaluator", tenantId: "pot" },
+      "workbench-demo",
     );
     const otherWorkspace = await deriveAgentKey(
-      { subject: "evaluator-a", email: "a@northstar.example", role: "evaluator", tenantId: "pot" },
+      { subject: "evaluator-a", email: "a@workbench.example", role: "evaluator", tenantId: "pot" },
       "other-workspace",
     );
     expect(new Set([first, otherUser, otherWorkspace]).size).toBe(3);
@@ -166,14 +166,14 @@ describe("edge runtime", () => {
     ).toBe("unavailable");
     expect(classifyToolResult({ isError: true, content: [] })).toBe("error");
     expect(
-      classifyToolResult({ isError: false, result: [{ campaignId: "701jV000004GglIQAS" }] }),
+      classifyToolResult({ isError: false, result: [{ campaignId: "701xx0000A1B2C3D4E" }] }),
     ).toBe("success");
   });
   it("forces explicit Salesforce campaign requests through the matching governed tool", () => {
     const names = ["salesforce_summarize_campaign", "salesforce_check_campaign_readiness"];
     expect(
       selectRequiredTool(
-        "Summarize Salesforce Campaign 701jV000004GglIQAS using only live evidence",
+        "Summarize Salesforce Campaign 701xx0000A1B2C3D4E using only live evidence",
         names,
       ),
     ).toBe("salesforce_summarize_campaign");
@@ -259,7 +259,7 @@ describe("edge runtime", () => {
           input: {},
           output: { stale: true },
         },
-        { type: "text" as const, text: "Here is the push campaign draft for Coastline Kitchen." },
+        { type: "text" as const, text: "Here is the push campaign draft for Sample Kitchen." },
       ],
     } as unknown as UIMessage;
     const window = conversationWindow([
@@ -269,7 +269,7 @@ describe("edge runtime", () => {
     ] as UIMessage[]);
     expect(window.map((message) => message.id)).toEqual(["u1", "draft", "u2"]);
     expect(window[1]?.parts).toEqual([
-      { type: "text", text: "Here is the push campaign draft for Coastline Kitchen." },
+      { type: "text", text: "Here is the push campaign draft for Sample Kitchen." },
     ]);
   });
 
@@ -298,7 +298,7 @@ describe("edge runtime", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         action: "create-review-task",
-        recordId: "701jV000004GglIQAS",
+        recordId: "701xx0000A1B2C3D4E",
         summary: "Create a review task for the current blockers.",
       }),
     });
@@ -321,7 +321,7 @@ describe("edge runtime", () => {
     await expect(execute.json()).resolves.toMatchObject({
       result: {
         source: "local-fixture",
-        campaignId: "701jV000004GglIQAS",
+        campaignId: "701xx0000A1B2C3D4E",
         subject: "Review campaign readiness: VERO Phase 1 Launch",
         priority: "High",
         dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
@@ -360,7 +360,7 @@ describe("edge runtime", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         action: "create-review-task",
-        recordId: "701jV000004GglIQAS",
+        recordId: "701xx0000A1B2C3D4E",
         summary: "Review the campaign with current readiness findings.",
       }),
     });
@@ -373,7 +373,7 @@ describe("edge runtime", () => {
     await expect(execute.json()).resolves.toMatchObject({
       result: {
         source: "local-fixture",
-        campaignId: "701jV000004GglIQAS",
+        campaignId: "701xx0000A1B2C3D4E",
         idempotencyKey: confirmation.idempotencyKey,
         readBack: true,
       },

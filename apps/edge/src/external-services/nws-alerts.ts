@@ -6,7 +6,7 @@ import { LOCATIONS, type LocationId } from "../campaign-context/open-meteo.ts";
  * keyless public API. It asks callers to identify themselves with a User-Agent.
  */
 
-const USER_AGENT = "northstar-marketing-workbench (fictional demo; no customer data)";
+const USER_AGENT = "marketing-workbench (fictional demo; no customer data)";
 
 const FeatureSchema = z.object({
   properties: z.object({
@@ -72,7 +72,7 @@ async function fetchAlerts(url: string, fetchImpl: typeof fetch) {
   } as const;
 }
 
-/** Active alerts at a Coastline Kitchen location, plus a count of alerts elsewhere in California. */
+/** Active alerts at a Sample Kitchen location, plus a count of alerts elsewhere in California. */
 export async function fetchLocationAlerts(location: LocationId, fetchImpl: typeof fetch = fetch) {
   const { latitude, longitude, city } = LOCATIONS[location];
   const [atLocation, statewide] = await Promise.all([

@@ -1,4 +1,4 @@
-import { type InsightTile, type RecordRef, systemLabel } from "@northstar/contracts";
+import { type InsightTile, type RecordRef, systemLabel } from "@workbench/contracts";
 
 const SALESFORCE_SANDBOX_ORIGIN = "https://pu1788182184076.my.salesforce.com";
 

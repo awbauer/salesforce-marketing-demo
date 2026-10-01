@@ -112,7 +112,7 @@ export function planMarketingWrite(focus: FocusItem): PlannedMarketingWrite | nu
 export function agentRequest(write: MarketingWrite) {
   if (write.kind === "brief")
     return [
-      "The user reviewed and confirmed this campaign brief in the Northstar workbench.",
+      "The user reviewed and confirmed this campaign brief in the Workbench workbench.",
       "Save it exactly as written with Save Campaign Brief, then draft its campaign preview with Draft a Campaign Preview.",
       "Do not create or save the campaign yet. In your reply, include the Brief ID.",
       ...MARKETING_BRIEF_FIELDS.flatMap(([key, label]) =>
@@ -120,7 +120,7 @@ export function agentRequest(write: MarketingWrite) {
       ),
     ].join("\n");
   return [
-    `The user reviewed and confirmed the campaign preview already saved on brief ${write.briefId} ("${write.briefName}") in the Northstar workbench.`,
+    `The user reviewed and confirmed the campaign preview already saved on brief ${write.briefId} ("${write.briefName}") in the Workbench workbench.`,
     "Create the campaign for that brief with Create Campaign, then save it with Save Campaign.",
     "Do not activate, schedule, or send anything. In your reply, include the Campaign ID.",
   ].join("\n");
@@ -291,7 +291,7 @@ export function fixturePermissionReport(
   const checks = [
     {
       label: "Workbench permission set",
-      detail: "Northstar Marketing Workbench Evaluator is assigned.",
+      detail: "Marketing Workbench Evaluator is assigned.",
     },
     ...(action === "save-marketing-brief"
       ? [

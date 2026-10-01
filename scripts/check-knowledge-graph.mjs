@@ -5,12 +5,12 @@
 import { isDeepStrictEqual } from "node:util";
 import {
   ACCOUNTS,
-  buildDataset,
   ALL_CAMPAIGNS,
+  buildDataset,
   CLIENT_NAMES,
   createMemoryStore,
   forgetMemory,
-  KNOWLEDGE_GRAPH_TOOL_SPECS,
+  ALL_KNOWLEDGE_GRAPH_TOOL_SPECS as KNOWLEDGE_GRAPH_TOOL_SPECS,
   listMemory,
   MEMORY_TOOL_SPECS,
   queryApiBackend,
@@ -37,8 +37,8 @@ const cases = {
     { campaign: "camp-fall", channel: "email" },
     { campaign: "camp-holiday", channel: "sms" },
     { campaign: "camp-winter", channel: "push" },
-    { campaign: "camp-coastline-weather", channel: "mobile-app" },
-    { campaign: "camp-coastline-late-night", channel: "push" },
+    { campaign: "camp-restaurant-weather", channel: "mobile-app" },
+    { campaign: "camp-restaurant-late-night", channel: "push" },
   ],
   find_similar_past_pushes: [
     { location: "los-angeles", daypart: "dinner", condition: "clear" },
@@ -119,15 +119,18 @@ const stamp = (offsetMinutes) => {
     id: crypto.randomUUID(),
   };
 };
-const subjects = { salesforceIds: [], names: ["Coastline Kitchen", "Coastline Rainy Day Comfort"] };
+const subjects = {
+  salesforceIds: [],
+  names: ["Sample Kitchen", "Sample Kitchen Rainy Day Comfort"],
+};
 const draft = (version, headline) => ({
   focusId: "focus-parity",
   kind: "push-message",
-  title: "Coastline rainy-day push",
+  title: "Sample Kitchen rainy-day push",
   summary: `Rainy-day push, version ${version}.`,
   fields: [
     { label: "Headline", value: headline },
-    { label: "Brand", value: "Coastline Kitchen" },
+    { label: "Brand", value: "Sample Kitchen" },
   ],
   version,
 });
@@ -148,14 +151,14 @@ const inputs = [
     ...stamp(10),
     decision: {
       kind: "confirmed-write",
-      outcome: "Saved the brief “Coastline rainy-day push” (21y000000000001).",
+      outcome: "Saved the brief “Sample Kitchen rainy-day push” (21y000000000001).",
       note: "Saved from version 2 of the draft.",
     },
     record: {
       system: "salesforce",
       objectType: "Brief",
       recordId: "21y000000000001",
-      title: "Coastline rainy-day push",
+      title: "Sample Kitchen rainy-day push",
     },
     draftRef: { focusId: "focus-parity", version: 2 },
     subjects,
@@ -171,7 +174,11 @@ try {
     ["list_memory", (backend) => listMemory(backend, workspaceId, now)],
     ...MEMORY_TOOL_SPECS.flatMap((spec) =>
       (spec.name === "recall_decisions"
-        ? [{ subject: "coastline" }, { subject: "21y000000000001" }, { subject: "nothing here" }]
+        ? [
+            { subject: "sample kitchen" },
+            { subject: "21y000000000001" },
+            { subject: "nothing here" },
+          ]
         : spec.name === "recall_recent_work"
           ? [{ limit: 5 }]
           : [{ memoryId: inputs[2].id }, { memoryId: inputs[1].id }]

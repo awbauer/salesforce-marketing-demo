@@ -1,4 +1,4 @@
-import { type TurnRecord, TurnRecordSchema } from "@northstar/contracts";
+import { type TurnRecord, TurnRecordSchema } from "@workbench/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MemoryPanel } from "./MemoryPanel";
 import { turnStats } from "./turn-stats";

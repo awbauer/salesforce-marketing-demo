@@ -130,36 +130,36 @@ describe("Neo4j Query API client", () => {
       });
   });
 
-  it("connects Coastline Kitchen to Northstar and every push to its campaign, content, audience, and consent", () => {
+  it("connects Sample Kitchen to Workbench and every push to its campaign, content, audience, and consent", () => {
     const dataset = buildDataset();
     const out = (id: string, type: string) =>
       dataset.relationships
         .filter((edge) => edge.from === id && edge.type === type)
         .map((edge) => edge.to);
-    expect(out("brand-coastline-kitchen", "PART_OF")).toEqual(["brand-northstar"]);
+    expect(out("brand-restaurant", "PART_OF")).toEqual(["brand-workbench"]);
     expect(out("consent-push-marketing", "FOR")).toEqual(["channel-mobile-app"]);
     const pushes = dataset.nodes.filter((node) => node.label === "PushSend");
     expect(pushes).toHaveLength(1500);
     for (const push of pushes) {
       expect(out(push.id, "ON")).toEqual(["channel-mobile-app"]);
       expect(out(push.id, "SENT_UNDER")).toEqual(["consent-push-marketing"]);
-      expect(out(push.id, "PART_OF")[0]).toMatch(/^camp-coastline-/);
-      expect(out(push.id, "USED")[0]).toMatch(/^asset-camp-coastline-/);
-      expect(out(push.id, "SENT_TO")[0]).toMatch(/^segment-coastline-/);
+      expect(out(push.id, "PART_OF")[0]).toMatch(/^camp-restaurant-/);
+      expect(out(push.id, "USED")[0]).toMatch(/^asset-camp-restaurant-/);
+      expect(out(push.id, "SENT_TO")[0]).toMatch(/^segment-restaurant-/);
     }
     // Restaurant entities belong to the brand: locations it operates and one menu they serve.
-    expect(out("brand-coastline-kitchen", "OPERATES")).toHaveLength(5);
-    expect(out("location-los-angeles", "SERVES")).toEqual(["menu-coastline-core"]);
+    expect(out("brand-restaurant", "OPERATES")).toHaveLength(5);
+    expect(out("location-los-angeles", "SERVES")).toEqual(["menu-restaurant-core"]);
     expect(
       dataset.relationships.filter(
-        (edge) => edge.type === "ON_MENU" && edge.to === "menu-coastline-core",
+        (edge) => edge.type === "ON_MENU" && edge.to === "menu-restaurant-core",
       ),
     ).toHaveLength(10);
   });
 
-  it("reports push consent for Coastline's app audiences from segment aggregates", async () => {
+  it("reports push consent for Sample Kitchen's app audiences from segment aggregates", async () => {
     const coverage = (await tool("check_consent_coverage")({
-      campaign: "camp-coastline-late-night",
+      campaign: "camp-restaurant-late-night",
       channel: "push",
     })) as {
       channel: string;
@@ -195,7 +195,7 @@ describe("Neo4j Query API client", () => {
     };
     expect(result.topItems.every((item) => item.content?.endsWith("· push"))).toBe(true);
     expect(result.audience).toEqual({
-      segment: "Coastline app · Los Angeles",
+      segment: "Sample Kitchen app · Los Angeles",
       appUsers: 18400,
       channel: "push",
       optedIn: 11900,
@@ -303,7 +303,7 @@ describe("use-case graph tools", () => {
     for (const reach of result.reachableByChannel)
       expect(result.affectedAppUsers).toBeGreaterThan(reach.optedIn);
     expect(result.campaignsToReview.map((campaign) => campaign.name)).toContain(
-      "Coastline Weather Moments",
+      "Sample Kitchen Weather Moments",
     );
     expect(result.paths.map((path) => path.relationships[0]?.type.split(" ")[0])).toEqual(
       expect.arrayContaining(["NEAR", "HAS_CONSENT", "TARGETS"]),

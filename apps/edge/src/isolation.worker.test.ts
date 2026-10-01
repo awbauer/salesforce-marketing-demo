@@ -1,11 +1,11 @@
 import { env } from "cloudflare:test";
-import { PROOF_DEFAULTS } from "@northstar/contracts";
+import { INSTANCE_PROFILE } from "@workbench/contracts";
 import { getAgentByName } from "agents";
 import { describe, expect, it } from "vitest";
 import { deriveAgentKey } from "./auth";
 import { openCatalogCampaign } from "./worker.test-helpers";
 
-const CAMPAIGN_ID = "701jV000004GglIQAS";
+const CAMPAIGN_ID = "701xx0000A1B2C3D4E";
 const PNG = Uint8Array.from(
   atob(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
@@ -18,14 +18,14 @@ async function agentFor(subject: string) {
   const name = await deriveAgentKey(
     {
       subject,
-      email: `${subject}@northstar.example`,
+      email: `${subject}@workbench.example`,
       role: "evaluator",
-      tenantId: "northstar-pot",
+      tenantId: INSTANCE_PROFILE.instance.id,
     },
-    PROOF_DEFAULTS.workspaceId,
+    INSTANCE_PROFILE.instance.id,
   );
   const stub = await getAgentByName(env.MarketingOrchestrator, name, {
-    props: { principalSubject: subject, workspaceId: PROOF_DEFAULTS.workspaceId },
+    props: { principalSubject: subject, workspaceId: INSTANCE_PROFILE.instance.id },
   });
   return (path: string, init?: RequestInit) =>
     stub.fetch(new Request(`https://example.test/agent/${path}`, init));
@@ -36,12 +36,12 @@ async function seedDraftFor(subject: string) {
   await env.APP_DB.exec(
     "CREATE TABLE IF NOT EXISTS campaign_image_drafts (image_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, principal_subject TEXT NOT NULL, campaign_id TEXT NOT NULL, channel TEXT NOT NULL, prompt_summary TEXT NOT NULL, prompt_version TEXT NOT NULL, model_id TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL, content_hash TEXT NOT NULL, r2_key TEXT NOT NULL UNIQUE, lifecycle TEXT NOT NULL, seed INTEGER, created_at TEXT NOT NULL, expires_at TEXT NOT NULL)",
   );
-  const r2Key = `drafts/northstar-demo/${subject}/${imageId}.png`;
+  const r2Key = `drafts/${INSTANCE_PROFILE.instance.id}/${subject}/${imageId}.png`;
   await env.CAMPAIGN_ASSETS.put(r2Key, PNG);
   const digest = await crypto.subtle.digest("SHA-256", PNG);
   const hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
   await env.APP_DB.prepare(
-    `INSERT INTO campaign_image_drafts VALUES (?, 'northstar-demo', ?, ?, 'email', 'Private concept',
+    `INSERT INTO campaign_image_drafts VALUES (?, '${INSTANCE_PROFILE.instance.id}', ?, ?, 'email', 'Private concept',
       'campaign-image-v1', '@cf/black-forest-labs/flux-2-klein-4b', 1024, 1024, ?, ?, 'draft',
       NULL, ?, ?)`,
   )

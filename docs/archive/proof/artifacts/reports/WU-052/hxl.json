@@ -1,0 +1,9 @@
+{
+  "generatedAt": "2026-09-30T23:46:39.918Z",
+  "status": "passed",
+  "widget": "workbenchCampaignReadiness",
+  "lightningType": "workbenchCampaignReadinessOutput",
+  "resourceUri": "ui://widget/lightningType/c__workbenchCampaignReadinessOutput",
+  "fallback": "native",
+  "failures": []
+}

@@ -1,3 +1,4 @@
+import { INSTANCE_PACK, PARENT_BRAND, RESTAURANT_BRAND, WEALTH_BRAND } from "@workbench/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type CanvasCommand, GraphCanvas } from "./GraphCanvas";
 import {
@@ -20,6 +21,15 @@ import {
 } from "./graph-model";
 import "./graph.css";
 
+const CAMPAIGN_NAMES = Object.fromEntries(
+  INSTANCE_PACK.vocabulary.campaigns.map((campaign) => [campaign.id, campaign.name]),
+);
+const graphBrands = [
+  PARENT_BRAND,
+  ...(INSTANCE_PACK.modules.restaurant ? [RESTAURANT_BRAND] : []),
+  ...(INSTANCE_PACK.modules.wealth ? [WEALTH_BRAND] : []),
+].join(", ");
+
 type Load =
   | { status: "loading" }
   | { status: "error"; message: string }
@@ -35,11 +45,11 @@ type Tour = {
   expand?: boolean;
 };
 
-export const TOURS: Tour[] = [
+const ALL_TOURS: (Tour & { module?: "restaurant" | "wealth" })[] = [
   {
     id: "campaign",
     title: "How a campaign fits together",
-    question: "What is Fall Loyalty Reactivation built from?",
+    question: `What is ${CAMPAIGN_NAMES["camp-fall"]} built from?`,
     explain:
       "A campaign has a brief, content assets, and an audience segment. Each asset links to the brand rules it passed or failed, which is how the graph explains readiness.",
     target: () => "camp-fall",
@@ -53,15 +63,16 @@ export const TOURS: Tour[] = [
     target: () => "segment-camp-fall",
   },
   {
-    id: "coastline",
-    title: "Coastline Kitchen under Northstar",
-    question: "How does Coastline's weather campaign reach app users?",
-    explain:
-      "Coastline Kitchen is a brand under Northstar. Its weather campaign runs on the mobile app channel, targets an app segment near each location with aggregate push consent, and uses push content checked against Coastline's own brand rules.",
-    target: () => "camp-coastline-weather",
+    id: "restaurant",
+    module: "restaurant",
+    title: `${RESTAURANT_BRAND} under ${PARENT_BRAND}`,
+    question: `How does ${RESTAURANT_BRAND}'s weather campaign reach app users?`,
+    explain: `${RESTAURANT_BRAND} is a brand under ${PARENT_BRAND}. Its weather campaign runs on the mobile app channel, targets an app segment near each location with aggregate push consent, and uses push content checked against ${RESTAURANT_BRAND}'s own brand rules.`,
+    target: () => "camp-restaurant-weather",
   },
   {
     id: "rain",
+    module: "restaurant",
     title: "What worked in the rain",
     question: "Which past pushes performed best when it rained?",
     explain:
@@ -71,17 +82,18 @@ export const TOURS: Tour[] = [
   },
   {
     id: "wealth-news",
+    module: "wealth",
     title: "Approved content for market news",
-    question: "What can Harborstone send when the Fed raises rates?",
-    explain:
-      "Harborstone Wealth is a brand under Northstar. Content about a market event is approved ahead of time: each asset links to its approval record (approved, expired, or pending) and the disclosures it must carry, so the graph can say what's ready to send and why the rest is blocked.",
+    question: `What can ${WEALTH_BRAND} send when the Fed raises rates?`,
+    explain: `${WEALTH_BRAND} is a brand under ${PARENT_BRAND}. Content about a market event is approved ahead of time: each asset links to its approval record (approved, expired, or pending) and the disclosures it must carry, so the graph can say what's ready to send and why the rest is blocked.`,
     target: () => "event-rate-increase",
     expand: true,
   },
   {
     id: "wealth-client",
+    module: "wealth",
     title: "An account plan from the graph",
-    question: "How could Harborstone grow Cedar Valley Community Foundation?",
+    question: `How could ${WEALTH_BRAND} grow Cedar Valley Community Foundation?`,
     explain:
       "A client's signals suggest products it doesn't hold yet, peers of the same type show what's typical, and each product links to approved content. Its contacts carry consent by channel, so the plan names who to reach, how, and with what.",
     target: () => "client-cedar-valley-community-foundation",
@@ -96,6 +108,10 @@ export const TOURS: Tour[] = [
     target: (graph) => graph.links.find((link) => link.type === "FAILED")?.to,
   },
 ];
+
+export const TOURS: Tour[] = ALL_TOURS.filter(
+  (tour) => !tour.module || INSTANCE_PACK.modules[tour.module],
+);
 
 const PREVIEW_CONNECTIONS = 10;
 
@@ -258,9 +274,8 @@ export function GraphView({ onClose }: { onClose: () => void }) {
           <p className="kicker">Knowledge graph</p>
           <h2 id="graph-title">Graph explorer</h2>
           <p className="graph-lede">
-            The fictional Northstar, Coastline Kitchen, and Harborstone Wealth graph that the
-            orchestrator's graph tools read. Pick a tour, search, or click any node to see how it
-            connects.
+            The fictional {graphBrands} graph that the orchestrator's graph tools read. Pick a tour,
+            search, or click any node to see how it connects.
           </p>
         </div>
         <button type="button" className="text-button" onClick={onClose}>
@@ -557,7 +572,7 @@ function GraphPrimer() {
       <ol>
         <li>
           <strong>Colors are node types</strong>, grouped into brands and campaigns, audience and
-          consent, and Coastline Kitchen's restaurants.
+          consent, and the industry data this instance adds.
         </li>
         <li>
           <strong>Size is connectedness</strong>: bigger nodes take part in more relationships.

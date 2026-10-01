@@ -1,5 +1,5 @@
 {
-  "name": "@northstar/web",
+  "name": "@workbench/web",
   "private": true,
   "type": "module"
 }

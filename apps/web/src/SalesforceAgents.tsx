@@ -3,7 +3,7 @@ import {
   SALESFORCE_AGENTS,
   SALESFORCE_TOOL_DETAILS,
   type SalesforceToolDetail,
-} from "@northstar/contracts";
+} from "@workbench/contracts";
 import type { UIMessage } from "ai";
 
 export type SalesforceCall = {

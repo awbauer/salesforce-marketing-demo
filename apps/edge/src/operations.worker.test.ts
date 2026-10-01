@@ -1,5 +1,5 @@
 import { SELF } from "cloudflare:test";
-import { parseOperationControls } from "@northstar/contracts";
+import { parseOperationControls } from "@workbench/contracts";
 import { describe, expect, it } from "vitest";
 import { writeBlockReason } from "./orchestrator";
 import { openCatalogCampaign } from "./worker.test-helpers";
@@ -49,14 +49,14 @@ describe("operator controls", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         action: "create-review-task",
-        recordId: "701jV000004GglIQAS",
+        recordId: "701xx0000A1B2C3D4E",
         summary: "Create a review task for the current blockers.",
       }),
     });
     const response = await SELF.fetch("https://example.test/agent/audit/export");
     expect(response.status).toBe(200);
     expect(response.headers.get("content-disposition")).toMatch(
-      /attachment; filename="northstar-audit-\d{4}-\d{2}-\d{2}\.json"/,
+      /attachment; filename="workbench-audit-\d{4}-\d{2}-\d{2}\.json"/,
     );
     const body = (await response.json()) as {
       retentionHours: number;

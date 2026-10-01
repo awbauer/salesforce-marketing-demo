@@ -11,7 +11,7 @@ import type { EvidencePath, GraphBackend, PathNode, Row } from "./tools.ts";
  * paths, and history are computed here, so Neo4j and the in-memory store answer identically.
  */
 
-export const MEMORY_DATASET = "northstar-memory-v1";
+export const MEMORY_DATASET = "workbench-memory-v1";
 export const MEMORY_LABELS = [
   "Workspace",
   "MemoryEvent",

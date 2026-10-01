@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { DAYPARTS } from "./coastline.ts";
+import { RESTAURANT_BRAND, WEALTH_BRAND } from "../../contracts/src/brands.ts";
+import { INSTANCE_PACK } from "../../contracts/src/generated/instance.ts";
 import {
   ACCOUNTS,
   ALL_CAMPAIGNS,
@@ -11,6 +12,8 @@ import {
   type GraphNode,
   LOCATIONS,
 } from "./dataset.ts";
+import type { MemoryStore } from "./memory.ts";
+import { DAYPARTS } from "./restaurant.ts";
 import {
   CLIENT_NAMES,
   DEAL,
@@ -18,8 +21,7 @@ import {
   MARKET_EVENT_IDS,
   MARKET_EVENTS,
   marketEventId,
-} from "./harborstone.ts";
-import type { MemoryStore } from "./memory.ts";
+} from "./wealth.ts";
 
 export type Row = Record<string, unknown>;
 export type PathNode = { id: string; label: string; name: string };
@@ -134,7 +136,7 @@ const getGraphOverview = define({
   name: "get_graph_overview",
   title: "Knowledge graph overview",
   description:
-    "Summarize what the Northstar marketing knowledge graph contains: node counts by label, relationship counts by type, and the dataset version. All data is fictional.",
+    "Summarize what the Workbench marketing knowledge graph contains: node counts by label, relationship counts by type, and the dataset version. All data is fictional.",
   input: z.object({}),
   run: async (backend) => {
     const [row] = await rows(backend, OVERVIEW_CYPHER, {}, (ix) => {
@@ -373,7 +375,7 @@ type Cohort = { id: string; name: string; size: number; optedIn: number };
 const checkConsentCoverage = define({
   name: "check_consent_coverage",
   title: "Check consent coverage",
-  description: `Check how much of a campaign's audience holds the marketing consent a channel requires: individual personas for B2B campaigns, and aggregate app-user segments (push opt-ins) for Coastline Kitchen's mobile app campaigns, with the members or segments that fall short. Channels: email, sms, mobile-app (push notifications). Read-only; never changes consent or suppressions. Campaigns: ${campaignHelp}.`,
+  description: `Check how much of a campaign's audience holds the marketing consent a channel requires: individual personas for B2B campaigns, and aggregate app-user segments (push opt-ins) for ${RESTAURANT_BRAND}'s mobile app campaigns, with the members or segments that fall short. Channels: email, sms, mobile-app (push notifications). Read-only; never changes consent or suppressions. Campaigns: ${campaignHelp}.`,
   input: z.object({
     campaign: z.enum(CAMPAIGN_IDS).describe("Campaign ID"),
     channel: z
@@ -524,8 +526,7 @@ const round4 = (value: number) => Math.round(value * 10000) / 10000;
 const findSimilarPastPushes = define({
   name: "find_similar_past_pushes",
   title: "Find similar past sends",
-  description:
-    "Look up Coastline Kitchen's fictional send history on the campaign's channel (email sends for email, push sends for push; SMS has no history, so it uses push) for the same location, daypart, and weather condition, and return the best-performing menu items, their content, and the message angle by average order rate, plus the location's audience and how many of them hold marketing consent for the campaign's channel. Condition must be clear, cloudy, fog, rain, or heat (use heat when feels-like is 85°F or more; rain for drizzle or storms). If fewer than 5 matching sends exist, it widens to all weather for that location and daypart.",
+  description: `Look up ${RESTAURANT_BRAND}'s fictional send history on the campaign's channel (email sends for email, push sends for push; SMS has no history, so it uses push) for the same location, daypart, and weather condition, and return the best-performing menu items, their content, and the message angle by average order rate, plus the location's audience and how many of them hold marketing consent for the campaign's channel. Condition must be clear, cloudy, fog, rain, or heat (use heat when feels-like is 85°F or more; rain for drizzle or storms). If fewer than 5 matching sends exist, it widens to all weather for that location and daypart.`,
   input: z.object({
     location: z.enum(LOCATION_IDS).describe("Restaurant location (same IDs as the weather tool)"),
     daypart: z.enum(DAYPARTS).describe("Local daypart"),
@@ -973,10 +974,9 @@ type ImpactRow = {
 const assessLocationImpact = define({
   name: "assess_location_impact",
   title: "Assess location impact",
-  description:
-    "For a Coastline Kitchen location: the app audience near it (aggregate counts, no individuals), how many can be reached on each channel (push, email, SMS) under that channel's marketing consent, and the campaigns that target that audience and may need pausing during a disruption, each with its evidence path. Read-only.",
+  description: `For a ${RESTAURANT_BRAND} location: the app audience near it (aggregate counts, no individuals), how many can be reached on each channel (push, email, SMS) under that channel's marketing consent, and the campaigns that target that audience and may need pausing during a disruption, each with its evidence path. Read-only.`,
   input: z.object({
-    location: z.enum(LOCATION_IDS).describe("Coastline Kitchen location (city id)"),
+    location: z.enum(LOCATION_IDS).describe(`${RESTAURANT_BRAND} location (city id)`),
   }),
   run: async (backend, { location }) => {
     const [row] = (await rows(backend, LOCATION_IMPACT_CYPHER, { location }, (ix) => {
@@ -1097,10 +1097,9 @@ type DemandRow = {
 const mapWeatherDemand = define({
   name: "map_weather_demand",
   title: "Map weather to menu demand and inventory",
-  description:
-    "For a Coastline Kitchen location and the weather conditions in its forecast: the menu items whose demand those conditions lift (learned from past push results), the inventory items each one is made with and how much a serving uses, and the location's store manager, each with its evidence path. Read-only; it does not read stock levels.",
+  description: `For a ${RESTAURANT_BRAND} location and the weather conditions in its forecast: the menu items whose demand those conditions lift (learned from past push results), the inventory items each one is made with and how much a serving uses, and the location's store manager, each with its evidence path. Read-only; it does not read stock levels.`,
   input: z.object({
-    location: z.enum(LOCATION_IDS).describe("Coastline Kitchen location (city id)"),
+    location: z.enum(LOCATION_IDS).describe(`${RESTAURANT_BRAND} location (city id)`),
     conditions: z
       .array(z.enum(CONDITIONS))
       .min(1)
@@ -1229,7 +1228,7 @@ const mapWeatherDemand = define({
 });
 
 // ---------------------------------------------------------------------------------------------
-// Financial services use cases (Harborstone Wealth): approved content for market news, an
+// Financial services use cases (Sample Wealth): approved content for market news, an
 // embargoed acquisition release, and account plans to grow assets under management.
 
 type Consent = { scopeId: string; channel: string; purpose: string; optedIn: number };
@@ -1397,8 +1396,7 @@ type ResponseRow = {
 const matchNewsToApprovedContent = define({
   name: "match_news_to_approved_content",
   title: "Match market news to approved content",
-  description:
-    "For a market event (from the Federal Reserve news tool's event field: rate-increase, rate-cut, rate-hold, or market-volatility), find Harborstone Wealth's pre-approved regulated content for it: which assets are approved and releasable now (with approval ID, expiry, required disclosures, and channel), which are blocked and why (expired or pending approval, failed compliance check), how many clients and subscribers can be reached on each channel under marketing consent, and how fast past responses went out and how they performed. Each with its evidence path. Read-only.",
+  description: `For a market event (from the Federal Reserve news tool's event field: rate-increase, rate-cut, rate-hold, or market-volatility), find ${WEALTH_BRAND}'s pre-approved regulated content for it: which assets are approved and releasable now (with approval ID, expiry, required disclosures, and channel), which are blocked and why (expired or pending approval, failed compliance check), how many clients and subscribers can be reached on each channel under marketing consent, and how fast past responses went out and how they performed. Each with its evidence path. Read-only.`,
   input: z.object({
     event: z.enum(MARKET_EVENT_IDS).describe("Market event, from the news tool's event field"),
     channel: z
@@ -1588,8 +1586,7 @@ type DealRow = AssetFacts & {
 const prepareDealRelease = define({
   name: "prepare_deal_release",
   title: "Prepare an acquisition announcement release",
-  description:
-    "For Harborstone Wealth's embargoed acquisition (deal-bayview: Bayview Retirement Advisors), the pre-approved announcement package in release order: each asset's timing, audience, the consent it relies on (a service notice, marketing, internal, or public) and how many can be reached under it, its approval (embargoed until the announcement) and required disclosures, and anything that blocks it. Each with its evidence path. Read-only: it releases nothing.",
+  description: `For ${WEALTH_BRAND}'s embargoed acquisition (deal-bayview: Bayview Retirement Advisors), the pre-approved announcement package in release order: each asset's timing, audience, the consent it relies on (a service notice, marketing, internal, or public) and how many can be reached under it, its approval (embargoed until the announcement) and required disclosures, and anything that blocks it. Each with its evidence path. Read-only: it releases nothing.`,
   input: z.object({
     deal: z.enum(DEAL_IDS).default(DEAL.id).describe("The acquisition"),
   }),
@@ -1641,7 +1638,7 @@ const prepareDealRelease = define({
       const blockers = releaseBlockers(row, { allowEmbargoed: true });
       if (row.segment && reachable === 0)
         blockers.push(
-          `${row.segment} have no ${row.channel} ${row.purpose} consent with Harborstone`,
+          `${row.segment} have no ${row.channel} ${row.purpose} consent with ${WEALTH_BRAND}`,
         );
       return {
         step: row.step,
@@ -1808,10 +1805,9 @@ const round1 = (value: number) => Math.round(value * 10) / 10;
 const buildAumAccountPlan = define({
   name: "build_aum_account_plan",
   title: "Build an account plan to grow assets under management",
-  description:
-    "For a Harborstone Wealth client (a foundation, business, or family office; never an individual): assets with Harborstone and the estimated assets held elsewhere, the signals the relationship team has seen, and the plays they point to (products the client doesn't hold yet, the estimated AUM opportunity, and how many similar clients already hold each), the pre-approved content for each play (usable or blocked, with approval IDs and disclosures), the advisor, and the client's contacts ranked by role and engagement with the marketing channels each has consented to. Each with its evidence path. Read-only.",
+  description: `For a ${WEALTH_BRAND} client (a foundation, business, or family office; never an individual): assets with ${WEALTH_BRAND} and the estimated assets held elsewhere, the signals the relationship team has seen, and the plays they point to (products the client doesn't hold yet, the estimated AUM opportunity, and how many similar clients already hold each), the pre-approved content for each play (usable or blocked, with approval IDs and disclosures), the advisor, and the client's contacts ranked by role and engagement with the marketing channels each has consented to. Each with its evidence path. Read-only.`,
   input: z.object({
-    client: z.enum(CLIENT_NAMES).describe("Fictional Harborstone client name"),
+    client: z.enum(CLIENT_NAMES).describe(`Fictional ${WEALTH_BRAND} client name`),
   }),
   run: async (backend, { client }) => {
     const [row] = (await rows(backend, ACCOUNT_PLAN_CYPHER, { client }, (ix) => {
@@ -2040,7 +2036,7 @@ const buildAumAccountPlan = define({
       clientType: row.clientType,
       found: true,
       advisor: row.advisor ? { name: row.advisor, title: row.advisorTitle } : null,
-      aumWithHarborstoneMillions: row.aum,
+      aumWithFirmMillions: row.aum,
       heldAwayEstimateMillions: row.heldAway,
       walletShare: round4(row.aum / (row.aum + row.heldAway)),
       holdings: row.holdings.map((holding) => ({
@@ -2100,7 +2096,8 @@ const buildAumAccountPlan = define({
   },
 });
 
-export const KNOWLEDGE_GRAPH_TOOL_SPECS = [
+/** Every tool the workbench can offer; the Learn gate and the tool checks cover all of them. */
+export const ALL_KNOWLEDGE_GRAPH_TOOL_SPECS = [
   getGraphOverview,
   explainBuyerGroup,
   findAudienceOverlap,
@@ -2114,5 +2111,21 @@ export const KNOWLEDGE_GRAPH_TOOL_SPECS = [
   prepareDealRelease,
   buildAumAccountPlan,
 ] as const;
+
+/** Tools that only make sense when a vertical module's data is in the graph. */
+export const TOOL_MODULE: Partial<Record<string, "restaurant" | "wealth">> = {
+  find_similar_past_pushes: "restaurant",
+  assess_location_impact: "restaurant",
+  map_weather_demand: "restaurant",
+  match_news_to_approved_content: "wealth",
+  prepare_deal_release: "wealth",
+  build_aum_account_plan: "wealth",
+};
+
+/** The tools this instance's industry pack enables. */
+export const KNOWLEDGE_GRAPH_TOOL_SPECS = ALL_KNOWLEDGE_GRAPH_TOOL_SPECS.filter((spec) => {
+  const module = TOOL_MODULE[spec.name];
+  return !module || INSTANCE_PACK.modules[module];
+});
 
 export { pathNode };

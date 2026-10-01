@@ -240,9 +240,7 @@ describe("forced tool call middleware", () => {
       ),
     ).toEqual({ message: "Draft a brief." });
     expect(
-      repairToolInput(
-        '{"message":"Draft a campaign brief for Coastline Kitchen. Objective: Email c',
-      ),
+      repairToolInput('{"message":"Draft a campaign brief for Sample Kitchen. Objective: Email c'),
     ).toBeNull();
   });
 

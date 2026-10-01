@@ -1,7 +1,7 @@
 import { PHASE_2_CURATED_TOOLS } from "../packages/contracts/src/index.ts";
 import { report } from "./lib/report.mjs";
 
-const required = ["PROOF_BASE_URL", "CF_ACCESS_JWT"];
+const required = ["WORKBENCH_BASE_URL", "CF_ACCESS_JWT"];
 const missing = required.filter((name) => !process.env[name]);
 if (missing.length) {
   await report("production-chat", {
@@ -18,16 +18,16 @@ const headers = {
   "Cf-Access-Jwt-Assertion": process.env.CF_ACCESS_JWT,
 };
 const statusResponse = await fetch(
-  new URL("/agent/salesforce/status", process.env.PROOF_BASE_URL),
+  new URL("/agent/salesforce/status", process.env.WORKBENCH_BASE_URL),
   { headers, signal: AbortSignal.timeout(15_000) },
 );
 const connector = await readJson(statusResponse);
 const preflightResponse = await fetch(
-  new URL("/agent/diagnostics/salesforce-write-preflight", process.env.PROOF_BASE_URL),
+  new URL("/agent/diagnostics/salesforce-write-preflight", process.env.WORKBENCH_BASE_URL),
   { method: "POST", headers, signal: AbortSignal.timeout(15_000) },
 );
 const preflight = await readJson(preflightResponse);
-const response = await fetch(new URL("/agent/diagnostics/chat", process.env.PROOF_BASE_URL), {
+const response = await fetch(new URL("/agent/diagnostics/chat", process.env.WORKBENCH_BASE_URL), {
   method: "POST",
   headers,
   body: JSON.stringify({ scenario: "campaign-summary" }),

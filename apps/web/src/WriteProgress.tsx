@@ -1,4 +1,4 @@
-import type { WriteProgress as Progress } from "@northstar/contracts";
+import type { WriteProgress as Progress } from "@workbench/contracts";
 import { useEffect, useRef } from "react";
 
 const STATUS_LABELS: Record<Progress["steps"][number]["status"], string> = {

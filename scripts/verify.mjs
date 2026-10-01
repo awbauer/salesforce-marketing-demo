@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { report } from "./lib/report.mjs";
+
 const mode = process.argv[2] ?? "full";
 const commands =
   mode === "fast"
@@ -12,6 +13,7 @@ const commands =
         ["pnpm", "hxl:check"],
         ["pnpm", "contracts:check"],
         ["pnpm", "docs:check"],
+        ["pnpm", "template:check"],
         ["pnpm", "learn:check"],
       ]
     : [
@@ -26,6 +28,7 @@ const commands =
         ["pnpm", "eval"],
         ["pnpm", "contracts:check"],
         ["pnpm", "docs:check"],
+        ["pnpm", "template:check"],
         ["pnpm", "learn:check"],
         ["pnpm", "build"],
       ];
@@ -37,7 +40,7 @@ for (const [command, ...args] of commands) {
     env: {
       ...process.env,
       CI: "true",
-      XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME ?? "/tmp/northstar-wrangler",
+      XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME ?? "/tmp/workbench-wrangler",
     },
   });
   results.push({ command: [command, ...args].join(" "), exitCode: result.status ?? 1 });

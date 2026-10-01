@@ -1,0 +1,44 @@
+{
+  "generatedAt": "2026-09-30T23:46:39.319Z",
+  "status": "passed",
+  "requiredFiles": [
+    "aiAuthoringBundles/Campaign_Readiness_Governance/Campaign_Readiness_Governance.agent",
+    "aiAuthoringBundles/Campaign_Readiness_Governance/Campaign_Readiness_Governance.bundle-meta.xml",
+    "classes/WorkbenchGetCampaignContext.cls",
+    "classes/WorkbenchGetConsentSummary.cls",
+    "classes/WorkbenchValidateCampaignContent.cls",
+    "classes/WorkbenchCreateCampaignReviewRequest.cls",
+    "classes/WorkbenchAttachCampaignImage.cls",
+    "classes/WorkbenchConfirmationVerifier.cls",
+    "classes/WorkbenchCampaignActionsTest.cls",
+    "classes/WorkbenchCheckWriteAccess.cls",
+    "classes/WorkbenchGetMarketingRecords.cls",
+    "classes/WorkbenchMarketingAgentTest.cls",
+    "aiAuthoringBundles/Workbench_Campaign_Creation/Workbench_Campaign_Creation.agent",
+    "objects/Activity/fields/Workbench_Idempotency_Key__c.field-meta.xml",
+    "objects/ContentVersion/fields/Workbench_Idempotency_Key__c.field-meta.xml",
+    "objects/Case/fields/Workbench_Idempotency_Key__c.field-meta.xml",
+    "classes/WorkbenchCreateInventoryCase.cls",
+    "objects/Workbench_Confirmation_Config__c/Workbench_Confirmation_Config__c.object-meta.xml",
+    "objects/Workbench_Confirmation_Config__c/fields/Signing_Key__c.field-meta.xml",
+    "mcpServerDefinitions/MarketingWorkbench.mcpServerDefinition-meta.xml",
+    "permissionsets/Marketing_Workbench_Evaluator.permissionset-meta.xml"
+  ],
+  "supportingFiles": [
+    "salesforce/specs/hosted-mcp-server.json",
+    "salesforce/specs/phase-2-smoke.json",
+    "salesforce/postman/Marketing-Workbench.postman_collection.json",
+    "migrations/0001_phase2_confirmation_audit.sql"
+  ],
+  "agentActionTargets": 3,
+  "toolCount": 18,
+  "hostedMcpToolCount": 18,
+  "writeTools": [
+    "save_marketing_brief",
+    "create_marketing_campaign",
+    "create_campaign_review_request",
+    "create_inventory_case",
+    "attach_campaign_image"
+  ],
+  "failures": []
+}

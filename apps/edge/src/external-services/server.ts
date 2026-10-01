@@ -1,5 +1,6 @@
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
+import { RESTAURANT_BRAND } from "@workbench/contracts";
 import { jsonSchema, type ToolSet, tool } from "ai";
 import { z } from "zod";
 import { LOCATION_IDS, LOCATIONS } from "../campaign-context/open-meteo.ts";
@@ -7,7 +8,7 @@ import { fetchFedAnnouncements } from "./fed-news.ts";
 import { fetchUpcomingHolidays, HOLIDAY_COUNTRIES } from "./nager-date.ts";
 import { fetchLocationAlerts } from "./nws-alerts.ts";
 
-export const EXTERNAL_SERVICES_MCP_NAME = "northstar-external-services";
+export const EXTERNAL_SERVICES_MCP_NAME = "workbench-external-services";
 /** Tool keys in the orchestrator carry this prefix. */
 export const EXTERNAL_SERVICES_TOOL_PREFIX = "ext_";
 
@@ -61,9 +62,9 @@ export function createExternalServicesMcpServer(dependencies: ExternalServicesDe
     "get_weather_alerts",
     {
       title: "Get weather alerts",
-      description: `Active National Weather Service watches, warnings, and advisories at a Coastline Kitchen location (free public API), most severe first, plus other active alerts elsewhere in California. Locations: ${LOCATION_IDS.map((id) => `${id} (${LOCATIONS[id].city})`).join(", ")}.`,
+      description: `Active National Weather Service watches, warnings, and advisories at a ${RESTAURANT_BRAND} location (free public API), most severe first, plus other active alerts elsewhere in California. Locations: ${LOCATION_IDS.map((id) => `${id} (${LOCATIONS[id].city})`).join(", ")}.`,
       inputSchema: z.object({
-        location: z.enum(LOCATION_IDS).describe("Coastline Kitchen location (city id)"),
+        location: z.enum(LOCATION_IDS).describe(`${RESTAURANT_BRAND} location (city id)`),
       }),
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
@@ -119,7 +120,7 @@ export function createExternalServicesMcpServer(dependencies: ExternalServicesDe
 /** In-process MCP client for the orchestrator, mirroring the campaign-context connector. */
 export async function connectExternalServiceTools(dependencies: ExternalServicesDependencies = {}) {
   const server = createExternalServicesMcpServer(dependencies);
-  const client = new Client({ name: "northstar-orchestrator", version: "1.0.0" });
+  const client = new Client({ name: "workbench-orchestrator", version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   await client.connect(clientTransport);

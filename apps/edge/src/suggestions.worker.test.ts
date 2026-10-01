@@ -1,5 +1,5 @@
 import { runInDurableObject, SELF } from "cloudflare:test";
-import type { Confirmation, SuggestedAction } from "@northstar/contracts";
+import type { Confirmation, SuggestedAction } from "@workbench/contracts";
 import { describe, expect, it } from "vitest";
 import type { FocusInput } from "./focus";
 import { agentStubFor, CATALOG_CAMPAIGN_ID, openCatalogCampaign } from "./worker.test-helpers";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toolCallCount, tokensLabel, toolCallsLabel, turnStats } from "./turn-stats";
+import { tokensLabel, toolCallCount, toolCallsLabel, turnStats } from "./turn-stats";
 
 describe("turn stats", () => {
   it("reads seconds, tokens, and tool calls together", () => {

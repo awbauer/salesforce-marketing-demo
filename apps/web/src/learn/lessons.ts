@@ -14,6 +14,7 @@ export type DiagramId =
   | "architecture"
   | "workspace"
   | "model-guards"
+  | "instance-profile"
   | "mcp"
   | "salesforce"
   | "routing"
@@ -113,9 +114,9 @@ export const PART_LESSONS: Record<string, PartLesson> = {
 
 const BUYER_GROUP_PROMPT = "Who should be in the buyer group for Acme Outfitters, and why?";
 const EMAIL_PROMPT =
-  "Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
+  "Draft an email campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
 const PUSH_PROMPT =
-  "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
+  "Draft a push notification campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
 
 export const SECTION_LESSONS: Record<string, SectionLesson> = {
   "what-is-context": {
@@ -187,6 +188,12 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
       "The model was chosen by measuring the whole pipeline, and its known quirks shaped the guards.",
     tryIt: [{ kind: "view", label: "See the model comparison", view: "evaluations" }],
   },
+  instance: {
+    diagram: "instance-profile",
+    keyIdea:
+      "One profile and one industry pack decide the data, tools, prompts and screens, so a copy of the workbench can speak for any client.",
+    tryIt: [{ kind: "view", label: "Open the graph this pack built", view: "graph" }],
+  },
   mcp: {
     diagram: "mcp",
     keyIdea:
@@ -246,11 +253,11 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
     keyIdea:
       "Salesforce's Campaign Creation agent creates the brief, the campaign, and its flow; the workbench asks it to, after you confirm, and reads the result back.",
     tryIt: [
-      { kind: "prompt", label: "Draft the Coastline Kitchen email", prompt: EMAIL_PROMPT },
+      { kind: "prompt", label: "Draft the Sample Kitchen email", prompt: EMAIL_PROMPT },
       {
         kind: "prompt",
         label: "Create a campaign in Marketing Cloud",
-        prompt: "Create a campaign in Marketing Cloud for Coastline Kitchen's late-night tacos",
+        prompt: "Create a campaign in Marketing Cloud for Sample Kitchen's late-night tacos",
       },
     ],
   },
@@ -282,8 +289,8 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
     keyIdea:
       "Outside context (menu, weather, past results) turns a generic draft into one that fits this moment.",
     tryIt: [
-      { kind: "prompt", label: "Draft the Coastline Kitchen email", prompt: EMAIL_PROMPT },
-      { kind: "prompt", label: "Draft the Coastline Kitchen push", prompt: PUSH_PROMPT },
+      { kind: "prompt", label: "Draft the Sample Kitchen email", prompt: EMAIL_PROMPT },
+      { kind: "prompt", label: "Draft the Sample Kitchen push", prompt: PUSH_PROMPT },
     ],
   },
   "long-term-memory": {

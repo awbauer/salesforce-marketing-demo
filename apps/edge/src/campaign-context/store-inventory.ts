@@ -1,13 +1,13 @@
 import {
-  COASTLINE_INVENTORY,
-  COASTLINE_LOCATIONS,
-  COASTLINE_MENU,
-  COASTLINE_RECIPES,
-  type CoastlineLocationId,
-} from "../../../../packages/knowledge-graph/src/coastline.ts";
+  RESTAURANT_INVENTORY,
+  RESTAURANT_LOCATIONS,
+  RESTAURANT_MENU,
+  RESTAURANT_RECIPES,
+  type RestaurantLocationId,
+} from "../../../../packages/knowledge-graph/src/restaurant.ts";
 
 /**
- * A mocked store inventory system for Coastline Kitchen. Usage comes from the menu's recipes and
+ * A mocked store inventory system for Sample Kitchen. Usage comes from the menu's recipes and
  * each restaurant's size; on-hand stock and deliveries on order are randomized per location and
  * day, so they change daily but are stable within a day. Every figure is invented.
  */
@@ -45,16 +45,16 @@ function seeded(seed: string) {
 
 const round = (value: number) => Math.round(value * 10) / 10;
 
-export function locationInventory(location: CoastlineLocationId, date: string) {
-  const store = COASTLINE_LOCATIONS.find((entry) => entry.id === location);
+export function locationInventory(location: RestaurantLocationId, date: string) {
+  const store = RESTAURANT_LOCATIONS.find((entry) => entry.id === location);
   if (!store) return null;
   const servings = BASE_SERVINGS_PER_DAY * (store.appUsers / 10_000);
   const use = new Map<string, number>();
-  for (const item of COASTLINE_MENU)
-    for (const [inventory, perServing] of COASTLINE_RECIPES[item.name] ?? [])
+  for (const item of RESTAURANT_MENU)
+    for (const [inventory, perServing] of RESTAURANT_RECIPES[item.name] ?? [])
       use.set(inventory, (use.get(inventory) ?? 0) + servings * perServing);
   const random = seeded(`${location}:${date}`);
-  const items: StockLevel[] = COASTLINE_INVENTORY.map((item) => {
+  const items: StockLevel[] = RESTAURANT_INVENTORY.map((item) => {
     const avgDailyUse = round(use.get(item.id) ?? 0);
     const parLevel = round(avgDailyUse * PAR_DAYS);
     // Most items sit near par; some run well below it. About half have a delivery coming.

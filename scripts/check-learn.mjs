@@ -10,6 +10,7 @@
 //    reference entries) must change too, unless a commit carries a trailer such as
 //    `Learn-Reviewed: routing, workspace (the change doesn't alter what a reader learns)`.
 //    The branch is compared with its merge base on LEARN_BASE_REF, the PR base, or origin/main.
+
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,6 +26,7 @@ import {
   UNTAUGHT_SOURCES,
 } from "../apps/web/src/learn/sources.ts";
 import { ConfirmationSchema, ORCHESTRATOR_TOOLS } from "../packages/contracts/src/index.ts";
+import { PACKS } from "../packages/industry-packs/src/index.ts";
 import {
   buildDataset,
   MEMORY_LABELS,
@@ -67,7 +69,8 @@ function salesforceComponents() {
   return [...new Set([...classes, ...objects])];
 }
 
-const dataset = buildDataset();
+// The Learn page teaches every vertical, so its inventory uses the full-tour pack, not the instance.
+const dataset = buildDataset({ pack: PACKS.composite });
 const inventory = {
   Tool: [...ORCHESTRATOR_TOOLS],
   "Write action": [...ConfirmationSchema.shape.action.options],

@@ -1,5 +1,6 @@
 import { report } from "./lib/report.mjs";
-const required = ["PROOF_BASE_URL"];
+
+const required = ["WORKBENCH_BASE_URL"];
 const missing = required.filter((name) => !process.env[name]);
 if (missing.length) {
   await report("live-proof", {
@@ -11,7 +12,7 @@ if (missing.length) {
   process.exit(2);
 }
 
-const baseUrl = new URL(process.env.PROOF_BASE_URL);
+const baseUrl = new URL(process.env.WORKBENCH_BASE_URL);
 const accessJwt = process.env.CF_ACCESS_JWT;
 const request = async (path, authenticated = false) =>
   fetch(new URL(path, baseUrl), {

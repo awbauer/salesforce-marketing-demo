@@ -4,11 +4,11 @@
     "allowSyntheticDefaultImports": true,
     "composite": false,
     "paths": {
-      "@northstar/contracts": ["./packages/contracts/src/index.ts"],
-      "@northstar/ui": ["./packages/ui/src/index.tsx"],
-      "@northstar/evals/report": ["./packages/evals/src/report.ts"],
-      "@northstar/evals/pricing": ["./packages/evals/src/pricing.ts"],
-      "@northstar/knowledge-graph": ["./packages/knowledge-graph/src/index.ts"]
+      "@workbench/contracts": ["./packages/contracts/src/index.ts"],
+      "@workbench/ui": ["./packages/ui/src/index.tsx"],
+      "@workbench/evals/report": ["./packages/evals/src/report.ts"],
+      "@workbench/evals/pricing": ["./packages/evals/src/pricing.ts"],
+      "@workbench/knowledge-graph": ["./packages/knowledge-graph/src/index.ts"]
     },
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,

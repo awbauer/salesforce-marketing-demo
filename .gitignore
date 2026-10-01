@@ -10,3 +10,14 @@ dist/
 
 # Local Agentforce preview sessions (transcripts and traces)
 .sfdx/
+
+/workbench.profile.json
+/.workbench/
+/packages/contracts/src/generated/
+
+/artifacts/
+
+/wrangler.cloudflare.jsonc
+
+/templates/aws/cdk/node_modules/
+/templates/aws/cdk/cdk.out/

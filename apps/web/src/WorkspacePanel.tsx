@@ -5,8 +5,8 @@ import {
   type MarketingPreviewStep,
   type WorkingRecord,
   type WorkingSet,
-} from "@northstar/contracts";
-import { InsightBoard, recordUrl, relativeTime } from "@northstar/ui";
+} from "@workbench/contracts";
+import { InsightBoard, recordUrl, relativeTime } from "@workbench/ui";
 import { useEffect, useState } from "react";
 import { readableToolName } from "./turn-trace";
 

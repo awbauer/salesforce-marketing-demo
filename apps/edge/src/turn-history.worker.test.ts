@@ -1,5 +1,5 @@
 import { SELF } from "cloudflare:test";
-import { TurnRecordSchema } from "@northstar/contracts";
+import { TurnRecordSchema } from "@workbench/contracts";
 import { describe, expect, it } from "vitest";
 import { buildTurnRecord, describeInterpretation, redactForHistory } from "./turn-history";
 

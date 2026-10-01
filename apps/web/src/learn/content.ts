@@ -1,6 +1,6 @@
 /**
  * Learn page content: a primer on context and GraphRAG, then an in-depth explainer for each
- * concept the Northstar demo uses. Bodies are Markdown; every resource link was checked to resolve.
+ * concept the Workbench demo uses. Bodies are Markdown; every resource link was checked to resolve.
  */
 
 export type Resource = {
@@ -294,7 +294,7 @@ export const LEARN_PARTS: LearnPart[] = [
 
 **The audit trail** is never sent to the model. It exists for people: the History view and the audit export.
 
-**Long-term memory** belongs in the graph because it's retrieved *by relationship* ("what did we decide about the Coastline push?"), not by recency, and it needs provenance. It's never sent automatically: the model reads it through recall tools, only when a question asks about earlier work. See *Long-term memory* under the demo concepts.`,
+**Long-term memory** belongs in the graph because it's retrieved *by relationship* ("what did we decide about the Sample Kitchen push?"), not by recency, and it needs provenance. It's never sent automatically: the model reads it through recall tools, only when a question asks about earlier work. See *Long-term memory* under the demo concepts.`,
         inDemo: [
           "History view: Turns (the audit trail) and Memory (long-term memory)",
           "apps/edge/src/orchestrator.ts (conversationWindow)",
@@ -374,13 +374,13 @@ GraphRAG's advantages are **multi-hop reasoning** and **explainability**. Every 
         id: "graphrag-here",
         title: "How this demo does GraphRAG",
         summary: "Twelve read-only, curated graph tools over Neo4j, each returning evidence paths.",
-        body: `- **The graph:** a deterministic, fictional dataset of about 2,400 nodes and 20,300 relationships. **Northstar** is the parent brand, with B2B accounts (each with a headquarters country), buying-role personas, campaigns, segments, content, brand rules, and consent scopes. **Coastline Kitchen** is a restaurant brand under Northstar: its locations, menu, and dayparts come from the restaurant system with the same ids. Its campaigns run on the **mobile app** and **email** channels. Each of its 1,500 past push sends and 600 past email sends links to its campaign, its content (push or email), app segment, consent for that channel, location, daypart, weather, and featured menu item, so an email campaign learns from past emails and a push from past pushes. Each location's app segment holds **marketing consent per channel**: separate push, email, and SMS opt-in counts, because consent to one channel isn't consent to another. **Harborstone Wealth** is a wealth-management brand under Northstar: regulated content with its approval records and required disclosures, an embargoed acquisition with its release package, and institutional clients with their holdings, signals, advisors, and contacts.
+        body: `- **The graph:** a deterministic, fictional dataset of about 2,400 nodes and 20,300 relationships. **Workbench** is the parent brand, with B2B accounts (each with a headquarters country), buying-role personas, campaigns, segments, content, brand rules, and consent scopes. **Sample Kitchen** is a restaurant brand under Workbench: its locations, menu, and dayparts come from the restaurant system with the same ids. Its campaigns run on the **mobile app** and **email** channels. Each of its 1,500 past push sends and 600 past email sends links to its campaign, its content (push or email), app segment, consent for that channel, location, daypart, weather, and featured menu item, so an email campaign learns from past emails and a push from past pushes. Each location's app segment holds **marketing consent per channel**: separate push, email, and SMS opt-in counts, because consent to one channel isn't consent to another. **Sample Wealth** is a wealth-management brand under Workbench: regulated content with its approval records and required disclosures, an embargoed acquisition with its release package, and institutional clients with their holdings, signals, advisors, and contacts.
 - **The store:** Neo4j AuraDB, reached over the HTTPS **Query API**, because Workers can't open Bolt connections. Every tool query runs in **read access mode**, so the database itself rejects writes. The only writes are the server's fixed long-term memory statements, which keep to their own dataset.
 - **The tools:** \`explain_buyer_group\`, \`find_audience_overlap\`, \`check_consent_coverage\`, \`find_similar_past_pushes\`, \`trace_content_lineage\`, \`get_graph_overview\`, three that power the sales and service use cases (\`plan_account_outreach\`, \`assess_location_impact\`, and \`map_weather_demand\`), and three for financial services (\`match_news_to_approved_content\`, \`prepare_deal_release\`, and \`build_aum_account_plan\`). Each returns an answer plus up to 25 **evidence paths**.
 - **Parity:** every tool also has an in-memory implementation over the same dataset. \`pnpm kg:parity\` proves both return identical results, so local development and evals match production. It also reports tool latency; the median stays under 500 ms.
 - **Grounding:** evaluations check that a graph answer names only accounts, people, campaigns, and menu items that appear in what the tools returned.
 - **In a flow:** the restaurant push campaign calls \`find_similar_past_pushes\` to learn what worked before in the same weather and daypart, then passes that to the Salesforce content tool.
-- **Graph explorer:** the Graph page's brand filter narrows the canvas to one brand's own nodes: a node counts as a brand's own when it's at least as close to that brand as to any other, walking loaded relationships without crossing through another brand. That's how Coastline Kitchen keeps its campaigns, locations, and shared channels and consent, without pulling in Northstar's B2B accounts through the parent brand.`,
+- **Graph explorer:** the Graph page's brand filter narrows the canvas to one brand's own nodes: a node counts as a brand's own when it's at least as close to that brand as to any other, walking loaded relationships without crossing through another brand. That's how Sample Kitchen keeps its campaigns, locations, and shared channels and consent, without pulling in Workbench's B2B accounts through the parent brand.`,
         inDemo: [
           "Use cases: Buyer-group recommendation, and Buyer-group outreach around local holidays",
           "Graph evidence panel under answers; “Knowledge graph · Neo4j” in Sources",
@@ -398,10 +398,11 @@ GraphRAG's advantages are **multi-hop reasoning** and **explainability**. Every 
       {
         id: "orchestrator",
         title: "The orchestrator agent",
-        summary: "A stateful Cloudflare agent per user that runs each chat turn.",
+        summary: "A stateful agent per user that runs each chat turn, on a local or hosted model.",
         body: `The **orchestrator** is a Cloudflare **Agents SDK** chat agent running in a **Durable Object**: a single-threaded, stateful instance with its own SQLite storage.
 - Each user gets their own instance, keyed by a hash of their Access identity and the workspace, so conversations and history are isolated by construction.
 - Each turn streams to the browser over a WebSocket, and the stream is **resumable** if the tab reconnects.
+- The Durable Object runtime is the open-source **workerd**, so the same agent runs on a laptop with \`pnpm dev\` and no Cloudflare account. Which model answers, and whether D1, R2 or Workers AI are bound, is decided by the **instance profile** and the deployment target, not by the agent's code (see *The model*).
 
 A turn runs a **tool loop** of up to 6 steps. On each step the model either calls a tool or writes the answer. Its tools come from four MCP servers, connected per turn: Salesforce, campaign context, the knowledge graph, and external services (public holidays and weather alerts). The orchestrator decides which tools are available on each step (see *Routing*) and records a **turn trace** of every event.
 
@@ -438,18 +439,44 @@ Four properties make it trustworthy:
       },
       {
         id: "model",
-        title: "The model: gpt-oss-20b on Workers AI",
-        summary: "An open-weight reasoning model served at the edge, chosen by evaluation.",
-        body: `The orchestrator runs **gpt-oss-20b**, OpenAI's open-weight reasoning model, on **Cloudflare Workers AI**, routed through **AI Gateway** for logging and cost visibility. The model ID is set in exactly one place: \`PROOF_DEFAULTS.orchestratorModel\`.
+        title: "The model: a local gpt-oss by default, hosted by choice",
+        summary: "One instance profile picks the model; the default runs on your own machine.",
+        body: `The orchestrator's chat model comes from the **instance profile** (\`models.chat\`), never from code. The default is **gpt-oss:20b**, OpenAI's open-weight reasoning model, served by **Ollama** on the presenter's machine, so a demo needs no cloud account. The profile can instead point at any OpenAI-compatible endpoint, **Cloudflare Workers AI** (optionally through **AI Gateway** for logging and cost visibility), or **Amazon Bedrock**. \`apps/edge/src/models.ts\` turns the profile into an AI SDK model in one place.
 
-- **Why 20b:** after the routing and reliability fixes, it matched or beat gpt-oss-120b through the pipeline at about 60% of the latency and lower cost (see *Evaluations*).
-- **Its quirks** shaped several guards. It sometimes writes a tool call into its reasoning or answer text instead of calling the tool, and leaks its internal "harmony" channel markup into tool names.`,
+- **Why gpt-oss:** after the routing and reliability fixes, the 20b size matched or beat the 120b through the pipeline at about 60% of the latency and lower cost (see *Evaluations*, measured on Workers AI).
+- **Its quirks** shaped several guards. It sometimes writes a tool call into its reasoning or answer text instead of calling the tool, and leaks its internal "harmony" channel markup into tool names. The repair middleware is applied only to gpt-oss models.
+- **No model reachable?** A local run falls back to scripted mode, and the fixtures answer the flows they cover. \`CHAT_ENGINE=fixture\` forces that mode for tests.
+- **Images** come from the profile's image provider; the default draws a deterministic placeholder locally.`,
         inDemo: [
-          "packages/contracts/src/index.ts (PROOF_DEFAULTS)",
+          "packages/contracts/src/profile.ts (InstanceProfileSchema)",
+          "apps/edge/src/models.ts (resolveChatModel)",
           "Evaluations view: model comparison",
-          "docs/decisions/ADR-005",
+          "docs/decisions/ADR-009",
         ],
         resources: [R.gptOss20b, R.gptOssRepo, R.harmony, R.workersAi, R.aiGateway],
+      },
+      {
+        id: "instance",
+        title: "Your instance: profile and industry packs",
+        summary: "One profile and one industry pack make this workbench yours for a client demo.",
+        body: `Everything that makes a copy of the workbench *yours* lives in one validated file, \`workbench.profile.json\`: the client's fictional brand, audience (internal or external), industry, the use cases to show, model providers, caps, retention, whether Salesforce is a sandbox or fixtures, and where it deploys. \`pnpm workbench:init\` asks for these and writes the file; \`pnpm profile:build\` compiles it into the app, because the Worker has no filesystem and tool schemas are built when the code loads.
+
+An **industry pack** supplies what the profile can't invent safely: a vocabulary (twelve fictional accounts, the five seasonal campaigns, content kinds and brand rules), the use cases the pack supports, and a paragraph of industry context for the orchestrator's prompt.
+
+- **Tiers.** *Vertical* packs (restaurant, financial services) also switch on a module: extra graph data, tools and scenarios built for that industry, such as weather-driven inventory or pre-approved regulated content. *Core* packs (retail, healthcare, B2B technology, travel) run every core marketing flow with the industry's vocabulary. The *tour* pack turns everything on.
+- **Brand names.** The client brand becomes the vertical module's brand (and the parent is "Brand Group"), so the graph, tools, prompts and screens say the client's name. Other modules use sample names and stay off.
+- **The wizard.** \`pnpm workbench:init\` interviews you (audience, industry, sample client profile, use cases, models, Salesforce, where it runs), checks for a local Ollama, writes the profile, and generates \`.workbench/demo-script.md\`, a run-sheet with the prompts to say for each use case. \`--answers file.json\` runs it without prompts.
+- **Personalization.** The wizard can ask your local model to rename accounts and campaigns; the result is validated (counts, duplicates, PII-shaped text, the real client's name) and falls back to the pack's own values. The real client name goes only into your ignored blocked-words list, so the Git gate stops it from being committed.
+- **Safety.** The writes, confirmations and data rules do not change per pack. \`pnpm template:check\` fails if instance files or example-client names are tracked, and tests, evals and the e2e suite run the full-tour profile so every module stays covered.`,
+        inDemo: [
+          "profiles/example.profile.json and profiles/demo-composite.profile.json",
+          "packages/contracts/src/profile.ts, packages/contracts/src/pack.ts",
+          "packages/industry-packs/src/index.ts",
+          "scripts/workbench-init.mjs (the wizard), scripts/make-demo-script.mjs",
+          "scripts/build-profile.mjs, scripts/check-template.mjs",
+          "docs/decisions/ADR-009-portable-instances.md",
+        ],
+        resources: [R.contextEngineering, R.buildingAgents],
       },
       {
         id: "mcp",
@@ -483,9 +510,9 @@ The local servers are called **in-process** through an in-memory MCP transport. 
         body: `Salesforce is **authoritative** for campaign data. The orchestrator never invents Salesforce facts. It calls tools on a **Salesforce Hosted MCP server**:
 
 - **Agent-backed tools.** Each calls an **Agentforce** agent defined as an Agent Script bundle. Under every answer, **Salesforce agents** shows which agent handled each call, its type and template, its subagent, and the actions it ran.
-  - **Northstar Campaign Creation** (a Marketing Cloud Next Campaign Creation agent) drafts, saves, and refines briefs and creates campaigns and their flows. See *Marketing Cloud Next*.
-  - **Northstar Content Builder** (a Marketing Cloud Next Content Builder agent) drafts copy and content sections with the standard Draft Content and Create Section actions.
-  - **Northstar Account Discovery** uses Marketing's account discovery and scoring APIs for signals, engagement, and buyer groups.
+  - **Workbench Campaign Creation** (a Marketing Cloud Next Campaign Creation agent) drafts, saves, and refines briefs and creates campaigns and their flows. See *Marketing Cloud Next*.
+  - **Workbench Content Builder** (a Marketing Cloud Next Content Builder agent) drafts copy and content sections with the standard Draft Content and Create Section actions.
+  - **Workbench Account Discovery** uses Marketing's account discovery and scoring APIs for signals, engagement, and buyer groups.
   - **Campaign Readiness and Governance** is a custom agent whose Apex actions summarize a campaign and check readiness, consent, and brand rules. These stay custom on purpose: Marketing Cloud Next has no campaign-summary or readiness action, and its standard **Generate Campaign Insights** flow fails in this org until campaigns have sent and gathered engagement data.
 - **Briefs and campaigns** are created only by the Campaign Creation agent's standard actions, as Marketing Cloud's own **Brief**, **BriefPlanStep**, **Campaign**, and campaign **flow** records. The workbench has no custom objects or Apex for them.
 - **Other writes:** a review task, an image attachment, and an inventory case for a store manager are global **Apex invocable actions** that verify a signed confirmation.
@@ -493,7 +520,7 @@ The local servers are called **in-process** through an in-memory MCP transport. 
 
 The model never holds a write tool: only the confirmation flow can call the write tools, and every write runs as you.
 
-Metadata (Apex, fields, the permission set, and the MCP definition) deploys through a gated CI pipeline to one approved proof org.`,
+Metadata (Apex, fields, the permission set, and the MCP definition) deploys through a gated CI pipeline to the approved sandbox.`,
         inDemo: [
           "Use cases: Campaign performance summary, Launch readiness and review request",
           "“Salesforce agents” under each answer",
@@ -509,7 +536,7 @@ Metadata (Apex, fields, the permission set, and the MCP definition) deploys thro
           "The workbench asks Salesforce's Campaign Creation agent to create briefs and campaigns, the way the Marketing app does.",
         body: `In **Marketing Cloud Next**, a campaign starts as a **brief** and becomes a **campaign with a flow**. Salesforce's **Campaign Creation agent** does that work with standard actions, and the workbench asks it to rather than writing records itself.
 
-**The agent.** \`Northstar_Campaign_Creation\` is an Agent Script agent built from Salesforce's \`MktCloud__CampaignCreationAgent\` template and published as a Campaign Creation agent. Only Agent Script agents can be exposed as Hosted MCP tools, so the workbench reaches it through the \`NorthstarMarketingWorkbench\` MCP server. Its **Marketing Campaigns** subagent runs the standard actions in Salesforce's required order:
+**The agent.** \`Workbench_Campaign_Creation\` is an Agent Script agent built from Salesforce's \`MktCloud__CampaignCreationAgent\` template and published as a Campaign Creation agent. Only Agent Script agents can be exposed as Hosted MCP tools, so the workbench reaches it through the \`MarketingWorkbench\` MCP server. Its **Marketing Campaigns** subagent runs the standard actions in Salesforce's required order:
 
 | Step | Standard action | What it does |
 |---|---|---|
@@ -522,7 +549,7 @@ Metadata (Apex, fields, the permission set, and the MCP definition) deploys thro
 Its **Campaign Refinement** subagent runs **Refine Campaign Preview** to change a saved preview ("make the second email shorter").
 
 **How the workbench uses it.**
-1. A campaign request (the Coastline plan, or "create a campaign in Marketing Cloud") ends with \`draft_campaign_brief\`. The agent's brief becomes the workspace focus, field for field.
+1. A campaign request (the Sample Kitchen plan, or "create a campaign in Marketing Cloud") ends with \`draft_campaign_brief\`. The agent's brief becomes the workspace focus, field for field.
 2. **Save brief** (an action card, then a confirmation card): \`save_marketing_brief\` asks the agent to run steps 2 and 3.
 3. **Create the campaign** (a second card): \`create_marketing_campaign\` asks it to run steps 4 and 5.
 4. After each write, \`get_marketing_records\` (read-only Apex) reads the Brief, its steps, the Campaign, and the flow back from Salesforce. The workspace shows only what Salesforce returned, never the agent's say-so.
@@ -538,7 +565,7 @@ Its **Campaign Refinement** subagent runs **Refine Campaign Preview** to change 
           "Use cases: Weather-aware campaign in Marketing Cloud",
           "“Salesforce agents” under each answer, and the confirmation card's agent details",
           "Workspace focus: Brief saved, campaign preview, Campaign and flow links",
-          "salesforce/force-app/main/default/aiAuthoringBundles/Northstar_Campaign_Creation",
+          "salesforce/force-app/main/default/aiAuthoringBundles/Workbench_Campaign_Creation",
           "apps/edge/src/marketing-writes.ts",
         ],
         resources: [R.mcnAgentforce, R.mcnCampaignTrailhead, R.hostedMcpAgents],
@@ -559,8 +586,8 @@ Its **Campaign Refinement** subagent runs **Refine Campaign Preview** to change 
    - Inventory, stock, or ingredients at a location → \`get_weather_forecast\` → \`map_weather_demand\` → \`get_location_inventory\`
    - Fed or interest-rate news and approved content → \`get_fed_announcements\` → \`match_news_to_approved_content\` for the event it maps to; market volatility → \`match_news_to_approved_content\` alone
    - An acquisition announcement → \`prepare_deal_release\`
-   - An account plan, AUM, or a Harborstone client's plays → \`build_aum_account_plan\`
-   - A Coastline Kitchen email or push campaign → profile → weather → past sends on that channel → the Campaign Creation agent's brief, which becomes the focus
+   - An account plan, AUM, or a Sample Wealth client's plays → \`build_aum_account_plan\`
+   - A Sample Kitchen email or push campaign → profile → weather → past sends on that channel → the Campaign Creation agent's brief, which becomes the focus
    - "Create a campaign … in Salesforce" or "in Marketing Cloud" → the Campaign Creation agent's brief, then the save is prepared for confirmation
    - A change to a brief ("make it warmer") → back to the agent: a re-drafted brief before it's saved, or **Refine Campaign Preview** after
    - A change to other drafts → no tools; the model rewrites the draft, which is saved as the next version
@@ -609,6 +636,8 @@ At the turn level:
    - For a **review task, image, or inventory case**, the Worker signs the confirmation with HMAC. Apex verifies the signature, the expiry, the same user, and the hash, then writes in **user mode**. An inventory case's contents come from the Worker, so its request hash is the SHA-256 of exactly those contents, and Apex re-hashes what it receives before writing.
 5. **Read-back:** the workbench reads the records back from Salesforce (\`get_marketing_records\` for Marketing Cloud) and shows only what Salesforce returned. If the agent says it saved something that Salesforce doesn't show, nothing is shown as saved.
 
+**Who is signed in.** The Worker is always the authorization boundary. Locally there is one fixed principal (only when both \`AUTH_MODE=development\` and \`ENVIRONMENT=local\`). On Cloudflare, Access tokens are verified; on AWS, the load balancer's signed Cognito token is verified (\`alb-oidc\`) or any OIDC bearer token (\`oidc\`), optionally limited to an email allow list. Anything else fails closed, and the container refuses to start without sign-in unless it is bound to localhost on purpose.
+
 You watch both halves step by step. While a confirmation is prepared, the steps are the plan, Salesforce's permission check with how many checks passed, and binding the request to a one-time confirmation. While a confirmed write runs, they're the confirmation check, a look for an earlier attempt or the signing, the call to the agent or the Apex action, the read-back, and the memory record. A failure marks the step where it stopped and says why.
 
 **Who checks what.** Each layer does one job:
@@ -626,7 +655,7 @@ You watch both halves step by step. While a confirmation is prepared, the steps 
           "Draft something → the Save to Salesforce action card in the chat → confirmation card with the permission check",
           "Check readiness → the Request a review action card → confirmation card",
           "Attach to campaign on a generated image",
-          "infra/cloudflare/pot/README.md (operator runbook)",
+          "templates/cloudflare/README.md (operator runbook)",
         ],
         resources: [R.owaspLlm, R.buildingAgents],
       },
@@ -689,7 +718,7 @@ Each turn is scored on:
 
 Latency and tokens are recorded too, and the Evaluations view shows each turn's seconds with its tokens and tool calls, plus the mean tokens and tool calls per turn for each model. Runs recorded before the grounding check show no rate for it.
 
-**What good looks like.** Pass/fail says the pipeline behaved; it doesn't say the answer was *good*. Each demo scenario has a written **rubric** in \`packages/evals/src/rubric.ts\`: a goal, an audience persona where a customer is involved, deterministic **criteria** (for the weather-aware Coastline campaign: names a menu item, uses the real weather and time of day, cites what worked before, a key message of 160 characters or fewer, a measurable KPI), and weights saying which quality dimensions matter. Criteria are reported as "criteria met" beside the pass gate, so pass rates stay comparable with earlier runs.
+**What good looks like.** Pass/fail says the pipeline behaved; it doesn't say the answer was *good*. Each demo scenario has a written **rubric** in \`packages/evals/src/rubric.ts\`: a goal, an audience persona where a customer is involved, deterministic **criteria** (for the weather-aware Sample Kitchen campaign: names a menu item, uses the real weather and time of day, cites what worked before, a key message of 160 characters or fewer, a measurable KPI), and weights saying which quality dimensions matter. Criteria are reported as "criteria met" beside the pass gate, so pass rates stay comparable with earlier runs.
 
 **Quantifying the qualitative.** A panel of two strong models from different families (GLM-5.3 and DeepSeek V4 Pro; a model never judges its own family) rates each answer 1 to 5 on anchored scales: context fidelity, accuracy, clarity, brand voice, engagement, marketer usefulness, and **would act**. For "would act" the judge answers as the audience persona on a standard purchase-intent scale, and the report shows the share of ratings that are 4 or 5 (the top-2-box). Ratings combine into a 0 to 100 **Quality Index** with a 95% bootstrap interval, and the report shows how often the two judges agree. Before a run is published, \`pnpm eval:calibrate\` has each judge score hand-written strong, mediocre, and weak answers and requires the right ordering. These are judge scores, not customer behavior: use them to rank models, not to forecast click rates.
 
@@ -718,12 +747,12 @@ Latency and tokens are recorded too, and the Evaluations view shows each turn's 
         summary: "External context that makes a campaign draft specific to the moment.",
         body: `The **campaign-context** MCP server gives the orchestrator facts Salesforce doesn't have:
 
-- \`get_restaurant_profile\`: the restaurant system's own data for **Coastline Kitchen**, a fictional fast-casual brand under Northstar that is open 24/7: its five California locations, menu, favorites, dayparts, app audience with opt-ins **by channel** (push, email, SMS), brand voice, and promotion rules. Locations and menu items carry the same ids as their knowledge-graph nodes.
+- \`get_restaurant_profile\`: the restaurant system's own data for **Sample Kitchen**, a fictional fast-casual brand under Workbench that is open 24/7: its five California locations, menu, favorites, dayparts, app audience with opt-ins **by channel** (push, email, SMS), brand voice, and promotion rules. Locations and menu items carry the same ids as their knowledge-graph nodes.
 - \`get_current_weather\`: live conditions from **Open-Meteo**, which is free, keyless, and CC BY 4.0, for a California city.
 - \`get_weather_forecast\`: Open-Meteo's daily forecast, with each day's demand-planning weather (heat, rain, fog, cloudy, or clear).
 - \`get_location_inventory\`: a restaurant's stock from a randomized **store inventory** mock, with par levels and typical daily use from the menu's recipes. See *The use-case library*.
 
-The Coastline campaign plan (email or push) chains these with the knowledge graph's past performance and the Salesforce content tool. The plan is **channel-aware**: the channel you ask for (or the draft's channel) is pinned on the past-performance lookup by the server, so an email campaign cites email opt-ins, never push opt-ins, whatever the model passed. The finished draft is saved to the workspace **focus**. The draft fits the menu, the time of day, the weather, and what worked before, and "make it warmer" revises it as a new version.`,
+The Sample Kitchen campaign plan (email or push) chains these with the knowledge graph's past performance and the Salesforce content tool. The plan is **channel-aware**: the channel you ask for (or the draft's channel) is pinned on the past-performance lookup by the server, so an email campaign cites email opt-ins, never push opt-ins, whatever the model passed. The finished draft is saved to the workspace **focus**. The draft fits the menu, the time of day, the weather, and what worked before, and "make it warmer" revises it as a new version.`,
         inDemo: [
           "Use cases: Weather-aware campaign in Marketing Cloud (the push prompt)",
           "Sources: Restaurant data, Weather · Open-Meteo",
@@ -760,7 +789,7 @@ Both APIs are free and keyless, called live from the Worker through a new in-pro
 
 The graph and prompts carry the manager's name only, never contact details. Nothing is ordered.
 
-**Financial services: Harborstone Wealth.** Three use cases (filter **Financial services**) show the graph in a regulated industry, where only content a registered principal approved can go out, exactly as approved, with its required disclosures. Harborstone is a fictional wealth-management brand under Northstar.
+**Financial services: Sample Wealth.** Three use cases (filter **Financial services**) show the graph in a regulated industry, where only content a registered principal approved can go out, exactly as approved, with its required disclosures. Sample Wealth is a fictional wealth-management brand under Workbench.
 - **Market news to pre-approved content.** "The Fed just announced its rate decision. What pre-approved content can we send clients today?"
   1. \`get_fed_announcements\` reads the Federal Reserve's public press feed, finds the latest FOMC statement, and reads its rate decision: raise, lower, or maintain, the size, and the new target range. It maps the decision to a market event.
   2. \`match_news_to_approved_content\` walks MarketEvent ← **RESPONDS_TO** ← ContentAsset → **APPROVED_UNDER** → Approval and → **REQUIRES** → Disclosure. It returns what's ready to send, with approval IDs, expiry, and disclosures; what's blocked and exactly why (an expired approval, one still pending, or a **FAILED** compliance rule); reach per channel under marketing consent; and past responses, which show that sending within hours of the news opened far better than the next day.
@@ -789,7 +818,7 @@ The graph and prompts carry the manager's name only, never contact details. Noth
 **How it's stored.** Each memory is a small subgraph in its own dataset, next to the demo graph:
 - a \`Draft\` node per version, linked to the version it replaced (\`SUPERSEDES\`)
 - a \`Decision\` node, linked to the draft it saved (\`DECIDED_ON\`) and the Salesforce record it created (\`RECORDED_IN\`)
-- \`ABOUT\` links to the \`Campaign\` and \`Brand\` nodes involved, so "what did we decide about Coastline?" is a graph question
+- \`ABOUT\` links to the \`Campaign\` and \`Brand\` nodes involved, so "what did we decide about Sample Kitchen?" is a graph question
 
 Every node carries its workspace and an expiry. The person who acted is stored only as a hash.
 
@@ -812,7 +841,7 @@ Memory may be stale, so reopening never marks a draft as saved, and a remembered
           "Chat: “Remember this draft”, then New chat and “What did we decide about …?”",
           "History → Memory (Reopen, Forget, Remember current draft)",
           "packages/knowledge-graph/src/memory.ts, apps/edge/src/memory.ts",
-          "docs/decisions/ADR-007-long-term-graph-memory.md",
+          "docs/archive/proof/decisions/ADR-007-long-term-graph-memory.md",
         ],
         resources: [R.contextEngineering, R.graphDb, R.cypher],
       },

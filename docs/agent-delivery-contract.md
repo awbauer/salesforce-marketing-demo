@@ -1,12 +1,12 @@
 # Agent Delivery Contract
 
-This contract turns the implementation plan into an execution system for autonomous coding agents. It supplements the root `AGENTS.md`; it does not change product scope.
+This contract is the execution system for autonomous coding agents. It supplements the root `AGENTS.md`; it does not change product scope.
 
 ## Work-unit model
 
 Every implementation change starts from a file in `docs/work-units/` copied from `TEMPLATE.md`. A work unit is intentionally smaller than a phase and should produce one independently verifiable vertical result.
 
-Required fields are objective, plan references, in-scope paths, prerequisites, contracts affected, acceptance criteria, verification commands, external mutations, evidence, and final status. Status is one of `ready`, `in_progress`, `blocked`, or `complete`.
+Required fields are objective, in-scope paths, prerequisites, contracts affected, acceptance criteria, verification commands, external mutations, evidence, and final status. Status is one of `ready`, `in_progress`, `blocked`, or `complete`.
 
 An agent may mark a work unit `complete` only when:
 
@@ -22,14 +22,14 @@ An agent may mark a work unit `complete` only when:
 - `packages/contracts` owns cross-boundary schemas. The web app, Worker, tests, fixtures, Salesforce action wrappers, and HXL mappings consume or validate against the same versioned definitions.
 - Agent prompts and tool descriptions are versioned and evaluated like code.
 - Salesforce metadata lives under `salesforce/`; no manually configured behavior is considered delivered until its metadata or reproducible setup record is checked in.
-- Cloudflare proof configuration and its read-back record live under `infra/cloudflare/pot/`.
+- Deployment templates (local, Cloudflare, AWS) live under `templates/`; per-instance configuration lives only in the gitignored `workbench.profile.json`.
 - UI components consume typed tile contracts and shared tokens from `packages/ui`.
-- Demonstration evidence is immutable and stored under `artifacts/evidence/<work-unit-id>/`; secrets and customer data are forbidden there.
+- Evidence goes in the work unit under `
 - Architecture changes require a short decision record in `docs/decisions/` that states context, decision, consequences, and superseded assumptions.
 
 ## Command contract
 
-Phase 1 creates and keeps these root commands stable:
+These root commands stay stable:
 
 | Command | Purpose |
 | --- | --- |
@@ -57,12 +57,12 @@ The blocked-word list is the sole exception to report generation because its con
 6. **Live proof gate:** Salesforce Hosted MCP, portal catalog, OAuth, allowed mutation confirmation, authoritative read-back, image generation, R2 lifecycle metadata.
 7. **Evidence gate:** work unit complete, reports linked, deployed versions recorded, limitations explicit.
 
-An agent may iterate through gates 1–5 without human involvement. Gate 6 may require a human only for login, MFA, OAuth consent, or account authorization. Gate 7 requires human evaluation only at the final Phase 5 checkpoint defined in the plan.
+An agent may iterate through gates 1–5 without human involvement. Gate 6 may require a human only for login, MFA, OAuth consent, or account authorization. Gate 7 requires human review only of the rendered demo.
 
 ## Drift controls
 
 - CI compares the tool catalog against a checked-in allowlist and rejects added mutation classes.
-- CI checks that model IDs, retention values, image dimensions, cost/generation cap, roles, region, and browser matrix match Section 17.
+- CI checks that model IDs appear only in the instance profile, that `wrangler.jsonc` stays account-free, and that no example-client names are tracked outside `docs/archive/` (`pnpm template:check`).
 - Contract tests reject undocumented tile kinds, tool effects, and error codes.
 - Evaluation fixtures are append-only during a work unit; lowering a threshold or deleting a failing case requires a decision record.
 - Generated Salesforce and HXL schema snapshots are diffed. Unexplained drift fails the gate.
@@ -76,4 +76,4 @@ An agent may iterate through gates 1–5 without human involvement. Gate 6 may r
 
 ## Minimal human touchpoints
 
-Humans are expected only for initial account authorization when required and the final Phase 5 proof review. Agents own implementation, visual iteration, testing, documentation, deployment diagnostics, evidence capture, and ordinary reversible fixes between those points.
+Humans are expected only for account authorization when required and the final review of the rendered demo. Agents own implementation, visual iteration, testing, documentation, deployment diagnostics, evidence capture, and ordinary reversible fixes between those points.

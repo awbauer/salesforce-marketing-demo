@@ -14,7 +14,7 @@ import { LEARN_REFERENCE, REFERENCE_KINDS, type ReferenceKind } from "./referenc
 import "./learn.css";
 
 type View = "graph" | "history" | "evaluations";
-const READ_KEY = "northstar.learn.read.v1";
+const READ_KEY = "workbench.learn.read.v1";
 
 // Reading progress is a per-viewer convenience; it must work when storage is unavailable.
 function loadRead(): Set<string> {

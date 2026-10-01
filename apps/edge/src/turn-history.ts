@@ -1,4 +1,4 @@
-import type { TurnRecord, TurnTrace } from "@northstar/contracts";
+import type { TurnRecord, TurnTrace } from "@workbench/contracts";
 import type { TurnRoute, TurnToolCall } from "./turn-trace";
 
 const STRING_LIMIT = 1000;

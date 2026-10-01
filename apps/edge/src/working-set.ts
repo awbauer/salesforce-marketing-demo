@@ -9,9 +9,11 @@ import {
   MEMORY_TOOLS,
   ORCHESTRATOR_TOOLS,
   READINESS_PRESENTATION,
+  RESTAURANT_BRAND,
   type RecordRef,
   recordKey,
   systemLabel,
+  WEALTH_BRAND,
   WORKSPACE_CATALOG,
   type WorkingRecord,
   type WorkingSet,
@@ -252,7 +254,7 @@ function inventoryCard(data: Record<string, unknown>, tool: string, at: Date): I
         id: `inventory:${str(data.location) ?? city}`,
         kind: "context",
         eyebrow: "Store inventory",
-        title: `Coastline Kitchen ${city}`,
+        title: `${RESTAURANT_BRAND} ${city}`,
         summary: `${items.length} items counted ${str(data.countedAt) ?? "today"}; ${thin.length} under a day and a half of typical use.`,
         metric: String(items.length),
         trend: "items",
@@ -484,7 +486,7 @@ function graphSummary(tool: string, data: Record<string, unknown>, count: number
     case "prepare_deal_release":
       return `${num(data.readyCount) ?? 0} of ${list(data.steps).length} announcement assets approved and ready to release in order; ${num(data.blockedCount) ?? 0} blocked.`;
     case "build_aum_account_plan":
-      return `${list(data.plays).length} plays worth about $${num(data.totalOpportunityMillions) ?? 0}M on $${num(data.aumWithHarborstoneMillions) ?? 0}M with Harborstone (wallet share ${pct(data.walletShare)}).`;
+      return `${list(data.plays).length} plays worth about $${num(data.totalOpportunityMillions) ?? 0}M on $${num(data.aumWithFirmMillions) ?? 0}M with ${WEALTH_BRAND} (wallet share ${pct(data.walletShare)}).`;
     case "assess_location_impact": {
       const reach = list(data.reachableByChannel)
         .map((entry) => entry as Record<string, unknown>)
@@ -751,7 +753,7 @@ export function inventoryRiskCard(risk: InventoryRisk, at: Date): InsightTile {
     id: `inventory-risk:${risk.locationId}`,
     kind: "context",
     eyebrow: "Inventory risk",
-    title: `Coastline Kitchen ${risk.city}`,
+    title: `${RESTAURANT_BRAND} ${risk.city}`,
     summary: low
       ? `${low} of ${risk.checkedItems} weather-driven items won't cover the ${risk.window.days}-day forecast (${risk.conditions.join(", ")}). Store manager: ${risk.manager.name}.`
       : `All ${risk.checkedItems} weather-driven items cover the ${risk.window.days}-day forecast (${risk.conditions.join(", ")}).`,

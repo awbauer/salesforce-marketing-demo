@@ -6,8 +6,8 @@ import {
   turnCost,
 } from "../../packages/evals/src/pricing.ts";
 import { JUDGES, judgesFor, scenarioDimensions } from "./eval-judge.mjs";
-import { requestsPerMinute } from "./eval-throttle.mjs";
 import { SIMULATED_TOOLS, SIMULATOR_MODEL } from "./eval-simulated-agent.mjs";
+import { requestsPerMinute } from "./eval-throttle.mjs";
 
 // Fallback per-turn token use by suite when a model has no history: measured on the published run.
 const FALLBACK = {

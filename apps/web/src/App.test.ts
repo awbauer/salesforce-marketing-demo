@@ -1,9 +1,4 @@
-import {
-  PROOF_DEFAULTS,
-  TURN_TRACE_PART_ID,
-  TURN_TRACE_PART_TYPE,
-  type TurnTrace,
-} from "@northstar/contracts";
+import { TURN_TRACE_PART_ID, TURN_TRACE_PART_TYPE, type TurnTrace } from "@workbench/contracts";
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { executionTrace, readableToolName, sanitizedPayload, sanitizedText } from "./turn-trace";
@@ -64,7 +59,7 @@ describe("technical trace hardening", () => {
     const trace: TurnTrace = {
       startedAt: 1_000,
       events: [
-        { kind: "turn-start", at: 1_000, model: PROOF_DEFAULTS.orchestratorModel, toolCount: 3 },
+        { kind: "turn-start", at: 1_000, model: "gpt-oss:20b", toolCount: 3 },
         { kind: "step-start", at: 1_010, step: 0 },
         { kind: "reasoning-start", at: 1_020, index: 0 },
         { kind: "reasoning-end", at: 1_520, index: 0, chars: 12 },
@@ -108,7 +103,7 @@ describe("technical trace hardening", () => {
           toolName: "salesforce_summarize_campaign",
           toolCallId: "call-1",
           state: "output-available",
-          input: { campaignId: "701jV000004GglIQAS" },
+          input: { campaignId: "701xx0000A1B2C3D4E" },
           output: { structuredContent: { name: "Launch" } },
         },
         { type: "step-start" },
@@ -133,7 +128,7 @@ describe("technical trace hardening", () => {
       "Turn completed",
     ]);
     expect(rows[3]?.payload).toBe("Plan a call.");
-    expect(rows[5]?.payload).toContain("701jV000004GglIQAS");
+    expect(rows[5]?.payload).toContain("701xx0000A1B2C3D4E");
     expect(rows[6]?.detail).toBe("Finish reason: tool-calls · 900 input tokens · 40 output tokens");
     expect(rows[7]?.payload).toContain("Launch");
     expect(rows.at(-1)).toMatchObject({

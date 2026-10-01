@@ -4,20 +4,22 @@ import {
   currentFocusVersion,
   type GeneratedCampaignImage,
   GeneratedCampaignImageSchema,
+  INSTANCE_PROFILE,
   initialOrchestratorState,
   type OperationControls,
   OperationControlsSchema,
   type OrchestratorState,
   OrchestratorStateSchema,
   PHASE_2_CURATED_TOOLS,
+  RESTAURANT_BRAND,
   WRITE_TOOL_BY_ACTION,
-} from "@northstar/contracts";
+} from "@workbench/contracts";
 import {
   normalizeAssistantText,
   salesforceRecordUrl,
   shouldShowChatError,
   unwrapAssistantText,
-} from "@northstar/ui";
+} from "@workbench/ui";
 import { useAgent } from "agents/react";
 import type { UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
@@ -118,8 +120,8 @@ function InventoryCaseDetails({ confirmation }: { confirmation: Confirmation }) 
   return (
     <div className="inventory-case">
       <p>
-        <strong>For {details.manager.name}</strong>, store manager, Coastline Kitchen {details.city}{" "}
-        · forecast: {details.conditions.join(", ")}
+        <strong>For {details.manager.name}</strong>, store manager, {RESTAURANT_BRAND}{" "}
+        {details.city} · forecast: {details.conditions.join(", ")}
       </p>
       <table>
         <caption className="sr-only">Items that won't cover the forecast</caption>
@@ -609,10 +611,17 @@ export function App() {
 
   return (
     <main>
+      {INSTANCE_PROFILE.client.audience === "external" && (
+        <p className="demo-banner" role="note">
+          Demonstration with fictional data: every customer, account and figure shown is invented.
+        </p>
+      )}
       <header className="topbar">
-        <div className="brand-mark">N</div>
+        <div className="brand-mark" aria-hidden="true">
+          {INSTANCE_PROFILE.client.brand.charAt(0).toUpperCase()}
+        </div>
         <div>
-          <p>Northstar</p>
+          <p>{INSTANCE_PROFILE.client.brand}</p>
           <h1>Marketing workbench</h1>
         </div>
         <div className="top-actions">
@@ -886,17 +895,17 @@ export function App() {
           </div>
           <div className="messages" aria-live="polite">
             <article className="message assistant">
-              <div className="message-author">Northstar orchestrator</div>
+              <div className="message-author">Workbench orchestrator</div>
               <p>
-                Explore the fictional Northstar campaign with governed Salesforce data. I can
-                summarize context, draft content, check readiness, and prepare a review task for
+                Explore the fictional {INSTANCE_PROFILE.client.brand} campaign with governed data. I
+                can summarize context, draft content, check readiness, and prepare a review task for
                 your confirmation. Nothing is published or sent.
               </p>
             </article>
             {messages.map((message) => (
               <article key={message.id} className={`message ${message.role}`}>
                 <div className="message-author">
-                  {message.role === "user" ? "You" : "Northstar orchestrator"}
+                  {message.role === "user" ? "You" : "Workbench orchestrator"}
                 </div>
                 {message.role === "assistant" ? (
                   <Markdown text={unwrapAssistantText(rawMessageText(message))} />
@@ -917,7 +926,7 @@ export function App() {
               <section className="live-trace" aria-live="polite">
                 <div className="trace-pulse" />
                 <div className="live-trace-detail">
-                  <strong>Northstar orchestrator is working</strong>
+                  <strong>Workbench orchestrator is working</strong>
                   <span className="live-trace-copy">
                     Tool selection and Salesforce agent calls will appear in the trace.
                   </span>
@@ -1314,7 +1323,10 @@ export function App() {
               )}
               {generatedImage && (
                 <figure className="generated-image-card">
-                  <img src={generatedImage.imageUrl} alt="Generated Northstar campaign draft" />
+                  <img
+                    src={generatedImage.imageUrl}
+                    alt={`Generated ${INSTANCE_PROFILE.client.brand} campaign draft`}
+                  />
                   <figcaption>
                     <strong>
                       {generatedImage.lifecycle === "attached"

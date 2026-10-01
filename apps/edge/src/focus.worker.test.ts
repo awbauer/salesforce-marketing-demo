@@ -1,4 +1,4 @@
-import { emptyWorkingSet, type WorkingSet } from "@northstar/contracts";
+import { emptyWorkingSet, type WorkingSet } from "@workbench/contracts";
 import { describe, expect, it } from "vitest";
 import { applyFocusUpdate, type FocusInput, focusFromAnswer, focusPrompt } from "./focus";
 import { workingSetPrompt } from "./working-set";
@@ -70,7 +70,7 @@ describe("workspace focus", () => {
 
   it("reads a drafted answer's title, summary, and labeled lines into the focus", () => {
     const answer = [
-      "**Rainy lunch at Coastline Kitchen**",
+      "**Rainy lunch at Sample Kitchen**",
       "",
       "A warm lunch email for Los Angeles subscribers, built from today's rain and past results.",
       "",
@@ -78,8 +78,8 @@ describe("workspace focus", () => {
       "- **Preheader:** Spicy Tortilla Soup, ready in minutes",
       "**Body:** Warm up with our best rainy-day bowl.",
       "Send time: 11:15 a.m.",
-      "**Campaign:** Coastline Weather Moments",
-      "**Brand:** Coastline Kitchen",
+      "**Campaign:** Sample Kitchen Weather Moments",
+      "**Brand:** Sample Kitchen",
       "It is a draft; nothing was scheduled or sent.",
     ].join("\n");
     const input = focusFromAnswer(answer, {
@@ -87,7 +87,7 @@ describe("workspace focus", () => {
       fallbackTitle: "Email draft",
       changeNote: "First draft",
     });
-    expect(input?.title).toBe("Rainy lunch at Coastline Kitchen");
+    expect(input?.title).toBe("Rainy lunch at Sample Kitchen");
     expect(input?.summary).toContain("A warm lunch email");
     expect(input?.fields.map((field) => field.label)).toEqual([
       "Subject line",

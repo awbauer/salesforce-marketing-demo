@@ -1,5 +1,5 @@
 import { runInDurableObject, SELF } from "cloudflare:test";
-import { PROOF_DEFAULTS, type WorkingSet } from "@northstar/contracts";
+import { INSTANCE_PROFILE, type WorkingSet } from "@workbench/contracts";
 import { describe, expect, it } from "vitest";
 import { notMemoryCases, rememberCases } from "../../../packages/evals/src/cases";
 import type { FocusInput } from "./focus";
@@ -29,8 +29,8 @@ const draft = (title: string): FocusInput => ({
   summary: "Lunch push for Los Angeles app users.",
   fields: [
     { label: "Headline", value: "Rain outside? Soup's on." },
-    { label: "Campaign", value: "Coastline Weather Moments" },
-    { label: "Brand", value: "Coastline Kitchen" },
+    { label: "Campaign", value: "Sample Kitchen Weather Moments" },
+    { label: "Brand", value: "Sample Kitchen" },
   ],
   changeNote: "First draft",
 });
@@ -73,11 +73,11 @@ describe("long-term memory routing", () => {
         current: 1,
         versions: [{ ...draft("Rainy-day comfort"), version: 1, basedOn: [], createdAt: "" }],
       },
-      campaignIds: ["701jV000004GglIQAS", undefined],
+      campaignIds: ["701xx0000A1B2C3D4E", undefined],
     });
     expect(subjects).toEqual({
-      salesforceIds: ["701jV000004GglIQAS"],
-      names: ["Coastline Weather Moments", "Coastline Kitchen"],
+      salesforceIds: ["701xx0000A1B2C3D4E"],
+      names: ["Sample Kitchen Weather Moments", "Sample Kitchen"],
     });
   });
 });
@@ -144,7 +144,7 @@ describe("long-term memory in the workspace", () => {
     await SELF.fetch("https://example.test/agent/memory/remember", { method: "POST" });
     const backend = knowledgeGraphBackend({});
     const mine = await connectKnowledgeGraphTools(backend, {
-      workspaceId: PROOF_DEFAULTS.workspaceId,
+      workspaceId: INSTANCE_PROFILE.instance.id,
       now: () => new Date(),
     });
     const other = await connectKnowledgeGraphTools(backend, {

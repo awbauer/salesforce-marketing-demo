@@ -1,0 +1,21 @@
+{
+  "name": "workbench-aws",
+  "private": true,
+  "version": "0.0.0",
+  "description": "AWS CDK app that runs the workbench container behind an authenticated load balancer",
+  "scripts": {
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.230.0",
+    "constructs": "10.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.0",
+    "aws-cdk": "2.1030.0",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
+}

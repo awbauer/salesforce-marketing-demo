@@ -1,0 +1,60 @@
+{
+  "instance": {
+    "id": "composite-demo",
+    "displayName": "Full-tour demo (restaurant + wealth + retail)"
+  },
+  "client": {
+    "brand": "Workbench",
+    "audience": "internal",
+    "pack": "composite",
+    "industry": "Multi-industry tour",
+    "region": "United States",
+    "language": "English",
+    "brandVoice": "Warm, direct, and practical.",
+    "customerSegments": [],
+    "products": [],
+    "compliance": []
+  },
+  "useCases": [
+    "campaign-performance",
+    "readiness-review",
+    "on-brand-copy",
+    "buyer-group",
+    "sales-outreach",
+    "consent-coverage",
+    "audience-overlap",
+    "content-lineage",
+    "campaign-visual",
+    "memory-recall",
+    "weather-aware-campaign",
+    "service-weather",
+    "weather-inventory",
+    "fsi-market-news",
+    "fsi-deal-release",
+    "fsi-aum-plan"
+  ],
+  "models": {
+    "chat": {
+      "provider": "ollama",
+      "model": "gpt-oss:20b",
+      "baseUrl": "http://127.0.0.1:11434/v1"
+    },
+    "image": {
+      "provider": "placeholder"
+    }
+  },
+  "caps": {
+    "images": 100,
+    "spendUsd": 25
+  },
+  "retention": {
+    "transcriptHours": 24,
+    "imageDays": 7
+  },
+  "salesforce": {
+    "mode": "fixture"
+  },
+  "deploy": {
+    "target": "local"
+  }
+}

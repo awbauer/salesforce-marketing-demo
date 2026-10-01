@@ -1,16 +1,16 @@
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import {
-  AUDIT_RETENTION_HOURS,
-  AUDIT_RETENTION_MS,
   type Confirmation,
   ConfirmationSchema,
   type ConnectorState,
   classifyPolicyIntent,
   currentFocusVersion,
+  DEFAULTS,
   emptyWorkingSet,
   FOCUS_KIND_LABELS,
   type FocusItem,
   GeneratedCampaignImageSchema,
+  INSTANCE_PROFILE,
   initialOrchestratorState,
   type MarketingWrite,
   MEMORY_RETENTION_DAYS,
@@ -19,17 +19,18 @@ import {
   type PermissionReport,
   PHASE_2_AUTONOMOUS_TOOLS,
   PHASE_2_CURATED_TOOLS,
-  PROOF_DEFAULTS,
   parseOperationControls,
   policyResponse,
+  RESTAURANT_BRAND,
   referentFromReply,
   SALESFORCE_AGENTS,
   SALESFORCE_TOOL_DETAILS,
+  SAMPLE_CAMPAIGN_ID,
   type SuggestedAction,
   type TurnRecord,
   TurnRecordSchema,
   WRITE_TOOL_BY_ACTION,
-} from "@northstar/contracts";
+} from "@workbench/contracts";
 import {
   convertToModelMessages,
   createUIMessageStream,
@@ -42,11 +43,10 @@ import {
   type UIMessageChunk,
   wrapLanguageModel,
 } from "ai";
-import { createWorkersAI } from "workers-ai-provider";
 import {
+  ALL_KNOWLEDGE_GRAPH_TOOL_SPECS,
   forgetMemory,
   type GraphBackend,
-  KNOWLEDGE_GRAPH_TOOL_SPECS,
   listMemory,
   type MemoryRecordRef,
   recordDecision,
@@ -102,6 +102,14 @@ import {
   memoryStamp,
   memorySubjects,
 } from "./memory";
+import {
+  chatModelReachable,
+  DEFAULT_WORKERS_AI_IMAGE_MODEL,
+  type ModelBindings,
+  needsToolCallRepair,
+  placeholderImage,
+  resolveChatModel,
+} from "./models";
 import { buildTurnRecord } from "./turn-history";
 import {
   type DraftIntent,
@@ -143,18 +151,20 @@ export {
 } from "./turn-policy";
 
 export type AgentProps = { principalSubject: string; workspaceId: string };
-type OrchestratorBindings = CloudflareBindings & {
-  SALESFORCE_MCP_URL?: string;
-  CONFIRMATION_SIGNING_KEY?: string;
-  // Operator kill switches, set as Worker secrets so deploys do not reset them.
-  WRITES_ENABLED?: string;
-  DISABLED_TOOLS?: string;
-  MEMORY_ENABLED?: string;
-  // Neo4j Aura Query API credentials (Worker secrets); without them the fixture graph is used.
-  NEO4J_QUERY_URL?: string;
-  NEO4J_USERNAME?: string;
-  NEO4J_PASSWORD?: string;
-};
+type OrchestratorBindings = CloudflareBindings &
+  ModelBindings & {
+    CHAT_ENGINE?: string;
+    SALESFORCE_MCP_URL?: string;
+    CONFIRMATION_SIGNING_KEY?: string;
+    // Operator kill switches, set as Worker secrets so deploys do not reset them.
+    WRITES_ENABLED?: string;
+    DISABLED_TOOLS?: string;
+    MEMORY_ENABLED?: string;
+    // Neo4j Aura Query API credentials (Worker secrets); without them the fixture graph is used.
+    NEO4J_QUERY_URL?: string;
+    NEO4J_USERNAME?: string;
+    NEO4J_PASSWORD?: string;
+  };
 
 /** The store inventory mock's count date in local development. */
 const LOCAL_FIXTURE_COUNT_DATE = "2026-09-27";
@@ -183,8 +193,10 @@ const FOUND_NOTES = {
   recovered: "the agent didn't answer in time, but Salesforce shows it was saved",
 } as const;
 /** The Marketing Cloud agent the workbench asks to save briefs and create campaigns. */
-const CAMPAIGN_AGENT = "Northstar_Campaign_Creation";
-const IMAGE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const CAMPAIGN_AGENT = "Workbench_Campaign_Creation";
+const AUDIT_RETENTION_HOURS = INSTANCE_PROFILE.retention.transcriptHours;
+const AUDIT_RETENTION_MS = AUDIT_RETENTION_HOURS * 3_600_000;
+const IMAGE_RETENTION_MS = INSTANCE_PROFILE.retention.imageDays * 24 * 60 * 60 * 1000;
 
 const SEMANTIC_FAILURE_PATTERN =
   /no business units|no (?:results|records|data)\b|cannot (?:access|summarize|find|retrieve)|can't (?:access|summarize|find|retrieve)|not (?:available|found)|permission denied|access denied/i;
@@ -275,7 +287,7 @@ const LOCAL_FIXTURE_RESULTS: Array<[string, unknown]> = [
           type: "text",
           text: JSON.stringify({
             source: "local-fixture",
-            campaignId: "701jV000004GglIQAS",
+            campaignId: SAMPLE_CAMPAIGN_ID,
             summary:
               "Fall Loyalty Reactivation is in progress; engagement is 8.4 percent above its four-week baseline.",
             openRate: "38.2%",
@@ -293,7 +305,7 @@ const LOCAL_FIXTURE_RESULTS: Array<[string, unknown]> = [
           type: "text",
           text: JSON.stringify({
             source: "local-fixture",
-            campaignId: "701jV000004GglIQAS",
+            campaignId: SAMPLE_CAMPAIGN_ID,
             summary: "7 of 9 readiness checks pass; 2 blockers remain before review.",
             blockers: "Accessibility copy; commercial-consent scope",
           }),
@@ -318,13 +330,13 @@ function localAgentBrief(keyMessage: string) {
   return [
     "Here is a draft campaign brief (local fixture):",
     "Name: Rainy-day comfort: Spicy Tortilla Soup",
-    "Description: Lunch campaign for Coastline app users in Los Angeles, built from the weather and past rainy-day results.",
+    `Description: Lunch campaign for ${RESTAURANT_BRAND} app users in Los Angeles, built from the weather and past rainy-day results.`,
     `Key Message: ${keyMessage}`,
-    "Target Audience: Coastline Kitchen app users in Los Angeles who order at lunch.",
+    `Target Audience: ${RESTAURANT_BRAND} app users in Los Angeles who order at lunch.`,
     "Primary Goal: Drive lunch app orders on rainy days.",
     "Primary CTAs: Order now",
     "Primary KPI: Lunch orders from the campaign",
-    "Agent Guardrails: Coastline Kitchen brand voice; no discounts over 20 percent. Requested channel: Mobile app push.",
+    `Agent Guardrails: ${RESTAURANT_BRAND} brand voice; no discounts over 20 percent. Requested channel: Mobile app push.`,
     "Priority: High",
   ].join("\n");
 }
@@ -655,7 +667,8 @@ function scriptedTurnStream(
   });
 }
 
-const POLICY_ROUTER = "Northstar policy router";
+const POLICY_ROUTER = "Workbench policy router";
+const ORCHESTRATOR_MODEL = INSTANCE_PROFILE.models.chat.model;
 const TURN_HISTORY_LIMIT = 200;
 type TurnPipeResult = Awaited<ReturnType<ReturnType<typeof createTurnTracer>["pipe"]>>;
 
@@ -708,7 +721,7 @@ export class MarketingOrchestrator extends AIChatAgent<
   AgentProps
 > {
   static options = { sendIdentityOnConnect: false };
-  initialState = initialOrchestratorState;
+  initialState = { ...initialOrchestratorState, workspaceId: INSTANCE_PROFILE.instance.id };
   maxPersistedMessages = 100;
   waitForMcpConnections = false;
   private principalSubject = "unknown";
@@ -723,6 +736,52 @@ export class MarketingOrchestrator extends AIChatAgent<
   } = {};
   /** Local development's Marketing Cloud records, created by the local agent stand-in. */
   private localMarketing = new Map<string, MarketingReadBack>();
+
+  /** Renders a 1024×1024 PNG with the profile's image provider; null when it returns nothing. */
+  private async renderImage(
+    prompt: string,
+    seed: number | undefined,
+  ): Promise<{ png: Uint8Array; model: string } | null> {
+    const { provider, model, baseUrl } = INSTANCE_PROFILE.models.image;
+    if (provider === "placeholder") return placeholderImage(prompt);
+    if (provider === "openai-compatible") {
+      const response = await fetch(`${(baseUrl ?? "").replace(/\/$/, "")}/images/generations`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model,
+          prompt,
+          size: "1024x1024",
+          n: 1,
+          response_format: "b64_json",
+        }),
+        signal: AbortSignal.timeout(120_000),
+      });
+      const body = (await response.json().catch(() => null)) as {
+        data?: { b64_json?: string }[];
+      } | null;
+      const image = body?.data?.[0]?.b64_json;
+      return response.ok && image ? { png: decodeBase64(image), model: model ?? provider } : null;
+    }
+    const form = new FormData();
+    form.append("prompt", prompt);
+    form.append("width", String(1024));
+    form.append("height", String(1024));
+    if (seed !== undefined) form.append("seed", String(seed));
+    const encoded = new Response(form);
+    if (!this.env.AI) return null;
+    const result = await (
+      this.env.AI as unknown as {
+        run: (model: string, input: unknown) => Promise<{ image?: string }>;
+      }
+    ).run(model ?? DEFAULT_WORKERS_AI_IMAGE_MODEL, {
+      multipart: {
+        body: encoded.body ?? undefined,
+        contentType: encoded.headers.get("content-type") ?? undefined,
+      },
+    });
+    return result.image ? { png: decodeBase64(result.image), model: model ?? provider } : null;
+  }
 
   private async productionChatResponse(
     messages: UIMessage[],
@@ -792,10 +851,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       briefSaved: this.state.workingSet.focus?.saved?.objectType === "Brief",
     };
     this.agentBriefThisTurn = false;
-    const workersAI = createWorkersAI({
-      binding: this.env.AI,
-      gateway: { id: this.env.AI_GATEWAY_ID },
-    });
+    const chatModel = resolveChatModel(INSTANCE_PROFILE, this.env as ModelBindings);
     const workspace = workingSetPrompt(this.state.workingSet);
     const prompt = latestUserText(turnMessages);
     const focus = this.state.workingSet.focus;
@@ -837,7 +893,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         const tracer = createTurnTracer(writer, {
-          model: PROOF_DEFAULTS.orchestratorModel,
+          model: ORCHESTRATOR_MODEL,
           toolCount: Object.keys(tools).length,
           requiredTool,
           route: "model",
@@ -848,10 +904,9 @@ export class MarketingOrchestrator extends AIChatAgent<
         });
         try {
           const result = streamText({
-            model: wrapLanguageModel({
-              model: workersAI(PROOF_DEFAULTS.orchestratorModel),
-              middleware: forcedToolCallMiddleware,
-            }),
+            model: needsToolCallRepair(INSTANCE_PROFILE)
+              ? wrapLanguageModel({ model: chatModel, middleware: forcedToolCallMiddleware })
+              : chatModel,
             system: orchestratorSystemPrompt(workspace, toolPlan),
             messages: await convertToModelMessages(turnMessages),
             tools: pinnedTools,
@@ -897,7 +952,7 @@ export class MarketingOrchestrator extends AIChatAgent<
             await this.refreshPreview();
           await this.recordTurn(
             prompt,
-            { model: PROOF_DEFAULTS.orchestratorModel, route: "model", requiredTool },
+            { model: ORCHESTRATOR_MODEL, route: "model", requiredTool },
             turn,
           );
         } catch (error) {
@@ -911,7 +966,7 @@ export class MarketingOrchestrator extends AIChatAgent<
           );
           await this.recordTurn(
             prompt,
-            { model: PROOF_DEFAULTS.orchestratorModel, route: "model", requiredTool },
+            { model: ORCHESTRATOR_MODEL, route: "model", requiredTool },
             turn,
           );
         } finally {
@@ -943,7 +998,7 @@ export class MarketingOrchestrator extends AIChatAgent<
   }
 
   private ensureTurnHistory() {
-    this.sql`CREATE TABLE IF NOT EXISTS northstar_turn_history (
+    this.sql`CREATE TABLE IF NOT EXISTS workbench_turn_history (
       id TEXT PRIMARY KEY,
       started_at INTEGER NOT NULL,
       record TEXT NOT NULL
@@ -959,12 +1014,12 @@ export class MarketingOrchestrator extends AIChatAgent<
     try {
       const record = TurnRecordSchema.parse(buildTurnRecord({ utterance, ...context, result }));
       this.ensureTurnHistory();
-      this.sql`INSERT INTO northstar_turn_history (id, started_at, record)
+      this.sql`INSERT INTO workbench_turn_history (id, started_at, record)
         VALUES (${record.id}, ${Date.parse(record.startedAt)}, ${JSON.stringify(record)})`;
       const cutoff = Date.now() - AUDIT_RETENTION_MS;
-      this.sql`DELETE FROM northstar_turn_history WHERE started_at < ${cutoff}`;
-      this.sql`DELETE FROM northstar_turn_history WHERE id NOT IN (
-        SELECT id FROM northstar_turn_history ORDER BY started_at DESC LIMIT ${TURN_HISTORY_LIMIT}
+      this.sql`DELETE FROM workbench_turn_history WHERE started_at < ${cutoff}`;
+      this.sql`DELETE FROM workbench_turn_history WHERE id NOT IN (
+        SELECT id FROM workbench_turn_history ORDER BY started_at DESC LIMIT ${TURN_HISTORY_LIMIT}
       )`;
     } catch (error) {
       console.error("[orchestrator] could not record turn history", error);
@@ -1017,7 +1072,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         headers: {
           "content-type": "application/json; charset=utf-8",
           "cache-control": "no-store",
-          "content-disposition": `attachment; filename="northstar-audit-${exportedAt.slice(0, 10)}.json"`,
+          "content-disposition": `attachment; filename="workbench-audit-${exportedAt.slice(0, 10)}.json"`,
         },
       },
     );
@@ -1026,7 +1081,7 @@ export class MarketingOrchestrator extends AIChatAgent<
   private listTurns(): TurnRecord[] {
     this.ensureTurnHistory();
     const cutoff = Date.now() - AUDIT_RETENTION_MS;
-    return this.sql<{ record: string }>`SELECT record FROM northstar_turn_history
+    return this.sql<{ record: string }>`SELECT record FROM workbench_turn_history
       WHERE started_at >= ${cutoff} ORDER BY started_at DESC LIMIT ${TURN_HISTORY_LIMIT}`.flatMap(
       (row) => {
         const parsed = TurnRecordSchema.safeParse(JSON.parse(row.record));
@@ -1086,40 +1141,37 @@ export class MarketingOrchestrator extends AIChatAgent<
     )
       .bind(this.state.workspaceId)
       .first<{ count: number }>();
-    if ((usage?.count ?? 0) >= 100)
+    if ((usage?.count ?? 0) >= INSTANCE_PROFILE.caps.images)
       return json(
-        { error: { code: "RATE_LIMITED", message: "The 100-image proof cap has been reached." } },
+        {
+          error: {
+            code: "RATE_LIMITED",
+            message: "The image cap for this workbench instance has been reached.",
+          },
+        },
         { status: 429 },
       );
 
     this.imageGenerationInFlight = true;
+    let imageModelUsed =
+      INSTANCE_PROFILE.models.image.model ?? INSTANCE_PROFILE.models.image.provider;
     try {
       const prompt = [
-        "Create a polished square campaign image for the fictional Northstar outdoor lifestyle brand.",
+        `Create a polished square campaign image for the fictional ${INSTANCE_PROFILE.client.brand} brand (${INSTANCE_PROFILE.client.industry}).`,
         `Channel: ${body.channel}.`,
         `Creative concept: ${concept}.`,
         "Editorial photography, warm natural light, inclusive but no identifiable real person, no text, no logo, no product claims.",
       ].join(" ");
-      const form = new FormData();
-      form.append("prompt", prompt);
-      form.append("width", String(1024));
-      form.append("height", String(1024));
-      if (seed !== undefined) form.append("seed", String(seed));
-      const encoded = new Response(form);
-      const result = await this.env.AI.run("@cf/black-forest-labs/flux-2-klein-4b", {
-        multipart: {
-          body: encoded.body ?? undefined,
-          contentType: encoded.headers.get("content-type") ?? undefined,
-        },
-      });
-      if (!result.image)
+      const generated = await this.renderImage(prompt, seed);
+      if (!generated)
         return json(
           {
             error: { code: "UPSTREAM_UNAVAILABLE", message: "The image model returned no image." },
           },
           { status: 502 },
         );
-      const bytes = decodeBase64(result.image);
+      const bytes = generated.png;
+      imageModelUsed = generated.model;
       const dimensions = pngDimensions(bytes);
       if (
         bytes.byteLength > IMAGE_MAX_BYTES ||
@@ -1165,7 +1217,7 @@ export class MarketingOrchestrator extends AIChatAgent<
           body.channel,
           concept,
           IMAGE_PROMPT_VERSION,
-          this.env.CAMPAIGN_IMAGE_MODEL,
+          imageModelUsed,
           dimensions.width,
           dimensions.height,
           contentHash,
@@ -1185,7 +1237,7 @@ export class MarketingOrchestrator extends AIChatAgent<
           width: dimensions.width,
           height: dimensions.height,
           contentHash,
-          model: this.env.CAMPAIGN_IMAGE_MODEL,
+          model: imageModelUsed,
           lifecycle: "draft",
           expiresAt,
         }),
@@ -1241,7 +1293,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     return {
       imageBase64: encodeBase64(bytes),
       contentHash: draft.content_hash,
-      title: `Northstar ${draft.channel} campaign image`,
+      title: `Workbench ${draft.channel} campaign image`,
       altText: `Generated campaign image: ${draft.prompt_summary}`,
     };
   }
@@ -1384,7 +1436,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     summary?: unknown;
     imageId?: unknown;
   }): Promise<Response> {
-    const action = PROOF_DEFAULTS.allowedWrites.find((write) => write === body.action);
+    const action = DEFAULTS.allowedWrites.find((write) => write === body.action);
     if (!action) return this.buildConfirmation(body);
     this.beginPrepareProgress(action);
     let response: Response;
@@ -1611,7 +1663,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       { id: "plan", label: plan },
       {
         id: "permissions",
-        label: "Salesforce checks your permissions as you (NorthstarCheckWriteAccess)",
+        label: "Salesforce checks your permissions as you (WorkbenchCheckWriteAccess)",
       },
       { id: "confirm", label: "Binding exactly what will be written to a one-time confirmation" },
     ];
@@ -1675,18 +1727,18 @@ export class MarketingOrchestrator extends AIChatAgent<
       ];
     if (current.action === "create-inventory-case")
       return signed(
-        "NorthstarCreateInventoryCase",
+        "WorkbenchCreateInventoryCase",
         `verifies the signature and the case contents, then opens the Case for ${current.inventoryCase?.manager.name ?? "the store manager"}`,
         "Case",
       );
     if (current.action === "attach-generated-image")
       return signed(
-        "NorthstarAttachCampaignImage",
+        "WorkbenchAttachCampaignImage",
         "verifies the signature and the image hash, then attaches the file",
         "file and its campaign link",
       );
     return signed(
-      "NorthstarCreateCampaignReviewRequest",
+      "WorkbenchCreateCampaignReviewRequest",
       "verifies the signature, then creates the review Task",
       "Task",
     );
@@ -2181,7 +2233,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         { error: { code: "CONFLICT", message: "The confirmation has no case contents." } },
         { status: 409 },
       );
-    const subject = `Low stock before forecast weather: Coastline Kitchen ${details.city}`;
+    const subject = `Low stock before forecast weather: Store ${details.city}`;
     let result: {
       source: "salesforce" | "local-fixture";
       caseId: string;
@@ -2473,7 +2525,7 @@ export class MarketingOrchestrator extends AIChatAgent<
   }
 
   private ensureAttempts() {
-    this.sql`CREATE TABLE IF NOT EXISTS northstar_marketing_attempts (
+    this.sql`CREATE TABLE IF NOT EXISTS workbench_marketing_attempts (
       key TEXT PRIMARY KEY,
       at INTEGER NOT NULL
     )`;
@@ -2483,22 +2535,22 @@ export class MarketingOrchestrator extends AIChatAgent<
   private rememberAttempt(key: string) {
     this.ensureAttempts();
     const now = Date.now();
-    this.sql`INSERT OR REPLACE INTO northstar_marketing_attempts (key, at) VALUES (${key}, ${now})`;
-    this.sql`DELETE FROM northstar_marketing_attempts WHERE at < ${now - AUDIT_RETENTION_MS}`;
+    this.sql`INSERT OR REPLACE INTO workbench_marketing_attempts (key, at) VALUES (${key}, ${now})`;
+    this.sql`DELETE FROM workbench_marketing_attempts WHERE at < ${now - AUDIT_RETENTION_MS}`;
   }
 
   /** Whether this exact write was sent to the agent before without being confirmed. */
   private sentBefore(key: string) {
     this.ensureAttempts();
     return (
-      this.sql<{ key: string }>`SELECT key FROM northstar_marketing_attempts WHERE key = ${key}`
+      this.sql<{ key: string }>`SELECT key FROM workbench_marketing_attempts WHERE key = ${key}`
         .length > 0
     );
   }
 
   private forgetAttempt(key: string) {
     this.ensureAttempts();
-    this.sql`DELETE FROM northstar_marketing_attempts WHERE key = ${key}`;
+    this.sql`DELETE FROM workbench_marketing_attempts WHERE key = ${key}`;
   }
 
   /** Asks the Campaign Creation agent to do a confirmed write; local development uses a stand-in. */
@@ -2865,7 +2917,9 @@ export class MarketingOrchestrator extends AIChatAgent<
       content: [{ type: "text", text: JSON.stringify(data) }],
     });
     this.ingestToolResult("context_get_weather_forecast", { location, days: 3 }, mcp(forecast));
-    const spec = KNOWLEDGE_GRAPH_TOOL_SPECS.find((entry) => entry.name === "map_weather_demand");
+    const spec = ALL_KNOWLEDGE_GRAPH_TOOL_SPECS.find(
+      (entry) => entry.name === "map_weather_demand",
+    );
     const demandInput = { location, conditions: forecast.demandConditions };
     const demand = await spec?.run(knowledgeGraphBackend(this.env), demandInput as never);
     this.ingestToolResult("graph_map_weather_demand", demandInput, mcp(demand));
@@ -2878,7 +2932,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     const risk = this.state.inventoryRisk;
     if (!risk) return "The inventory check could not complete locally.";
     return [
-      `**Inventory check for Coastline Kitchen ${risk.city}** (local fixture forecast: ${risk.conditions.join(", ")}).\n\n`,
+      `**Inventory check for ${RESTAURANT_BRAND} ${risk.city}** (local fixture forecast: ${risk.conditions.join(", ")}).\n\n`,
       risk.lowItems.length
         ? `${risk.lowItems.length} item${risk.lowItems.length === 1 ? "" : "s"} won't cover the forecast:\n\n${risk.lowItems
             .map(
@@ -3025,7 +3079,7 @@ export class MarketingOrchestrator extends AIChatAgent<
   }
 
   private ensureMemoryAudit() {
-    this.sql`CREATE TABLE IF NOT EXISTS northstar_memory_audit (
+    this.sql`CREATE TABLE IF NOT EXISTS workbench_memory_audit (
       id TEXT PRIMARY KEY,
       at INTEGER NOT NULL,
       action TEXT NOT NULL,
@@ -3043,9 +3097,9 @@ export class MarketingOrchestrator extends AIChatAgent<
     try {
       this.ensureMemoryAudit();
       const now = Date.now();
-      this.sql`INSERT INTO northstar_memory_audit (id, at, action, memory_id, detail)
+      this.sql`INSERT INTO workbench_memory_audit (id, at, action, memory_id, detail)
         VALUES (${crypto.randomUUID()}, ${now}, ${action}, ${memoryId}, ${detail.slice(0, 240)})`;
-      this.sql`DELETE FROM northstar_memory_audit WHERE at < ${now - AUDIT_RETENTION_MS}`;
+      this.sql`DELETE FROM workbench_memory_audit WHERE at < ${now - AUDIT_RETENTION_MS}`;
     } catch (error) {
       console.warn("[memory] audit row failed", error instanceof Error ? error.message : error);
     }
@@ -3054,7 +3108,7 @@ export class MarketingOrchestrator extends AIChatAgent<
   private listMemoryAudit() {
     this.ensureMemoryAudit();
     return this.sql<{ at: number; action: string; memory_id: string; detail: string }>`
-      SELECT at, action, memory_id, detail FROM northstar_memory_audit
+      SELECT at, action, memory_id, detail FROM workbench_memory_audit
       WHERE at >= ${Date.now() - AUDIT_RETENTION_MS} ORDER BY at DESC LIMIT 200`.map((row) => ({
       at: new Date(row.at).toISOString(),
       action: row.action,
@@ -3314,7 +3368,7 @@ export class MarketingOrchestrator extends AIChatAgent<
             parts: [
               {
                 type: "text",
-                text: "Summarize Salesforce Campaign 701jV000004GglIQAS using only live Salesforce evidence.",
+                text: `Summarize Salesforce Campaign ${SAMPLE_CAMPAIGN_ID} using only live Salesforce evidence.`,
               },
             ],
           },
@@ -3568,7 +3622,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       await this.refreshPreview();
       return scriptedResponse(
         [
-          "The **Northstar Campaign Creation** agent refined the campaign preview (local fixture): the first email's subject is now “Rain outside? Warm soup is waiting.”\n\n",
+          "The **Workbench Campaign Creation** agent refined the campaign preview (local fixture): the first email's subject is now “Rain outside? Warm soup is waiting.”\n\n",
           "The workspace reloaded the preview from the brief. Nothing was sent or activated.",
         ],
         {
@@ -3588,7 +3642,7 @@ export class MarketingOrchestrator extends AIChatAgent<
       const current = currentFocusVersion(focus);
       return scriptedResponse(
         [
-          `The **Northstar Campaign Creation** agent (Marketing Cloud Next) drafted **${current.title}** (version ${current.version}) with its Draft a Campaign Brief action:\n\n`,
+          `The **Workbench Campaign Creation** agent (Marketing Cloud Next) drafted **${current.title}** (version ${current.version}) with its Draft a Campaign Brief action:\n\n`,
           ...current.fields.map((field) => `- **${field.label}:** ${field.value}\n`),
           "\nIt's a draft brief: nothing is saved in Marketing Cloud until you confirm.",
         ],
@@ -3602,9 +3656,15 @@ export class MarketingOrchestrator extends AIChatAgent<
         },
       );
     }
+    // With a reachable model, anything the fixtures do not cover goes to the configured model.
+    if (
+      (this.env.CHAT_ENGINE as string | undefined) !== "fixture" &&
+      (await chatModelReachable(INSTANCE_PROFILE, this.env as ModelBindings))
+    )
+      return this.productionChatResponse(this.messages, abortSignal);
     return scriptedResponse(
       [
-        "I reviewed the fictional Northstar sample campaign. The **strongest signal is stable engagement**.\n\n",
+        "I reviewed the fictional Workbench sample campaign. The **strongest signal is stable engagement**.\n\n",
         "**Readiness blockers**\n\n- Accessibility copy\n- Commercial-consent scope\n\n",
         "I have not changed, published, or sent anything.",
       ],

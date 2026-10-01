@@ -137,7 +137,7 @@ const BRIEF_FIELDS = [
 const filled = (answer: string, labels: readonly string[]) =>
   (labeledField(answer, labels)?.length ?? 0) > 0;
 
-// The Coastline scenarios end with a Marketing Cloud campaign brief, so the criteria read its
+// The Sample Kitchen scenarios end with a Marketing Cloud campaign brief, so the criteria read its
 // fields; the customer-facing copy is the Key Message and Primary CTAs.
 const restaurantCriteria = (channel: "email" | "push"): readonly Criterion[] => [
   namesMenuItem,
@@ -208,7 +208,7 @@ function fromBrief(id: string): Criterion {
 const APPROVAL_ID = /\b[A-Z]{2,6}-\d{4}-\d{3,5}\b/;
 
 const MAYA =
-  "Maya, 29, works near Coastline Kitchen's flagship and has the app with push on. She opens messages that match what she is craving right now and ignores generic promotions.";
+  "Maya, 29, works near Sample Kitchen's flagship and has the app with push on. She opens messages that match what she is craving right now and ignores generic promotions.";
 
 export const scenarioRubrics: Record<string, ScenarioRubric> = {
   "demo-summary": {
@@ -372,13 +372,13 @@ export const scenarioRubrics: Record<string, ScenarioRubric> = {
     weights: {},
   },
   "demo-restaurant-email": {
-    goal: "Have the Campaign Creation agent draft a Coastline Kitchen email campaign brief that uses today's weather, the time of day, the menu, and what worked before.",
+    goal: "Have the Campaign Creation agent draft a Sample Kitchen email campaign brief that uses today's weather, the time of day, the menu, and what worked before.",
     persona: MAYA.replace("push on", "email notifications on"),
     criteria: restaurantCriteria("email"),
     weights: CREATIVE_WEIGHTS,
   },
   "demo-restaurant-push": {
-    goal: "Have the Campaign Creation agent draft a Coastline Kitchen push campaign brief that uses today's weather, the time of day, the menu, and what worked before. Judge the Key Message and CTAs as the customer would receive them.",
+    goal: "Have the Campaign Creation agent draft a Sample Kitchen push campaign brief that uses today's weather, the time of day, the menu, and what worked before. Judge the Key Message and CTAs as the customer would receive them.",
     persona: MAYA,
     criteria: restaurantCriteria("push"),
     weights: CREATIVE_WEIGHTS,
@@ -425,7 +425,7 @@ export const scenarioRubrics: Record<string, ScenarioRubric> = {
     weights: { accuracy: 3, marketerUsefulness: 2, clarity: 1 },
   },
   "demo-memory-recall": {
-    goal: "Recall what was saved for the Coastline rainy-day push, with its date and source, and say it needs a re-check.",
+    goal: "Recall what was saved for the Sample Kitchen rainy-day push, with its date and source, and say it needs a re-check.",
     criteria: [
       {
         id: "headline",
@@ -456,9 +456,9 @@ export const scenarioRubrics: Record<string, ScenarioRubric> = {
     weights: { accuracy: 3, contextFidelity: 2, clarity: 1, marketerUsefulness: 1 },
   },
   "demo-mcn-create": {
-    goal: "Have the Campaign Creation agent draft a Marketing Cloud campaign brief for Coastline Kitchen's late-night tacos, presented as an unsaved draft.",
+    goal: "Have the Campaign Creation agent draft a Marketing Cloud campaign brief for Sample Kitchen's late-night tacos, presented as an unsaved draft.",
     persona:
-      "Jordan, 27, finishes a late shift and opens the Coastline app after 9 pm looking for something quick and filling.",
+      "Jordan, 27, finishes a late shift and opens the Sample Kitchen app after 9 pm looking for something quick and filling.",
     criteria: [
       fromBrief("brief-fields"),
       fromBrief("key-message-length"),

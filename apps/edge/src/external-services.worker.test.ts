@@ -111,7 +111,7 @@ describe("external services MCP", () => {
       expect(output.structuredContent?.elsewhereInCalifornia).toEqual([
         "Wind Advisory (Minor): San Diego County Coastal Areas",
       ]);
-      expect(calls.every((call) => call.includes("northstar-marketing-workbench"))).toBe(true);
+      expect(calls.every((call) => call.includes("marketing-workbench"))).toBe(true);
     } finally {
       await close();
     }
@@ -172,7 +172,7 @@ describe("external services MCP", () => {
       );
       // Links outside the Federal Reserve's site are never followed or returned.
       expect((data.recentReleases as unknown[]).length).toBe(2);
-      expect(calls.every((call) => call.includes("northstar-marketing-workbench"))).toBe(true);
+      expect(calls.every((call) => call.includes("marketing-workbench"))).toBe(true);
     } finally {
       await close();
     }

@@ -24,7 +24,7 @@ import {
 export async function memoryActorHash(principalSubject: string) {
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(`northstar-memory:${principalSubject}`),
+    new TextEncoder().encode(`workbench-memory:${principalSubject}`),
   );
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))

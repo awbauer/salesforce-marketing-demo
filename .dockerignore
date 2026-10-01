@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+.git
+.wrangler
+dist
+playwright-report
+test-results
+artifacts
+templates/aws/cdk/cdk.out
+.workbench
+.config
+.dev.vars
+.env*
+
+docs/archive
+.github

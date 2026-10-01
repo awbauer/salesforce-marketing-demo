@@ -7,9 +7,17 @@
       "!!dist",
       "!!**/.wrangler",
       "!!artifacts",
+      "!!docs/archive",
+      "!!wrangler.cloudflare.jsonc",
+      "!!workbench.profile.json",
+      "!!data/instance-dataset.json",
+      "!!.workbench",
+      "!!templates/aws/cdk/cdk.out",
+      "!!templates/aws/cdk/node_modules",
       "!!playwright-report",
       "!!test-results",
       "!!apps/edge/src/worker-configuration.d.ts",
+      "!!packages/contracts/src/generated",
       "!!apps/web/public/evals"
     ]
   },

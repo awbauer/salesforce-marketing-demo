@@ -1,8 +1,9 @@
 import { env, SELF } from "cloudflare:test";
+import { INSTANCE_PROFILE } from "@workbench/contracts";
 import { beforeEach, describe, expect, it } from "vitest";
 import { openCatalogCampaign } from "./worker.test-helpers";
 
-const CAMPAIGN_ID = "701jV000004GglIQAS";
+const CAMPAIGN_ID = "701xx0000A1B2C3D4E";
 // A valid 1x1 PNG; fictional test content only.
 const PNG = Uint8Array.from(
   atob(
@@ -20,11 +21,11 @@ async function seedDraft(imageId: string, campaignId = CAMPAIGN_ID) {
   await env.APP_DB.exec(
     "CREATE TABLE IF NOT EXISTS campaign_image_drafts (image_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, principal_subject TEXT NOT NULL, campaign_id TEXT NOT NULL, channel TEXT NOT NULL, prompt_summary TEXT NOT NULL, prompt_version TEXT NOT NULL, model_id TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL, content_hash TEXT NOT NULL, r2_key TEXT NOT NULL UNIQUE, lifecycle TEXT NOT NULL, seed INTEGER, created_at TEXT NOT NULL, expires_at TEXT NOT NULL)",
   );
-  const r2Key = `drafts/northstar-demo/test/${imageId}.png`;
+  const r2Key = `drafts/${INSTANCE_PROFILE.instance.id}/test/${imageId}.png`;
   await env.CAMPAIGN_ASSETS.put(r2Key, PNG);
   const contentHash = await sha256(PNG);
   await env.APP_DB.prepare(
-    `INSERT INTO campaign_image_drafts VALUES (?, 'northstar-demo', 'local-evaluator', ?, 'email',
+    `INSERT INTO campaign_image_drafts VALUES (?, '${INSTANCE_PROFILE.instance.id}', 'local-evaluator', ?, 'email',
       'A quiet trailhead at golden hour', 'campaign-image-v1', '@cf/black-forest-labs/flux-2-klein-4b', 1024, 1024, ?, ?,
       'draft', NULL, ?, ?)`,
   )
@@ -77,7 +78,7 @@ describe("confirmed campaign image attachment", () => {
         recordId: "069000000000001",
         campaignId: CAMPAIGN_ID,
         contentHash,
-        title: "Northstar email campaign image",
+        title: "Workbench email campaign image",
         readBack: true,
       },
     });
@@ -112,7 +113,7 @@ describe("confirmed campaign image attachment", () => {
   it("rejects unknown images and drafts generated for another campaign", async () => {
     expect((await preflight(crypto.randomUUID())).status).toBe(400);
     const imageId = crypto.randomUUID();
-    await seedDraft(imageId, "701jV000009ZZZZQAS");
+    await seedDraft(imageId, "701xx0000Z9Y8X7W6V");
     expect((await preflight(imageId)).status).toBe(400);
   });
 

@@ -1,17 +1,14 @@
 import { readFile } from "node:fs/promises";
-import { PROOF_DEFAULTS } from "../packages/contracts/src/index.ts";
+import { DEFAULTS } from "../packages/contracts/src/index.ts";
 import { report } from "./lib/report.mjs";
 
 const wrangler = await readFile("wrangler.jsonc", "utf8");
 const catalog = JSON.parse(await readFile("packages/contracts/src/tool-catalog.json", "utf8"));
-const required = [
-  PROOF_DEFAULTS.imageModel,
-  '"new_sqlite_classes"',
-  '"CAMPAIGN_ASSETS"',
-  '"APP_DB"',
-  '"database_id": "120cf689-0652-476c-9e4e-8af5b83e3627"',
-  '"bucket_name": "northstar-marketing-workbench-pot-campaign-assets"',
-];
+const cloudflareTemplate = await readFile(
+  "templates/cloudflare/wrangler.cloudflare.jsonc.tmpl",
+  "utf8",
+);
+const required = ['"new_sqlite_classes"', '"CAMPAIGN_ASSETS"', '"APP_DB"'];
 const forbidden = [
   "publish",
   "send",
@@ -25,20 +22,33 @@ const orchestratorSource = await readFile("apps/edge/src/orchestrator.ts", "utf8
 // The latest migration that rebuilds the confirmation audit defines its allowed actions.
 const confirmationMigration = await readFile("migrations/0005_inventory_case_action.sql", "utf8");
 const failures = required
-  .filter((value) => !wrangler.includes(value))
+  .flatMap((value) => [
+    ...(wrangler.includes(value) ? [] : [`wrangler.jsonc is missing ${value}`]),
+    ...(cloudflareTemplate.includes(value) ? [] : [`Cloudflare template is missing ${value}`]),
+  ])
   .map((value) => `Missing config invariant: ${value}`);
-if (/ORCHESTRATOR_MODEL/.test(wrangler))
-  failures.push("Orchestrator model must be set only in PROOF_DEFAULTS, not wrangler.jsonc");
-if (!orchestratorSource.includes("workersAI(PROOF_DEFAULTS.orchestratorModel)"))
-  failures.push("Orchestrator must read its model from PROOF_DEFAULTS.orchestratorModel");
+// The checked-in local config must run with no account: no ids, routes, or hosted bindings.
+for (const [label, pattern] of [
+  ["a database_id", /"database_id"/],
+  ["an account_id", /"account_id"/],
+  ["routes", /"routes?"\s*:/],
+  ["an AI binding", /"ai"\s*:/],
+  ["a model id", /ORCHESTRATOR_MODEL|@cf\//],
+])
+  if (pattern.test(wrangler))
+    failures.push(`wrangler.jsonc must stay account-free: found ${label}`);
+if (!/resolveChatModel\(INSTANCE_PROFILE/.test(orchestratorSource))
+  failures.push("Orchestrator must resolve its chat model from the instance profile");
+if (/@cf\//.test(orchestratorSource))
+  failures.push("Orchestrator must not hard-code a model id; set it in the instance profile");
 for (const value of forbidden)
-  if (PROOF_DEFAULTS.allowedWrites.some((item) => item.includes(value)))
+  if (DEFAULTS.allowedWrites.some((item) => item.includes(value)))
     failures.push(`Forbidden write exposed: ${value}`);
 const auditActionClause = confirmationMigration.match(/action IN \(([\s\S]*?)\)\s*\)/)?.[1] ?? "";
 const auditedActions = [...auditActionClause.matchAll(/'([^']+)'/g)]
   .map((match) => match[1])
   .sort();
-const allowedActions = [...PROOF_DEFAULTS.allowedWrites].sort();
+const allowedActions = [...DEFAULTS.allowedWrites].sort();
 // Retired actions stay in the audit's CHECK so rows written before they were retired remain valid.
 const RETIRED_ACTIONS = ["save-brief", "save-campaign", "save-draft-campaign", "save-message"];
 const expectedAudit = [...allowedActions, ...RETIRED_ACTIONS].sort();
@@ -51,13 +61,15 @@ for (const tool of catalog.tools) {
     failures.push(`Unapproved tool risk: ${tool.name}/${tool.riskClass}`);
   if (tool.riskClass === "write") {
     if (tool.autonomous !== false) failures.push(`Write tool is autonomous: ${tool.name}`);
-    if (!PROOF_DEFAULTS.allowedWrites.includes(tool.allowedWrite))
-      failures.push(`Write tool is outside Section 17: ${tool.name}/${tool.allowedWrite}`);
+    if (!DEFAULTS.allowedWrites.includes(tool.allowedWrite))
+      failures.push(
+        `Write tool is outside DEFAULTS.allowedWrites: ${tool.name}/${tool.allowedWrite}`,
+      );
   }
 }
 await report("contracts", {
   status: failures.length ? "failed" : "passed",
-  fixedDefaults: PROOF_DEFAULTS,
+  fixedDefaults: DEFAULTS,
   toolCatalog: catalog,
   failures,
 });

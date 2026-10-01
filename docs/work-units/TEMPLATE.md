@@ -2,7 +2,6 @@
 id: WU-000
 title: Replace with one verifiable outcome
 status: ready
-plan_sections: []
 owners: [agent]
 ---
 
@@ -28,7 +27,7 @@ State the user-visible or platform-visible result, not an activity.
 - [ ] Observable result is implemented.
 - [ ] Failure and recovery states are covered.
 - [ ] Documentation matches demonstrated behavior.
-- [ ] No proof boundary or Section 17 default changed.
+- [ ] No write, tool or data rule in `docs/architecture.md` changed without a decision record.
 
 ## Verification
 

@@ -3,7 +3,6 @@
 // turns that predate cost tracking from their stored token counts (all input at the uncached rate).
 // Quality scores and rubric criteria need the live tool evidence, so only a new run produces them.
 import { readFileSync, writeFileSync } from "node:fs";
-import { PROOF_DEFAULTS } from "../packages/contracts/src/index.ts";
 import { turnCost } from "../packages/evals/src/pricing.ts";
 import { EVAL_CHECKS, EvalReportSchema } from "../packages/evals/src/report.ts";
 import { buildMethodology } from "./lib/eval-methodology.mjs";
@@ -43,7 +42,7 @@ const results = previous.results.map((result) => {
 
 const report = EvalReportSchema.parse({
   ...previous,
-  productionModel: PROOF_DEFAULTS.orchestratorModel,
+  productionModel: "@cf/openai/gpt-oss-20b" /* the eval baseline */,
   methodology: buildMethodology({
     trialsDemo: trials["demo-scenarios"],
     trialsRouting: trials["routing-pipeline"],

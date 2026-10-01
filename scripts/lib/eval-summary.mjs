@@ -1,3 +1,4 @@
+import { NEURON_USD, PRICING_AS_OF, PRICING_SOURCE } from "../../packages/evals/src/pricing.ts";
 import {
   bootstrapMean,
   dimensionMeans,
@@ -5,7 +6,6 @@ import {
   QUALITY_DIMENSIONS,
   topTwoBox,
 } from "../../packages/evals/src/quality.ts";
-import { NEURON_USD, PRICING_AS_OF, PRICING_SOURCE } from "../../packages/evals/src/pricing.ts";
 import { EVAL_CHECKS } from "../../packages/evals/src/report.ts";
 
 const sum = (values) => values.reduce((total, value) => total + value, 0);

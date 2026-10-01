@@ -52,7 +52,7 @@ import {
   MEMORY_TOOLS,
   PHASE_2_AUTONOMOUS_TOOLS,
   POLICY_RESPONSES,
-  PROOF_DEFAULTS,
+  RESTAURANT_BRAND,
 } from "../packages/contracts/src/index.ts";
 import { demoScenarios, routingCases } from "../packages/evals/src/cases.ts";
 import { formatUsd, turnCost } from "../packages/evals/src/pricing.ts";
@@ -69,21 +69,21 @@ import {
   rememberDraft,
 } from "../packages/knowledge-graph/src/index.ts";
 import { estimateRun, formatEstimate } from "./lib/eval-estimate.mjs";
-import { createEvalProvider } from "./lib/eval-provider.mjs";
-import { concurrencyFor } from "./lib/eval-throttle.mjs";
 import { buildQuality, JUDGES, judgeAnswer } from "./lib/eval-judge.mjs";
 import { buildMethodology } from "./lib/eval-methodology.mjs";
+import { createEvalProvider } from "./lib/eval-provider.mjs";
 import {
   createSimulatedAgent,
   SIMULATED_TOOLS,
   simulatedResult,
 } from "./lib/eval-simulated-agent.mjs";
 import { summarize, summarizeAgreement, summarizeCost } from "./lib/eval-summary.mjs";
+import { concurrencyFor } from "./lib/eval-throttle.mjs";
 
 // Served as a static asset so the demo UI shows the latest committed run without a code change.
 const DEFAULT_REPORT_PATH = "apps/web/public/evals/latest.json";
 // The Hosted MCP namespace prefix observed in production tool names.
-const TOOL_PREFIX = "tool_salesforce_northstar-marketing-salesforce_";
+const TOOL_PREFIX = "tool_salesforce_workbench-marketing-salesforce_";
 const CALIBRATION_PATH = "artifacts/reports/eval-calibration.json";
 
 // Inexpensive models run by default. The frontier tier is opt-in (--tier frontier) because Kimi K2.6
@@ -125,7 +125,7 @@ function argument(name, fallback) {
 /** Tool descriptions come from the source-controlled Hosted MCP definition. */
 function toolDescriptions() {
   const xml = readFileSync(
-    "salesforce/force-app/main/default/mcpServerDefinitions/NorthstarMarketingWorkbench.mcpServerDefinition-meta.xml",
+    "salesforce/force-app/main/default/mcpServerDefinitions/MarketingWorkbench.mcpServerDefinition-meta.xml",
     "utf8",
   );
   return Object.fromEntries(
@@ -163,13 +163,13 @@ const FIXTURES = {
     message: [
       "Here is a draft campaign brief:",
       "Name: Rainy Day Comfort",
-      "Description: Lunch email for Coastline Kitchen app users in Los Angeles on rainy days.",
+      "Description: Lunch email for Sample Kitchen app users in Los Angeles on rainy days.",
       "Key Message: Rain outside? Spicy Tortilla Soup is ready in minutes.",
       "Target Audience: Los Angeles app users who order at lunch.",
       "Primary Goal: Drive lunch app orders on rainy days.",
       "Primary CTAs: Order now",
       "Primary KPI: Lunch orders from the campaign",
-      "Agent Guardrails: Coastline Kitchen brand voice.",
+      "Agent Guardrails: Sample Kitchen brand voice.",
       "Priority: High",
       "Would you like to see a campaign preview based on this brief?",
     ].join("\n"),
@@ -240,7 +240,7 @@ function savedBriefWorkspace() {
     {
       kind: "brief",
       title: "Rainy Day Comfort",
-      summary: "Lunch email for Coastline Kitchen app users in Los Angeles on rainy days.",
+      summary: "Lunch email for Sample Kitchen app users in Los Angeles on rainy days.",
       fields: [
         { label: "Key Message", value: "Rain outside? Spicy Tortilla Soup is ready in minutes." },
         { label: "Target Audience", value: "Los Angeles app users who order at lunch." },
@@ -514,7 +514,7 @@ function agentRequestCheck(resultSteps, sent) {
     "sunny",
   ].filter((term) => context.includes(term));
   return (
-    brief.includes("coastline") &&
+    brief.includes(RESTAURANT_BRAND.toLowerCase()) &&
     menu.some((item) => brief.includes(item.toLowerCase())) &&
     placeOrWeather.some((term) => brief.includes(term))
   );
@@ -542,7 +542,7 @@ async function seedEvalMemory(backend, workspaceId) {
       id: crypto.randomUUID(),
     };
   };
-  const subjects = { salesforceIds: [], names: ["Coastline Kitchen"] };
+  const subjects = { salesforceIds: [], names: ["Sample Kitchen"] };
   const draft = {
     focusId: "eval-focus",
     kind: "push-message",
@@ -550,7 +550,7 @@ async function seedEvalMemory(backend, workspaceId) {
     summary: "Lunch push for Los Angeles app users on rainy days.",
     fields: [
       { label: "Headline", value: "Rain outside? Soup's on." },
-      { label: "Brand", value: "Coastline Kitchen" },
+      { label: "Brand", value: "Sample Kitchen" },
     ],
     version: 2,
   };
@@ -683,7 +683,7 @@ const cost = summarizeCost(results, {
 const report = EvalReportSchema.parse({
   generatedAt: new Date().toISOString(),
   gitSha: execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim(),
-  productionModel: PROOF_DEFAULTS.orchestratorModel,
+  productionModel: "@cf/openai/gpt-oss-20b" /* the eval baseline */,
   methodology: buildMethodology({ trialsDemo, trialsRouting }),
   models: MODELS.map((model) => ({
     id: model.id,

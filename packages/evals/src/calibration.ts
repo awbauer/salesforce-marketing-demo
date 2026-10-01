@@ -9,9 +9,9 @@ const mcp = (value: unknown) =>
 const restaurantTrace: ToolTrace[] = [
   {
     name: "get_restaurant_profile",
-    request: "coastline-kitchen",
+    request: "restaurant-brand",
     output: mcp({
-      name: "Coastline Kitchen",
+      name: "Sample Kitchen",
       location: { city: "Los Angeles", neighborhood: "Downtown" },
       brandVoice: "Warm, sunny, unpretentious. Short sentences. No exclamation marks.",
       menu: [
@@ -36,7 +36,7 @@ const restaurantTrace: ToolTrace[] = [
 ];
 
 const briefRequest =
-  "Draft a campaign brief for Coastline Kitchen: a Los Angeles push campaign for lunch on a rainy day featuring Tomato Basil Soup, informed by past rainy lunch pushes.";
+  "Draft a campaign brief for Sample Kitchen: a Los Angeles push campaign for lunch on a rainy day featuring Tomato Basil Soup, informed by past rainy lunch pushes.";
 
 export type CalibrationReference = {
   caseId: string;
@@ -49,7 +49,7 @@ export const CALIBRATION_REFERENCES: CalibrationReference[] = [
   {
     caseId: "demo-restaurant-push",
     prompt:
-      "Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
+      "Draft a push notification campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
     trace: [
       ...restaurantTrace,
       { name: "draft_campaign_brief", request: briefRequest, output: "{}" },
@@ -71,7 +71,7 @@ export const CALIBRATION_REFERENCES: CalibrationReference[] = [
         "**Lunch Promotion**",
         "**Name:** Lunch promotion",
         "**Description:** A push about lunch for app users in Los Angeles.",
-        "**Key Message:** Enjoy a delicious lunch from Coastline Kitchen today.",
+        "**Key Message:** Enjoy a delicious lunch from Sample Kitchen today.",
         "**Target Audience:** App users",
         "**Primary Goal:** Increase sales",
         "**Primary CTAs:** Order now",
@@ -92,7 +92,7 @@ export const CALIBRATION_REFERENCES: CalibrationReference[] = [
   {
     caseId: "demo-restaurant-email",
     prompt:
-      "Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
+      "Draft an email campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu",
     trace: [
       ...restaurantTrace,
       { name: "draft_campaign_brief", request: briefRequest, output: "{}" },
@@ -112,7 +112,7 @@ export const CALIBRATION_REFERENCES: CalibrationReference[] = [
       mediocre: [
         "**Lunch Email**",
         "**Name:** Lunch email",
-        "**Key Message:** Coastline Kitchen has great food for lunch.",
+        "**Key Message:** Sample Kitchen has great food for lunch.",
         "**Target Audience:** Subscribers",
         "**Primary Goal:** More orders",
         "**Primary CTAs:** Visit us",

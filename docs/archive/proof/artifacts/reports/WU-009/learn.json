@@ -1,0 +1,38 @@
+{
+  "generatedAt": "2026-09-30T16:09:27.887Z",
+  "status": "failed",
+  "baseRef": "origin/main",
+  "mergeBase": "d623dd13b0ceda72f843ae2ba37ed8506d349826",
+  "inventory": {
+    "Tool": 40,
+    "Write action": 5,
+    "Graph node": 34,
+    "Graph relationship": 53,
+    "Operator control": 3,
+    "Salesforce component": 10
+  },
+  "drift": [
+    {
+      "section": "orchestrator",
+      "status": "stale",
+      "paths": [
+        "apps/edge/src/index.ts",
+        "apps/edge/src/models.ts",
+        "apps/edge/src/orchestrator.ts",
+        "packages/contracts/src/profile.ts",
+        "scripts/build-profile.mjs"
+      ]
+    },
+    {
+      "section": "governance",
+      "status": "reviewed",
+      "paths": [
+        "packages/contracts/src/index.ts"
+      ]
+    }
+  ],
+  "notices": [],
+  "failures": [
+    "Learn drift: this branch changes code that these Learn sections explain, but the sections didn't change:\n  • orchestrator (“The orchestrator agent”) ← apps/edge/src/index.ts, apps/edge/src/models.ts, apps/edge/src/orchestrator.ts, packages/contracts/src/profile.ts, scripts/build-profile.mjs\nUpdate each section in apps/web/src/learn/content.ts (or its lesson or reference entries) so it teaches the change.\nIf nothing a reader learns has changed, say so in a commit trailer:\n  Learn-Reviewed: orchestrator (why no Learn update is needed)"
+  ]
+}

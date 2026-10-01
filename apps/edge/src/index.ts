@@ -1,5 +1,5 @@
 import { createMcpHandler } from "@modelcontextprotocol/server";
-import { HealthSchema, PROOF_DEFAULTS } from "@northstar/contracts";
+import { HealthSchema, INSTANCE_PROFILE } from "@workbench/contracts";
 import { getAgentByName } from "agents";
 import {
   EXPLORER_MAX_ROWS,
@@ -11,11 +11,12 @@ import {
 import { type AuthBindings, AuthError, deriveAgentKey, resolvePrincipal } from "./auth";
 import { createCampaignContextMcpServer } from "./campaign-context/server";
 import { createKnowledgeGraphMcpServer, knowledgeGraphBackend } from "./knowledge-graph/server";
+import type { ModelBindings } from "./models";
 import { pruneConfirmationAudit } from "./orchestrator";
 
 export { MarketingOrchestrator } from "./orchestrator";
 
-type Env = CloudflareBindings & AuthBindings;
+type Env = CloudflareBindings & AuthBindings & ModelBindings;
 
 function json(value: unknown, init: ResponseInit = {}) {
   const headers = new Headers(init.headers);
@@ -102,7 +103,7 @@ export default {
         return json(
           HealthSchema.parse({
             status: "ok",
-            service: "northstar-edge",
+            service: "workbench-edge",
             environment: env.ENVIRONMENT,
             correlationId: id,
           }),
@@ -113,7 +114,7 @@ export default {
           checks: {
             durableObject: true,
             staticAssets: Boolean(env.ASSETS),
-            workersAi: Boolean(env.AI),
+            chatProvider: INSTANCE_PROFILE.models.chat.provider,
             d1: Boolean(env.APP_DB),
             r2: Boolean(env.CAMPAIGN_ASSETS),
           },
@@ -121,8 +122,8 @@ export default {
         });
       if (url.pathname === "/api/session") {
         const principal = await resolvePrincipal(request, env);
-        const agentKey = await deriveAgentKey(principal, PROOF_DEFAULTS.workspaceId);
-        return json({ workspaceId: PROOF_DEFAULTS.workspaceId, principal, agentKey });
+        const agentKey = await deriveAgentKey(principal, INSTANCE_PROFILE.instance.id);
+        return json({ workspaceId: INSTANCE_PROFILE.instance.id, principal, agentKey });
       }
       if (url.pathname.startsWith("/api/graph/")) {
         await resolvePrincipal(request, env);
@@ -140,9 +141,9 @@ export default {
       }
       if (url.pathname === "/agent" || url.pathname.startsWith("/agent/")) {
         const principal = await resolvePrincipal(request, env);
-        const name = await deriveAgentKey(principal, PROOF_DEFAULTS.workspaceId);
+        const name = await deriveAgentKey(principal, INSTANCE_PROFILE.instance.id);
         const stub = await getAgentByName(env.MarketingOrchestrator, name, {
-          props: { principalSubject: principal.subject, workspaceId: PROOF_DEFAULTS.workspaceId },
+          props: { principalSubject: principal.subject, workspaceId: INSTANCE_PROFILE.instance.id },
         });
         return stub.fetch(request);
       }

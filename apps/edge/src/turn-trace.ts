@@ -3,7 +3,7 @@ import {
   TURN_TRACE_PART_TYPE,
   type TurnTrace,
   type TurnTraceEvent,
-} from "@northstar/contracts";
+} from "@workbench/contracts";
 import type { UIMessageChunk, UIMessageStreamWriter } from "ai";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
