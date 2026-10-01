@@ -34,7 +34,7 @@ owners: [agent]
 - [x] Tests, evals and the e2e suite run the full-tour profile, so every module stays covered.
 - [ ] `pnpm verify` passes.
 - [ ] The Apex rename and store-lookup change are deployed to a sandbox and their tests run (needs a sandbox; not done).
-- [ ] Playwright e2e run against the renamed UI (browsers not available in the authoring container).
+- [x] Playwright e2e run against the renamed UI with the full-tour profile: 19 passed on the bundled Chromium (the Chrome and Edge channels are not installed in the authoring container; CI runs both).
 
 ## Verification
 
@@ -45,7 +45,7 @@ pnpm template:check
 
 ## Evidence
 
-Unit tests: 157 passed; Worker tests: 132 passed; routing evaluation 28/28 under both the example and full-tour profiles.
+Unit tests: 157 passed; Worker tests: 132 passed; routing evaluation 28/28 under both the example and full-tour profiles; Playwright e2e: 19 passed (Chromium, full-tour profile).
 
 ## Limitations
 
