@@ -52,11 +52,11 @@ private class WorkbenchInventoryCaseTest {
     /** A store manager at a uniquely named test restaurant; returns the restaurant's city. */
     private static String manager() {
         String city = 'Testville ' + String.valueOf(Crypto.getRandomInteger()).replace('-', '');
-        Account restaurant = new Account(Name = 'Sample Kitchen test (fictional)');
+        Account restaurant = new Account(Name = 'Restaurant test (fictional)');
         insert restaurant;
         insert new Contact(
             AccountId = restaurant.Id, FirstName = 'Test', LastName = 'Manager', Title = 'Store Manager',
-            Department = 'Sample Kitchen ' + city
+            Department = 'Store ' + city
         );
         return city;
     }

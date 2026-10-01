@@ -1,3 +1,4 @@
+import { INSTANCE_PACK } from "@workbench/contracts";
 import { useMemo, useState } from "react";
 import {
   type Industry,
@@ -15,12 +16,16 @@ const KIND_GLYPHS: Record<SystemKind, string> = {
   "Knowledge graph": "⋈",
   "MCP server": "◇",
   "External API": "↗",
-  "Workers AI": "✦",
+  "Language model": "✦",
   Workbench: "▣",
 };
 
 type Filter = Team | Industry | "All";
-const FILTERS: Filter[] = ["All", ...TEAMS, "Financial services"];
+const FILTERS: Filter[] = [
+  "All",
+  ...TEAMS,
+  ...(INSTANCE_PACK.modules.wealth ? (["Financial services"] as const) : []),
+];
 const matches = (useCase: UseCase, filter: Filter) =>
   filter === "All" || useCase.team === filter || useCase.industry === filter;
 

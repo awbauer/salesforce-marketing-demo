@@ -1,8 +1,12 @@
 {
-  "instance": { "id": "example", "displayName": "Example workbench" },
+  "instance": {
+    "id": "example",
+    "displayName": "Example workbench"
+  },
   "client": {
     "brand": "Example Brand",
     "audience": "internal",
+    "pack": "retail",
     "industry": "Retail",
     "region": "United States",
     "language": "English",
@@ -11,17 +15,40 @@
     "products": [],
     "compliance": []
   },
-  "useCases": ["campaign-creation"],
+  "useCases": [
+    "campaign-performance",
+    "readiness-review",
+    "on-brand-copy",
+    "buyer-group",
+    "sales-outreach",
+    "consent-coverage",
+    "audience-overlap",
+    "content-lineage",
+    "campaign-visual",
+    "memory-recall"
+  ],
   "models": {
     "chat": {
       "provider": "ollama",
       "model": "gpt-oss:20b",
       "baseUrl": "http://127.0.0.1:11434/v1"
     },
-    "image": { "provider": "placeholder" }
+    "image": {
+      "provider": "placeholder"
+    }
   },
-  "caps": { "images": 100, "spendUsd": 25 },
-  "retention": { "transcriptHours": 24, "imageDays": 7 },
-  "salesforce": { "mode": "fixture" },
-  "deploy": { "target": "local" }
+  "caps": {
+    "images": 100,
+    "spendUsd": 25
+  },
+  "retention": {
+    "transcriptHours": 24,
+    "imageDays": 7
+  },
+  "salesforce": {
+    "mode": "fixture"
+  },
+  "deploy": {
+    "target": "local"
+  }
 }

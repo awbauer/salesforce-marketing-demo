@@ -11,7 +11,7 @@ export const routingCases = [
   },
   {
     id: "routing-03",
-    prompt: "Summarize campaign 701jV000004GglIQAS",
+    prompt: "Summarize campaign 701xx0000A1B2C3D4E",
     expected: "summarize_campaign",
   },
   {
@@ -237,7 +237,7 @@ export const routingHoldout = [
   },
   {
     id: "holdout-02",
-    prompt: "Give me a quick overview of campaign 701jV000004GglIQAS",
+    prompt: "Give me a quick overview of campaign 701xx0000A1B2C3D4E",
     expected: "summarize_campaign",
   },
   {

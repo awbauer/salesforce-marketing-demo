@@ -1,3 +1,9 @@
+import {
+  INSTANCE_PROFILE,
+  RESTAURANT_BRAND,
+  SAMPLE_CAMPAIGN_ID,
+  WEALTH_BRAND,
+} from "@workbench/contracts";
 /**
  * The use-case library: each scenario the demo supports, the utterances that drive it, the
  * systems it touches, and how data flows between them. "Coming soon" entries are drafted
@@ -13,7 +19,7 @@ export type SystemKind =
   | "Knowledge graph"
   | "MCP server"
   | "External API"
-  | "Workers AI"
+  | "Language model"
   | "Workbench";
 
 export type UseCaseSystem = { name: string; kind: SystemKind; role: string };
@@ -62,8 +68,8 @@ const READINESS_AGENT: UseCaseSystem = {
   role: "Custom agent: campaign context, consent summary, content validation (Apex)",
 };
 const ORCHESTRATOR: UseCaseSystem = {
-  name: "Workbench orchestrator (gpt-oss-20b)",
-  kind: "Workers AI",
+  name: `Workbench orchestrator (${INSTANCE_PROFILE.models.chat.model})`,
+  kind: "Language model",
   role: "Routes the request, calls the tools in order, writes the answer",
 };
 
@@ -73,12 +79,10 @@ const FED_NEWS: UseCaseSystem = {
   role: "Latest FOMC rate decision and monetary policy releases (free, no key)",
 };
 
-const EMAIL_PROMPT =
-  "Draft an email campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
-const PUSH_PROMPT =
-  "Draft a push notification campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu";
+const EMAIL_PROMPT = `Draft an email campaign for ${RESTAURANT_BRAND}, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu`;
+const PUSH_PROMPT = `Draft a push notification campaign for ${RESTAURANT_BRAND}, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu`;
 
-export const USE_CASES: UseCase[] = [
+export const ALL_USE_CASES: UseCase[] = [
   // ------------------------------------------------------------------------------------------
   // Available
   {
@@ -88,8 +92,7 @@ export const USE_CASES: UseCase[] = [
     status: "available",
     summary:
       "Turn today's weather, the menu, and past results into a Marketing Cloud Next brief, then a campaign with its flow.",
-    scenario:
-      "A Sample Kitchen marketer wants a lunch campaign that fits today's weather in Los Angeles and what has worked before, built the way Marketing Cloud Next builds campaigns: brief first, then a campaign with a flow.",
+    scenario: `A ${RESTAURANT_BRAND} marketer wants a lunch campaign that fits today's weather in Los Angeles and what has worked before, built the way Marketing Cloud Next builds campaigns: brief first, then a campaign with a flow.`,
     prompts: [
       {
         text: EMAIL_PROMPT,
@@ -176,7 +179,7 @@ export const USE_CASES: UseCase[] = [
       {
         from: "Orchestrator",
         to: "Readiness agent",
-        carries: "Summarize campaign 701jV000004GglIQAS",
+        carries: `Summarize campaign ${SAMPLE_CAMPAIGN_ID}`,
       },
       { from: "Readiness agent", to: "Workspace", carries: "Campaign facts and performance" },
     ],
@@ -358,8 +361,7 @@ export const USE_CASES: UseCase[] = [
     status: "available",
     summary:
       "When weather alerts hit a location, see which customers are affected, who can be notified, and what to pause.",
-    scenario:
-      "A service lead hears there are weather alerts near a Sample Kitchen location and needs to know who's affected, what to tell customers, and which campaigns to hold.",
+    scenario: `A service lead hears there are weather alerts near a ${RESTAURANT_BRAND} location and needs to know who's affected, what to tell customers, and which campaigns to hold.`,
     prompts: [
       {
         text: "There are weather alerts near our San Diego location. Which customers are affected and what should we tell them?",
@@ -424,8 +426,7 @@ export const USE_CASES: UseCase[] = [
     status: "available",
     summary:
       "Check each restaurant's stock against the dishes the forecast will lift, and open a Salesforce case for the store manager when something is running low.",
-    scenario:
-      "Before a hot or rainy stretch, operations wants to know whether each Sample Kitchen has enough of what the weather will sell, and to get a case to the store manager for anything that won't last.",
+    scenario: `Before a hot or rainy stretch, operations wants to know whether each ${RESTAURANT_BRAND} has enough of what the weather will sell, and to get a case to the store manager for anything that won't last.`,
     prompts: [
       {
         text: "Check inventory for our Sacramento store against the forecast",
@@ -511,8 +512,7 @@ export const USE_CASES: UseCase[] = [
     status: "available",
     summary:
       "When the Fed moves rates, find the compliance-approved content that's ready to send, who can get it, and what's blocked.",
-    scenario:
-      "The Fed just announced a rate decision. Sample Wealth prepared compliance-approved content for each outcome, and past responses sent within hours of the news opened far better than next-day ones. Marketing needs to know now what's approved to send, to whom, and what isn't, without writing a word of new regulated copy.",
+    scenario: `The Fed just announced a rate decision. ${WEALTH_BRAND} prepared compliance-approved content for each outcome, and past responses sent within hours of the news opened far better than next-day ones. Marketing needs to know now what's approved to send, to whom, and what isn't, without writing a word of new regulated copy.`,
     prompts: [
       {
         text: "The Fed just announced its rate decision. What pre-approved content can we send clients today?",
@@ -584,8 +584,7 @@ export const USE_CASES: UseCase[] = [
     status: "available",
     summary:
       "Line up the embargoed, pre-approved announcement package in release order, with who each piece can reach and what's still blocked.",
-    scenario:
-      "Sample Wealth announces its acquisition of Bayview Retirement Advisors tomorrow at 8:00 ET. Legal and compliance approved the package under embargo. The team needs the release order, the audience and consent basis for each piece, and anything that can't go out, before the announcement, not after.",
+    scenario: `${WEALTH_BRAND} announces its acquisition of Bayview Retirement Advisors tomorrow at 8:00 ET. Legal and compliance approved the package under embargo. The team needs the release order, the audience and consent basis for each piece, and anything that can't go out, before the announcement, not after.`,
     prompts: [
       {
         text: "We announce the Bayview acquisition tomorrow at 8am. What approved content is ready to release, in what order, and who can we send it to?",
@@ -633,8 +632,7 @@ export const USE_CASES: UseCase[] = [
     status: "available",
     summary:
       "Turn a client's signals, holdings, and peers into ranked plays, then activate them with approved content on consented channels.",
-    scenario:
-      "An institutional consultant at Sample Wealth has 90 days to grow a foundation client's assets. Some of its money is still at another custodian, the board just raised its payout, and rates moved. They need a plan that says which products to lead with and why, who to talk to on which channel, and which approved content to use, then a campaign to run it.",
+    scenario: `An institutional consultant at ${WEALTH_BRAND} has 90 days to grow a foundation client's assets. Some of its money is still at another custodian, the board just raised its payout, and rates moved. They need a plan that says which products to lead with and why, who to talk to on which channel, and which approved content to use, then a campaign to run it.`,
     prompts: [
       {
         text: "Build an account plan to grow AUM with Cedar Valley Community Foundation",
@@ -767,7 +765,7 @@ export const USE_CASES: UseCase[] = [
     team: "Marketing",
     status: "available",
     summary:
-      "Generate an on-brand image with Workers AI and attach the one you approve to the campaign.",
+      "Generate an on-brand image with the configured image model and attach the one you approve to the campaign.",
     scenario:
       "A marketer needs a hero image for the campaign and wants it stored with the campaign record.",
     prompts: [
@@ -777,7 +775,11 @@ export const USE_CASES: UseCase[] = [
       },
     ],
     systems: [
-      { name: "Workers AI (FLUX)", kind: "Workers AI", role: "Image generation" },
+      {
+        name: "Image model",
+        kind: "Language model",
+        role: "Image generation (placeholder, local, or hosted per the profile)",
+      },
       {
         name: "WorkbenchAttachCampaignImage",
         kind: "Salesforce action",
@@ -785,8 +787,8 @@ export const USE_CASES: UseCase[] = [
       },
     ],
     flow: [
-      { from: "Workspace", to: "Workers AI", carries: "A governed image prompt" },
-      { from: "Workers AI", to: "Workspace", carries: "Draft images (private)" },
+      { from: "Workspace", to: "Language model", carries: "A governed image prompt" },
+      { from: "Language model", to: "Workspace", carries: "Draft images (private)" },
       { from: "You", to: "Salesforce", carries: "Confirmed attachment, hash-verified" },
     ],
     writes: "A file on the Salesforce Campaign, only after you confirm.",
@@ -806,7 +808,7 @@ export const USE_CASES: UseCase[] = [
         demonstrates: "The server stores the focus in long-term memory",
       },
       {
-        text: "What did we decide about the Sample Kitchen rainy-day push?",
+        text: `What did we decide about the ${RESTAURANT_BRAND} rainy-day push?`,
         demonstrates: "Recall in a new chat, with provenance",
       },
     ],
@@ -978,5 +980,10 @@ export const USE_CASES: UseCase[] = [
     }),
   ),
 ];
+
+/** The scenarios this instance's profile selected, plus the greyed-out "coming soon" ideas. */
+export const USE_CASES: UseCase[] = ALL_USE_CASES.filter(
+  (useCase) => useCase.status === "coming-soon" || INSTANCE_PROFILE.useCases.includes(useCase.id),
+);
 
 export const TEAMS: Team[] = ["Marketing", "Sales", "Service"];

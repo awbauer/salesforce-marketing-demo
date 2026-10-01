@@ -5,7 +5,7 @@ The `Salesforce metadata` GitHub Actions workflow validates the governed Salesfo
 Configure the GitHub `proof` environment with these Actions secrets:
 
 - `SF_SFDX_AUTH_URL`: an SFDX authorization URL for a dedicated integration user in the approved proof org. Generate it from an authorized local CLI session and rotate or revoke it through Salesforce connected-app OAuth usage when necessary.
-- `SF_APPROVED_PROOF_ORG_ID`: the exact organization ID that the authenticated connection must report. Keeping the expected target in the protected environment prevents repository changes from silently authorizing another org.
+- `SF_APPROVED_ORG_ID`: the exact organization ID that the authenticated connection must report. Keeping the expected target in the protected environment prevents repository changes from silently authorizing another org.
 - `BLOCKED_WORDS_LOCAL`: the newline-delimited local blocked-word list. Keep it only in the environment secret; never add its values to source control or workflow logs.
 
 The workflow refuses to continue unless Salesforce reports the exact proof-org ID stored in the protected environment. Pull requests run a check-only deployment. Pushes to `main` and manual runs perform the deployment. The concurrency group serializes proof-org deployments rather than canceling an in-progress Salesforce operation.

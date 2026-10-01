@@ -1,3 +1,4 @@
+import { INSTANCE_PACK, PARENT_BRAND, RESTAURANT_BRAND, WEALTH_BRAND } from "@workbench/contracts";
 import type { SimulationLinkDatum, SimulationNodeDatum } from "d3-force";
 
 // Mirrors packages/knowledge-graph/src/explorer.ts; the web bundle never imports the dataset.
@@ -42,12 +43,11 @@ export type SimLink = SimulationLinkDatum<SimNode> & {
 export type Domain = { id: string; title: string; blurb: string; labels: string[] };
 
 /** Node types grouped by the part of the demo they come from. */
-export const DOMAINS: Domain[] = [
+const ALL_DOMAINS: (Domain & { module?: "restaurant" | "wealth" })[] = [
   {
     id: "marketing",
     title: "Brands, campaigns, and content",
-    blurb:
-      "Workbench and its Sample Kitchen and Sample Wealth brands: what they plan, write, and check.",
+    blurb: `${PARENT_BRAND} and its brands: what they plan, write, and check.`,
     labels: ["Brand", "Campaign", "Brief", "ContentAsset", "BrandRule"],
   },
   {
@@ -58,7 +58,8 @@ export const DOMAINS: Domain[] = [
   },
   {
     id: "restaurant",
-    title: "Sample Kitchen restaurants",
+    module: "restaurant",
+    title: `${RESTAURANT_BRAND} restaurants`,
     blurb:
       "Locations and their managers, the menu and what it's made with, and past pushes and emails with their context.",
     labels: [
@@ -75,7 +76,8 @@ export const DOMAINS: Domain[] = [
   },
   {
     id: "wealth",
-    title: "Sample Wealth",
+    module: "wealth",
+    title: `${WEALTH_BRAND}`,
     blurb:
       "Regulated content with its approvals and disclosures, an embargoed acquisition, and clients with their holdings and signals.",
     labels: [
@@ -92,6 +94,10 @@ export const DOMAINS: Domain[] = [
     ],
   },
 ];
+
+export const DOMAINS: Domain[] = ALL_DOMAINS.filter(
+  (domain) => !domain.module || INSTANCE_PACK.modules[domain.module],
+);
 
 export const LABEL_COLORS: Record<string, string> = {
   Brand: "#0f2a22",

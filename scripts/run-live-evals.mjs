@@ -52,6 +52,7 @@ import {
   MEMORY_TOOLS,
   PHASE_2_AUTONOMOUS_TOOLS,
   POLICY_RESPONSES,
+  RESTAURANT_BRAND,
 } from "../packages/contracts/src/index.ts";
 import { demoScenarios, routingCases } from "../packages/evals/src/cases.ts";
 import { formatUsd, turnCost } from "../packages/evals/src/pricing.ts";
@@ -513,7 +514,7 @@ function agentRequestCheck(resultSteps, sent) {
     "sunny",
   ].filter((term) => context.includes(term));
   return (
-    brief.includes("sample kitchen") &&
+    brief.includes(RESTAURANT_BRAND.toLowerCase()) &&
     menu.some((item) => brief.includes(item.toLowerCase())) &&
     placeOrWeather.some((term) => brief.includes(term))
   );

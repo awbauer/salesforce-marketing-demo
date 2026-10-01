@@ -2317,3 +2317,13 @@ a {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+.demo-banner {
+  margin: 0;
+  padding: 0.4rem 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+  background: var(--accent-soft, #e6f2ec);
+  color: var(--ink, #101b17);
+  border-bottom: 1px solid var(--line, #c9d8d0);
+}

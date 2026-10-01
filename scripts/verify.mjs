@@ -13,6 +13,7 @@ const commands =
         ["pnpm", "hxl:check"],
         ["pnpm", "contracts:check"],
         ["pnpm", "docs:check"],
+        ["pnpm", "template:check"],
         ["pnpm", "learn:check"],
       ]
     : [
@@ -27,6 +28,7 @@ const commands =
         ["pnpm", "eval"],
         ["pnpm", "contracts:check"],
         ["pnpm", "docs:check"],
+        ["pnpm", "template:check"],
         ["pnpm", "learn:check"],
         ["pnpm", "build"],
       ];

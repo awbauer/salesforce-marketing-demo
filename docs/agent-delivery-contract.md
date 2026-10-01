@@ -24,7 +24,7 @@ An agent may mark a work unit `complete` only when:
 - Salesforce metadata lives under `salesforce/`; no manually configured behavior is considered delivered until its metadata or reproducible setup record is checked in.
 - Deployment templates (local, Cloudflare, AWS) live under `templates/`; per-instance configuration lives only in the gitignored `workbench.profile.json`.
 - UI components consume typed tile contracts and shared tokens from `packages/ui`.
-- Demonstration evidence is immutable and stored under `artifacts/evidence/<work-unit-id>/`; secrets and customer data are forbidden there.
+- Evidence goes in the work unit under `
 - Architecture changes require a short decision record in `docs/decisions/` that states context, decision, consequences, and superseded assumptions.
 
 ## Command contract

@@ -10,7 +10,7 @@ import {
   CLIENT_NAMES,
   createMemoryStore,
   forgetMemory,
-  KNOWLEDGE_GRAPH_TOOL_SPECS,
+  ALL_KNOWLEDGE_GRAPH_TOOL_SPECS as KNOWLEDGE_GRAPH_TOOL_SPECS,
   listMemory,
   MEMORY_TOOL_SPECS,
   queryApiBackend,

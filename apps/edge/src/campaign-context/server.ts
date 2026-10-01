@@ -1,5 +1,6 @@
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
+import { RESTAURANT_BRAND } from "@workbench/contracts";
 import { jsonSchema, type ToolSet, tool } from "ai";
 import { z } from "zod";
 import { fetchCurrentWeather, fetchForecast, LOCATION_IDS, LOCATIONS } from "./open-meteo.ts";
@@ -111,10 +112,9 @@ export function createCampaignContextMcpServer(dependencies: CampaignContextDepe
     "get_location_inventory",
     {
       title: "Get location inventory",
-      description:
-        "Stock counts for a Sample Kitchen restaurant from its store inventory system (a randomized mock): each inventory item's on-hand amount, deliveries on order for the next three days, par level, typical daily use, and days of cover. Read-only.",
+      description: `Stock counts for a ${RESTAURANT_BRAND} restaurant from its store inventory system (a randomized mock): each inventory item's on-hand amount, deliveries on order for the next three days, par level, typical daily use, and days of cover. Read-only.`,
       inputSchema: z.object({
-        location: z.enum(LOCATION_IDS).describe("Sample Kitchen location (city id)"),
+        location: z.enum(LOCATION_IDS).describe(`${RESTAURANT_BRAND} location (city id)`),
       }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },

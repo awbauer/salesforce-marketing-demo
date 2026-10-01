@@ -1,5 +1,5 @@
 import { createMcpHandler } from "@modelcontextprotocol/server";
-import { DEFAULTS, HealthSchema } from "@workbench/contracts";
+import { HealthSchema, INSTANCE_PROFILE } from "@workbench/contracts";
 import { getAgentByName } from "agents";
 import {
   EXPLORER_MAX_ROWS,
@@ -10,7 +10,6 @@ import {
 } from "../../../packages/knowledge-graph/src/index.ts";
 import { type AuthBindings, AuthError, deriveAgentKey, resolvePrincipal } from "./auth";
 import { createCampaignContextMcpServer } from "./campaign-context/server";
-import { INSTANCE_PROFILE } from "./generated/profile";
 import { createKnowledgeGraphMcpServer, knowledgeGraphBackend } from "./knowledge-graph/server";
 import type { ModelBindings } from "./models";
 import { pruneConfirmationAudit } from "./orchestrator";

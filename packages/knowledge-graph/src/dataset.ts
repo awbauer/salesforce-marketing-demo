@@ -8,6 +8,9 @@
  * push campaigns run on the mobile app channel with the same consent, content, and segment
  * structure as every other campaign.
  */
+import { RESTAURANT_BRAND, SAMPLE_CAMPAIGN_ID } from "../../contracts/src/brands.ts";
+import { INSTANCE_PACK } from "../../contracts/src/generated/instance.ts";
+import type { IndustryPack } from "../../contracts/src/pack.ts";
 import {
   DAYPART_HOURS,
   DAYPARTS,
@@ -77,37 +80,18 @@ function random(seed: number) {
   };
 }
 
-export const ACCOUNTS = [
-  "Acme Outfitters",
-  "Summit Trail Co.",
-  "Redwood Rangers Club",
-  "Harbor Point Sports",
-  "Blue Ridge Adventures",
-  "Pacific Crest Supply",
-  "Granite Peak Gear",
-  "Riverbend Outdoor",
-  "Northwind Expeditions",
-  "Cedar Hollow Camps",
-  "Silverline Cycling",
-  "Lakeside Paddle Co.",
-] as const;
+/** The active pack's vocabulary; `buildDataset({ pack })` swaps it for another pack's. */
+const VOCABULARY = INSTANCE_PACK.vocabulary;
+
+export const ACCOUNTS = VOCABULARY.accounts.map((account) => account.name) as [string, ...string[]];
 
 /** Each account's headquarters country (ISO 3166-1 alpha-2), for planning outreach around holidays. */
-export const ACCOUNT_COUNTRIES: Record<(typeof ACCOUNTS)[number], { code: string; name: string }> =
-  {
-    "Acme Outfitters": { code: "US", name: "United States" },
-    "Summit Trail Co.": { code: "CA", name: "Canada" },
-    "Redwood Rangers Club": { code: "US", name: "United States" },
-    "Harbor Point Sports": { code: "GB", name: "United Kingdom" },
-    "Blue Ridge Adventures": { code: "US", name: "United States" },
-    "Pacific Crest Supply": { code: "CA", name: "Canada" },
-    "Granite Peak Gear": { code: "DE", name: "Germany" },
-    "Riverbend Outdoor": { code: "US", name: "United States" },
-    "Northwind Expeditions": { code: "NO", name: "Norway" },
-    "Cedar Hollow Camps": { code: "US", name: "United States" },
-    "Silverline Cycling": { code: "NL", name: "Netherlands" },
-    "Lakeside Paddle Co.": { code: "AU", name: "Australia" },
-  };
+export const ACCOUNT_COUNTRIES: Record<string, { code: string; name: string }> = Object.fromEntries(
+  VOCABULARY.accounts.map((account) => [
+    account.name,
+    { code: account.country, name: account.countryName },
+  ]),
+);
 
 const ROLES = [
   { role: "Economic buyer", weight: 5 },
@@ -118,40 +102,13 @@ const ROLES = [
   { role: "Technical evaluator", weight: 3 },
 ] as const;
 
-export const CAMPAIGNS = [
-  {
-    id: "camp-fall",
-    name: "Fall Loyalty Reactivation",
-    salesforceId: "701jV000004GglIQAS",
-    status: "Active",
-    channels: ["email"],
-  },
-  {
-    id: "camp-winter",
-    name: "Winter Gear Launch",
-    status: "Active",
-    channels: ["email", "mobile-app"],
-  },
-  { id: "camp-spring", name: "Spring Trail Series", status: "Planned", channels: ["email"] },
-  { id: "camp-holiday", name: "Holiday Gift Guide", status: "Planned", channels: ["email", "sms"] },
-  {
-    id: "camp-summer",
-    name: "Summer Hydration Push",
-    status: "Completed",
-    channels: ["mobile-app"],
-  },
-] as const;
-
-const CONTENT_KINDS = ["Hero email", "Landing page", "Webinar invite"] as const;
-
-const BRAND_RULES = [
-  "Accessible alt text",
-  "Warm, plain tone",
-  "No unapproved claims",
-  "Consent language present",
-  "At most one emoji",
-  "Legal footer",
-] as const;
+const campaignsOf = (vocabulary: IndustryPack["vocabulary"]) =>
+  vocabulary.campaigns.map((campaign) => ({
+    ...campaign,
+    // Only the fall campaign is linked to a Salesforce record (the sample campaign).
+    ...(campaign.id === "camp-fall" ? { salesforceId: SAMPLE_CAMPAIGN_ID } : {}),
+  }));
+export const CAMPAIGNS = campaignsOf(VOCABULARY);
 
 export const CHANNELS = ["email", "sms", "mobile-app"] as const;
 const CHANNEL_NAMES: Record<(typeof CHANNELS)[number], string> = {
@@ -189,19 +146,19 @@ type AngleKey = keyof typeof ANGLES;
 export const RESTAURANT_CAMPAIGNS = [
   {
     id: "camp-restaurant-weather",
-    name: "Sample Kitchen Weather Moments",
+    name: `${RESTAURANT_BRAND} Weather Moments`,
     status: "Active",
     angles: ["heat", "rain", "fog", "clear", "cloudy"] as AngleKey[],
   },
   {
     id: "camp-restaurant-mornings",
-    name: "Sample Kitchen Morning Fuel",
+    name: `${RESTAURANT_BRAND} Morning Fuel`,
     status: "Active",
     angles: ["morning"] as AngleKey[],
   },
   {
     id: "camp-restaurant-late-night",
-    name: "Sample Kitchen Late-Night Cravings",
+    name: `${RESTAURANT_BRAND} Late-Night Cravings`,
     status: "Active",
     angles: ["late"] as AngleKey[],
   },
@@ -210,7 +167,7 @@ export const RESTAURANT_CAMPAIGNS = [
 /** Sample Kitchen's email campaign: its own content per angle, sent under email marketing consent. */
 export const RESTAURANT_EMAIL_CAMPAIGN = {
   id: "camp-restaurant-lunch-letter",
-  name: "Sample Kitchen Lunch Letter",
+  name: `${RESTAURANT_BRAND} Lunch Letter`,
   status: "Active",
 } as const;
 
@@ -244,20 +201,40 @@ export const ALL_CAMPAIGNS = [
     name: campaign.name,
     status: campaign.status,
   })),
-  ...RESTAURANT_CAMPAIGNS.map((campaign) => ({
-    id: campaign.id,
-    name: campaign.name,
-    status: campaign.status,
-  })),
-  { ...RESTAURANT_EMAIL_CAMPAIGN },
-  { ...MARKET_MOMENTS_CAMPAIGN },
-  { id: DEAL.campaign.id, name: DEAL.campaign.name, status: DEAL.campaign.status },
-  { ...GROWTH_CAMPAIGN },
+  ...(INSTANCE_PACK.modules.restaurant
+    ? [
+        ...RESTAURANT_CAMPAIGNS.map((campaign) => ({
+          id: campaign.id,
+          name: campaign.name,
+          status: campaign.status,
+        })),
+        { ...RESTAURANT_EMAIL_CAMPAIGN },
+      ]
+    : []),
+  ...(INSTANCE_PACK.modules.wealth
+    ? [
+        { ...MARKET_MOMENTS_CAMPAIGN },
+        { id: DEAL.campaign.id, name: DEAL.campaign.name, status: DEAL.campaign.status },
+        { ...GROWTH_CAMPAIGN },
+      ]
+    : []),
 ];
 
 export const restaurantSegmentId = (location: string) => `segment-restaurant-${location}`;
 
-export function buildDataset(seed = 20260926): Dataset {
+export type DatasetOptions = { seed?: number; pack?: IndustryPack };
+
+/**
+ * Builds the graph for a pack: its vocabulary always, and the restaurant and wealth verticals
+ * only when the pack enables them. Defaults to the instance's own pack.
+ */
+export function buildDataset(options: DatasetOptions = {}): Dataset {
+  const { seed = 20260926, pack = INSTANCE_PACK } = options;
+  const { modules, vocabulary } = pack;
+  const campaigns = campaignsOf(vocabulary);
+  const accounts = vocabulary.accounts;
+  const contentKinds = vocabulary.contentKinds;
+  const brandRules = vocabulary.brandRules;
   const rand = random(seed);
   const pick = <T>(items: readonly T[]) => items[Math.floor(rand() * items.length)] as T;
   const nodes: GraphNode[] = [];
@@ -275,14 +252,16 @@ export function buildDataset(seed = 20260926): Dataset {
 
   // Brands: Sample Kitchen is a brand under Workbench.
   node("Brand", WORKBENCH_BRAND.id, WORKBENCH_BRAND.name, { kind: "parent brand" });
-  node("Brand", RESTAURANT.id, RESTAURANT.name, {
-    kind: "restaurant brand",
-    concept: RESTAURANT.concept,
-    hours: RESTAURANT.hours,
-    voice: RESTAURANT.brandVoice,
-    restaurantId: RESTAURANT.restaurantId,
-  });
-  rel("PART_OF", RESTAURANT.id, WORKBENCH_BRAND.id);
+  if (modules.restaurant) {
+    node("Brand", RESTAURANT.id, RESTAURANT.name, {
+      kind: "restaurant brand",
+      concept: RESTAURANT.concept,
+      hours: RESTAURANT.hours,
+      voice: RESTAURANT.brandVoice,
+      restaurantId: RESTAURANT.restaurantId,
+    });
+    rel("PART_OF", RESTAURANT.id, WORKBENCH_BRAND.id);
+  }
 
   // Channels and the marketing consent each requires.
   for (const channel of CHANNELS) {
@@ -304,19 +283,19 @@ export function buildDataset(seed = 20260926): Dataset {
   });
   rel("FOR", "consent-email-transactional", "channel-email");
 
-  const ruleIds = BRAND_RULES.map((rule) => {
+  const ruleIds = brandRules.map((rule) => {
     const id = node("BrandRule", `rule-${slug(rule)}`, rule);
     rel("RULE_OF", id, WORKBENCH_BRAND.id);
     return id;
   });
-  const restaurantRuleIds = RESTAURANT.promotionRules.map((rule) => {
+  const restaurantRuleIds = (modules.restaurant ? RESTAURANT.promotionRules : []).map((rule) => {
     const id = node("BrandRule", `rule-${slug(rule)}`, rule);
     rel("RULE_OF", id, RESTAURANT.id);
     return id;
   });
 
   const assetsByCampaign = new Map<string, string[]>();
-  for (const campaign of CAMPAIGNS) {
+  for (const campaign of campaigns) {
     node("Campaign", campaign.id, campaign.name, {
       status: campaign.status,
       ...("salesforceId" in campaign ? { salesforceId: campaign.salesforceId } : {}),
@@ -325,7 +304,7 @@ export function buildDataset(seed = 20260926): Dataset {
     for (const channel of campaign.channels) rel("ON", campaign.id, `channel-${channel}`);
     const brief = node("Brief", `brief-${campaign.id}`, `${campaign.name} brief`);
     rel("FOR", brief, campaign.id);
-    const assets = CONTENT_KINDS.map((kind) => {
+    const assets = contentKinds.map((kind) => {
       const asset = node(
         "ContentAsset",
         `asset-${campaign.id}-${slug(kind)}`,
@@ -335,11 +314,11 @@ export function buildDataset(seed = 20260926): Dataset {
       rel("USES", campaign.id, asset);
       rel("BUILT_FROM", asset, brief);
       for (const [index, ruleId] of ruleIds.entries()) {
-        if ((index + CONTENT_KINDS.indexOf(kind)) % 2 === 1) continue;
+        if ((index + contentKinds.indexOf(kind)) % 2 === 1) continue;
         // The fall hero email fails alt text, matching the readiness blocker in the demo.
         const failed =
           (campaign.id === "camp-fall" &&
-            kind === "Hero email" &&
+            contentKinds.indexOf(kind) === 0 &&
             ruleId === "rule-accessible-alt-text") ||
           rand() < 0.08;
         rel(failed ? "FAILED" : "PASSED", asset, ruleId);
@@ -351,14 +330,14 @@ export function buildDataset(seed = 20260926): Dataset {
     rel("TARGETS", campaign.id, `segment-${campaign.id}`);
   }
 
-  for (const [accountIndex, account] of ACCOUNTS.entries()) {
+  for (const [accountIndex, { name: account, country, countryName }] of accounts.entries()) {
     const accountId = node(
       "Account",
       `acct-${String(accountIndex + 1).padStart(2, "0")}`,
       account,
       {
-        country: ACCOUNT_COUNTRIES[account].code,
-        countryName: ACCOUNT_COUNTRIES[account].name,
+        country,
+        countryName,
       },
     );
     const roles = ROLES.filter(() => rand() < 0.75);
@@ -368,7 +347,7 @@ export function buildDataset(seed = 20260926): Dataset {
         roleWeight: weight,
       });
       rel("WORKS_AT", persona, accountId);
-      for (const campaign of CAMPAIGNS) {
+      for (const campaign of campaigns) {
         if (rand() < 0.45) rel("INCLUDES", `segment-${campaign.id}`, persona);
         for (const asset of assetsByCampaign.get(campaign.id) ?? [])
           if (rand() < 0.22)
@@ -384,212 +363,215 @@ export function buildDataset(seed = 20260926): Dataset {
     }
   }
 
-  // Sample Kitchen's own entities: locations, its menu, menu items, and dayparts.
-  for (const daypart of DAYPARTS)
-    node("Daypart", `daypart-${daypart}`, daypart, { hours: DAYPART_HOURS[daypart] });
-  for (const condition of CONDITIONS) node("WeatherCondition", `weather-${condition}`, condition);
-  node("Menu", RESTAURANT.menu.id, RESTAURANT.menu.name);
-  rel("MENU_OF", RESTAURANT.menu.id, RESTAURANT.id);
-  const menuIds = RESTAURANT_MENU.map((item) => {
-    const id = node("MenuItem", menuItemId(item.name), item.name, {
-      serves: item.serves,
-      price: item.price,
-      tags: [...item.tags],
-    });
-    rel("ON_MENU", id, RESTAURANT.menu.id);
-    for (const daypart of item.dayparts) rel("AVAILABLE_DURING", id, `daypart-${daypart}`);
-    return id;
-  });
-  // What each dish is made with, per serving, from the stock each restaurant keeps.
-  for (const item of RESTAURANT_INVENTORY)
-    node("InventoryItem", inventoryItemId(item.id), item.name, { unit: item.unit });
-  for (const item of RESTAURANT_MENU)
-    for (const [inventory, perServing] of RESTAURANT_RECIPES[item.name] ?? [])
-      rel("MADE_WITH", menuItemId(item.name), inventoryItemId(inventory), { perServing });
-  for (const [rank, favorite] of RESTAURANT.favorites.entries())
-    rel("FAVORITE", RESTAURANT.id, menuItemId(favorite.item), {
-      note: favorite.note,
-      rank: rank + 1,
-    });
-
-  // Each location has an app audience segment with aggregate marketing consent per channel
-  // (no individuals): push, email, and SMS opt-ins are counted separately.
-  for (const location of RESTAURANT_LOCATIONS) {
-    const locationId = node(
-      "Location",
-      locationNodeId(location.id),
-      `${RESTAURANT.name} ${location.city}`,
-      {
-        city: location.city,
-        weatherLocation: location.id,
-        neighborhood: location.neighborhood,
-        address: location.address,
-        hours: RESTAURANT.hours,
-      },
-    );
-    rel("OPERATES", RESTAURANT.id, locationId);
-    const manager = RESTAURANT_STORE_MANAGERS[location.id];
-    node("StoreManager", storeManagerId(location.id), manager.name, { role: "Store manager" });
-    rel("MANAGED_BY", locationId, storeManagerId(location.id));
-    rel("SERVES", locationId, RESTAURANT.menu.id);
-    const segment = node(
-      "Segment",
-      restaurantSegmentId(location.id),
-      `Sample Kitchen app · ${location.city}`,
-      {
-        size: location.appUsers,
-        audienceType: "app users",
-      },
-    );
-    rel("NEAR", segment, locationId);
-    for (const [channel, optedIn] of [
-      ["mobile-app", location.pushOptIns],
-      ["email", location.emailOptIns],
-      ["sms", location.smsOptIns],
-    ] as const)
-      rel("HAS_CONSENT", segment, CONSENT_IDS[channel], {
-        optedIn,
-        coverageRate: Math.round((optedIn / location.appUsers) * 1000) / 1000,
+  if (modules.restaurant) {
+    // Sample Kitchen's own entities: locations, its menu, menu items, and dayparts.
+    for (const daypart of DAYPARTS)
+      node("Daypart", `daypart-${daypart}`, daypart, { hours: DAYPART_HOURS[daypart] });
+    for (const condition of CONDITIONS) node("WeatherCondition", `weather-${condition}`, condition);
+    node("Menu", RESTAURANT.menu.id, RESTAURANT.menu.name);
+    rel("MENU_OF", RESTAURANT.menu.id, RESTAURANT.id);
+    const menuIds = RESTAURANT_MENU.map((item) => {
+      const id = node("MenuItem", menuItemId(item.name), item.name, {
+        serves: item.serves,
+        price: item.price,
+        tags: [...item.tags],
       });
-  }
+      rel("ON_MENU", id, RESTAURANT.menu.id);
+      for (const daypart of item.dayparts) rel("AVAILABLE_DURING", id, `daypart-${daypart}`);
+      return id;
+    });
+    // What each dish is made with, per serving, from the stock each restaurant keeps.
+    for (const item of RESTAURANT_INVENTORY)
+      node("InventoryItem", inventoryItemId(item.id), item.name, { unit: item.unit });
+    for (const item of RESTAURANT_MENU)
+      for (const [inventory, perServing] of RESTAURANT_RECIPES[item.name] ?? [])
+        rel("MADE_WITH", menuItemId(item.name), inventoryItemId(inventory), { perServing });
+    for (const [rank, favorite] of RESTAURANT.favorites.entries())
+      rel("FAVORITE", RESTAURANT.id, menuItemId(favorite.item), {
+        note: favorite.note,
+        rank: rank + 1,
+      });
 
-  // Sample Kitchen's push campaigns: brief, push content per angle, location segments, mobile app.
-  const assetByAngle = new Map<AngleKey, { campaign: string; asset: string }>();
-  for (const campaign of RESTAURANT_CAMPAIGNS) {
-    node("Campaign", campaign.id, campaign.name, { status: campaign.status });
-    rel("BELONGS_TO", campaign.id, RESTAURANT.id);
-    rel("ON", campaign.id, "channel-mobile-app");
-    const brief = node("Brief", `brief-${campaign.id}`, `${campaign.name} brief`);
-    rel("FOR", brief, campaign.id);
-    for (const location of RESTAURANT_LOCATIONS)
-      rel("TARGETS", campaign.id, restaurantSegmentId(location.id));
-    for (const angle of campaign.angles) {
-      const asset = node(
-        "ContentAsset",
-        `asset-${campaign.id}-${slug(ANGLES[angle])}`,
-        `${ANGLES[angle]} · push`,
-        { kind: "Push notification", angle: ANGLES[angle] },
+    // Each location has an app audience segment with aggregate marketing consent per channel
+    // (no individuals): push, email, and SMS opt-ins are counted separately.
+    for (const location of RESTAURANT_LOCATIONS) {
+      const locationId = node(
+        "Location",
+        locationNodeId(location.id),
+        `${RESTAURANT.name} ${location.city}`,
+        {
+          city: location.city,
+          weatherLocation: location.id,
+          neighborhood: location.neighborhood,
+          address: location.address,
+          hours: RESTAURANT.hours,
+        },
       );
-      rel("USES", campaign.id, asset);
-      rel("BUILT_FROM", asset, brief);
-      for (const ruleId of [...restaurantRuleIds, "rule-at-most-one-emoji"])
-        rel(rand() < 0.1 ? "FAILED" : "PASSED", asset, ruleId);
-      assetByAngle.set(angle, { campaign: campaign.id, asset });
-    }
-  }
-
-  // Fictional push history: order rates rise when the item suits the weather and daypart.
-  const rates = new Map<string, number[]>();
-  for (let index = 0; index < 1500; index += 1) {
-    const location = pick(RESTAURANT_LOCATIONS).id;
-    const daypart = pick(DAYPARTS);
-    const condition = pick(CONDITIONS);
-    const itemIndex = Math.floor(rand() * RESTAURANT_MENU.length);
-    const item = RESTAURANT_MENU[itemIndex] as (typeof RESTAURANT_MENU)[number];
-    const lift = demandLift(item, daypart, condition);
-    const orderRate = Math.max(0.005, 0.03 + lift + (rand() - 0.5) * 0.02);
-    const openRate = Math.max(0.02, 0.07 + lift * 0.8 + (rand() - 0.5) * 0.03);
-    const angleKey = angleFor(daypart, condition);
-    const angle = ANGLES[angleKey];
-    const push = node(
-      "PushSend",
-      `push-${String(index + 1).padStart(4, "0")}`,
-      `${angle}: ${item.name}`,
-      {
-        angle,
-        orderRate: Math.round(orderRate * 10000) / 10000,
-        openRate: Math.round(openRate * 10000) / 10000,
-      },
-    );
-    const content = assetByAngle.get(angleKey) as { campaign: string; asset: string };
-    rel("PART_OF", push, content.campaign);
-    rel("USED", push, content.asset);
-    rel("SENT_TO", push, restaurantSegmentId(location));
-    rel("ON", push, "channel-mobile-app");
-    rel("SENT_UNDER", push, CONSENT_IDS["mobile-app"]);
-    rel("FEATURED", push, menuIds[itemIndex] as string);
-    rel("FOR", push, locationNodeId(location));
-    rel("SENT_DURING", push, `daypart-${daypart}`);
-    rel("UNDER", push, `weather-${condition}`);
-    for (const key of [item.name, `${item.name}|${condition}`])
-      rates.set(key, [...(rates.get(key) ?? []), orderRate]);
-  }
-
-  // Weather that lifts a dish's demand, learned from that history: the dish's average order rate
-  // under the condition against its average overall, kept when it's at least 15% higher.
-  const mean = (values: number[] = []) =>
-    values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
-  for (const condition of CONDITIONS)
-    for (const item of RESTAURANT_MENU) {
-      const under = rates.get(`${item.name}|${condition}`) ?? [];
-      const lift = mean(under) / mean(rates.get(item.name));
-      if (under.length >= 10 && lift >= 1.15)
-        rel("LIFTS_DEMAND", `weather-${condition}`, menuItemId(item.name), {
-          lift: Math.round(lift * 100) / 100,
-          sends: under.length,
+      rel("OPERATES", RESTAURANT.id, locationId);
+      const manager = RESTAURANT_STORE_MANAGERS[location.id];
+      node("StoreManager", storeManagerId(location.id), manager.name, { role: "Store manager" });
+      rel("MANAGED_BY", locationId, storeManagerId(location.id));
+      rel("SERVES", locationId, RESTAURANT.menu.id);
+      const segment = node(
+        "Segment",
+        restaurantSegmentId(location.id),
+        `${RESTAURANT_BRAND} app · ${location.city}`,
+        {
+          size: location.appUsers,
+          audienceType: "app users",
+        },
+      );
+      rel("NEAR", segment, locationId);
+      for (const [channel, optedIn] of [
+        ["mobile-app", location.pushOptIns],
+        ["email", location.emailOptIns],
+        ["sms", location.smsOptIns],
+      ] as const)
+        rel("HAS_CONSENT", segment, CONSENT_IDS[channel], {
+          optedIn,
+          coverageRate: Math.round((optedIn / location.appUsers) * 1000) / 1000,
         });
     }
 
-  // Fictional email history: Sample Kitchen's email campaign, email content per angle, and sends
-  // under email marketing consent. Its own seed leaves the push history and lifts above as they were.
-  const emailRand = random(seed + 1);
-  const emailPick = <T>(items: readonly T[]) => items[Math.floor(emailRand() * items.length)] as T;
-  const email = RESTAURANT_EMAIL_CAMPAIGN;
-  node("Campaign", email.id, email.name, { status: email.status });
-  rel("BELONGS_TO", email.id, RESTAURANT.id);
-  rel("ON", email.id, "channel-email");
-  const emailBrief = node("Brief", `brief-${email.id}`, `${email.name} brief`);
-  rel("FOR", emailBrief, email.id);
-  for (const location of RESTAURANT_LOCATIONS)
-    rel("TARGETS", email.id, restaurantSegmentId(location.id));
-  const emailAssets = new Map<AngleKey, string>();
-  for (const angleKey of Object.keys(ANGLES) as AngleKey[]) {
-    const asset = node(
-      "ContentAsset",
-      `asset-${email.id}-${slug(ANGLES[angleKey])}`,
-      `${ANGLES[angleKey]} · email`,
-      { kind: "Email", angle: ANGLES[angleKey] },
-    );
-    rel("USES", email.id, asset);
-    rel("BUILT_FROM", asset, emailBrief);
-    for (const ruleId of restaurantRuleIds)
-      rel(emailRand() < 0.1 ? "FAILED" : "PASSED", asset, ruleId);
-    emailAssets.set(angleKey, asset);
+    // Sample Kitchen's push campaigns: brief, push content per angle, location segments, mobile app.
+    const assetByAngle = new Map<AngleKey, { campaign: string; asset: string }>();
+    for (const campaign of RESTAURANT_CAMPAIGNS) {
+      node("Campaign", campaign.id, campaign.name, { status: campaign.status });
+      rel("BELONGS_TO", campaign.id, RESTAURANT.id);
+      rel("ON", campaign.id, "channel-mobile-app");
+      const brief = node("Brief", `brief-${campaign.id}`, `${campaign.name} brief`);
+      rel("FOR", brief, campaign.id);
+      for (const location of RESTAURANT_LOCATIONS)
+        rel("TARGETS", campaign.id, restaurantSegmentId(location.id));
+      for (const angle of campaign.angles) {
+        const asset = node(
+          "ContentAsset",
+          `asset-${campaign.id}-${slug(ANGLES[angle])}`,
+          `${ANGLES[angle]} · push`,
+          { kind: "Push notification", angle: ANGLES[angle] },
+        );
+        rel("USES", campaign.id, asset);
+        rel("BUILT_FROM", asset, brief);
+        for (const ruleId of [...restaurantRuleIds, "rule-at-most-one-emoji"])
+          rel(rand() < 0.1 ? "FAILED" : "PASSED", asset, ruleId);
+        assetByAngle.set(angle, { campaign: campaign.id, asset });
+      }
+    }
+
+    // Fictional push history: order rates rise when the item suits the weather and daypart.
+    const rates = new Map<string, number[]>();
+    for (let index = 0; index < 1500; index += 1) {
+      const location = pick(RESTAURANT_LOCATIONS).id;
+      const daypart = pick(DAYPARTS);
+      const condition = pick(CONDITIONS);
+      const itemIndex = Math.floor(rand() * RESTAURANT_MENU.length);
+      const item = RESTAURANT_MENU[itemIndex] as (typeof RESTAURANT_MENU)[number];
+      const lift = demandLift(item, daypart, condition);
+      const orderRate = Math.max(0.005, 0.03 + lift + (rand() - 0.5) * 0.02);
+      const openRate = Math.max(0.02, 0.07 + lift * 0.8 + (rand() - 0.5) * 0.03);
+      const angleKey = angleFor(daypart, condition);
+      const angle = ANGLES[angleKey];
+      const push = node(
+        "PushSend",
+        `push-${String(index + 1).padStart(4, "0")}`,
+        `${angle}: ${item.name}`,
+        {
+          angle,
+          orderRate: Math.round(orderRate * 10000) / 10000,
+          openRate: Math.round(openRate * 10000) / 10000,
+        },
+      );
+      const content = assetByAngle.get(angleKey) as { campaign: string; asset: string };
+      rel("PART_OF", push, content.campaign);
+      rel("USED", push, content.asset);
+      rel("SENT_TO", push, restaurantSegmentId(location));
+      rel("ON", push, "channel-mobile-app");
+      rel("SENT_UNDER", push, CONSENT_IDS["mobile-app"]);
+      rel("FEATURED", push, menuIds[itemIndex] as string);
+      rel("FOR", push, locationNodeId(location));
+      rel("SENT_DURING", push, `daypart-${daypart}`);
+      rel("UNDER", push, `weather-${condition}`);
+      for (const key of [item.name, `${item.name}|${condition}`])
+        rates.set(key, [...(rates.get(key) ?? []), orderRate]);
+    }
+
+    // Weather that lifts a dish's demand, learned from that history: the dish's average order rate
+    // under the condition against its average overall, kept when it's at least 15% higher.
+    const mean = (values: number[] = []) =>
+      values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
+    for (const condition of CONDITIONS)
+      for (const item of RESTAURANT_MENU) {
+        const under = rates.get(`${item.name}|${condition}`) ?? [];
+        const lift = mean(under) / mean(rates.get(item.name));
+        if (under.length >= 10 && lift >= 1.15)
+          rel("LIFTS_DEMAND", `weather-${condition}`, menuItemId(item.name), {
+            lift: Math.round(lift * 100) / 100,
+            sends: under.length,
+          });
+      }
+
+    // Fictional email history: Sample Kitchen's email campaign, email content per angle, and sends
+    // under email marketing consent. Its own seed leaves the push history and lifts above as they were.
+    const emailRand = random(seed + 1);
+    const emailPick = <T>(items: readonly T[]) =>
+      items[Math.floor(emailRand() * items.length)] as T;
+    const email = RESTAURANT_EMAIL_CAMPAIGN;
+    node("Campaign", email.id, email.name, { status: email.status });
+    rel("BELONGS_TO", email.id, RESTAURANT.id);
+    rel("ON", email.id, "channel-email");
+    const emailBrief = node("Brief", `brief-${email.id}`, `${email.name} brief`);
+    rel("FOR", emailBrief, email.id);
+    for (const location of RESTAURANT_LOCATIONS)
+      rel("TARGETS", email.id, restaurantSegmentId(location.id));
+    const emailAssets = new Map<AngleKey, string>();
+    for (const angleKey of Object.keys(ANGLES) as AngleKey[]) {
+      const asset = node(
+        "ContentAsset",
+        `asset-${email.id}-${slug(ANGLES[angleKey])}`,
+        `${ANGLES[angleKey]} · email`,
+        { kind: "Email", angle: ANGLES[angleKey] },
+      );
+      rel("USES", email.id, asset);
+      rel("BUILT_FROM", asset, emailBrief);
+      for (const ruleId of restaurantRuleIds)
+        rel(emailRand() < 0.1 ? "FAILED" : "PASSED", asset, ruleId);
+      emailAssets.set(angleKey, asset);
+    }
+    for (let index = 0; index < 600; index += 1) {
+      const location = emailPick(RESTAURANT_LOCATIONS).id;
+      const daypart = emailPick(DAYPARTS);
+      const condition = emailPick(CONDITIONS);
+      const itemIndex = Math.floor(emailRand() * RESTAURANT_MENU.length);
+      const item = RESTAURANT_MENU[itemIndex] as (typeof RESTAURANT_MENU)[number];
+      const lift = demandLift(item, daypart, condition);
+      // Email opens far more often than push, and converts less often per send.
+      const orderRate = Math.max(0.003, 0.018 + lift * 0.7 + (emailRand() - 0.5) * 0.012);
+      const openRate = Math.max(0.08, 0.26 + lift * 1.2 + (emailRand() - 0.5) * 0.06);
+      const clickRate = Math.max(0.01, 0.045 + lift * 0.8 + (emailRand() - 0.5) * 0.02);
+      const angleKey = angleFor(daypart, condition);
+      const send = node(
+        "EmailSend",
+        `email-${String(index + 1).padStart(4, "0")}`,
+        `${ANGLES[angleKey]}: ${item.name}`,
+        {
+          angle: ANGLES[angleKey],
+          orderRate: Math.round(orderRate * 10000) / 10000,
+          openRate: Math.round(openRate * 10000) / 10000,
+          clickRate: Math.round(clickRate * 10000) / 10000,
+        },
+      );
+      rel("PART_OF", send, email.id);
+      rel("USED", send, emailAssets.get(angleKey) as string);
+      rel("SENT_TO", send, restaurantSegmentId(location));
+      rel("ON", send, "channel-email");
+      rel("SENT_UNDER", send, CONSENT_IDS.email);
+      rel("FEATURED", send, menuIds[itemIndex] as string);
+      rel("FOR", send, locationNodeId(location));
+      rel("SENT_DURING", send, `daypart-${daypart}`);
+      rel("UNDER", send, `weather-${condition}`);
+    }
   }
-  for (let index = 0; index < 600; index += 1) {
-    const location = emailPick(RESTAURANT_LOCATIONS).id;
-    const daypart = emailPick(DAYPARTS);
-    const condition = emailPick(CONDITIONS);
-    const itemIndex = Math.floor(emailRand() * RESTAURANT_MENU.length);
-    const item = RESTAURANT_MENU[itemIndex] as (typeof RESTAURANT_MENU)[number];
-    const lift = demandLift(item, daypart, condition);
-    // Email opens far more often than push, and converts less often per send.
-    const orderRate = Math.max(0.003, 0.018 + lift * 0.7 + (emailRand() - 0.5) * 0.012);
-    const openRate = Math.max(0.08, 0.26 + lift * 1.2 + (emailRand() - 0.5) * 0.06);
-    const clickRate = Math.max(0.01, 0.045 + lift * 0.8 + (emailRand() - 0.5) * 0.02);
-    const angleKey = angleFor(daypart, condition);
-    const send = node(
-      "EmailSend",
-      `email-${String(index + 1).padStart(4, "0")}`,
-      `${ANGLES[angleKey]}: ${item.name}`,
-      {
-        angle: ANGLES[angleKey],
-        orderRate: Math.round(orderRate * 10000) / 10000,
-        openRate: Math.round(openRate * 10000) / 10000,
-        clickRate: Math.round(clickRate * 10000) / 10000,
-      },
-    );
-    rel("PART_OF", send, email.id);
-    rel("USED", send, emailAssets.get(angleKey) as string);
-    rel("SENT_TO", send, restaurantSegmentId(location));
-    rel("ON", send, "channel-email");
-    rel("SENT_UNDER", send, CONSENT_IDS.email);
-    rel("FEATURED", send, menuIds[itemIndex] as string);
-    rel("FOR", send, locationNodeId(location));
-    rel("SENT_DURING", send, `daypart-${daypart}`);
-    rel("UNDER", send, `weather-${condition}`);
-  }
-  addWealth(node, rel, random(seed + 2));
+  if (modules.wealth) addWealth(node, rel, random(seed + 2));
   return { nodes, relationships };
 }
 

@@ -10,6 +10,7 @@ import {
   FOCUS_KIND_LABELS,
   type FocusItem,
   GeneratedCampaignImageSchema,
+  INSTANCE_PROFILE,
   initialOrchestratorState,
   type MarketingWrite,
   MEMORY_RETENTION_DAYS,
@@ -20,9 +21,11 @@ import {
   PHASE_2_CURATED_TOOLS,
   parseOperationControls,
   policyResponse,
+  RESTAURANT_BRAND,
   referentFromReply,
   SALESFORCE_AGENTS,
   SALESFORCE_TOOL_DETAILS,
+  SAMPLE_CAMPAIGN_ID,
   type SuggestedAction,
   type TurnRecord,
   TurnRecordSchema,
@@ -41,9 +44,9 @@ import {
   wrapLanguageModel,
 } from "ai";
 import {
+  ALL_KNOWLEDGE_GRAPH_TOOL_SPECS,
   forgetMemory,
   type GraphBackend,
-  KNOWLEDGE_GRAPH_TOOL_SPECS,
   listMemory,
   type MemoryRecordRef,
   recordDecision,
@@ -61,7 +64,6 @@ import {
 } from "./external-services/server";
 import { applyFocusUpdate, type FocusInput, focusFromAnswer } from "./focus";
 import { forcedToolCallMiddleware } from "./forced-tool-middleware";
-import { INSTANCE_PROFILE } from "./generated/profile";
 import {
   assessInventoryRisk,
   type DemandResult,
@@ -285,7 +287,7 @@ const LOCAL_FIXTURE_RESULTS: Array<[string, unknown]> = [
           type: "text",
           text: JSON.stringify({
             source: "local-fixture",
-            campaignId: "701jV000004GglIQAS",
+            campaignId: SAMPLE_CAMPAIGN_ID,
             summary:
               "Fall Loyalty Reactivation is in progress; engagement is 8.4 percent above its four-week baseline.",
             openRate: "38.2%",
@@ -303,7 +305,7 @@ const LOCAL_FIXTURE_RESULTS: Array<[string, unknown]> = [
           type: "text",
           text: JSON.stringify({
             source: "local-fixture",
-            campaignId: "701jV000004GglIQAS",
+            campaignId: SAMPLE_CAMPAIGN_ID,
             summary: "7 of 9 readiness checks pass; 2 blockers remain before review.",
             blockers: "Accessibility copy; commercial-consent scope",
           }),
@@ -328,13 +330,13 @@ function localAgentBrief(keyMessage: string) {
   return [
     "Here is a draft campaign brief (local fixture):",
     "Name: Rainy-day comfort: Spicy Tortilla Soup",
-    "Description: Lunch campaign for Sample Kitchen app users in Los Angeles, built from the weather and past rainy-day results.",
+    `Description: Lunch campaign for ${RESTAURANT_BRAND} app users in Los Angeles, built from the weather and past rainy-day results.`,
     `Key Message: ${keyMessage}`,
-    "Target Audience: Sample Kitchen app users in Los Angeles who order at lunch.",
+    `Target Audience: ${RESTAURANT_BRAND} app users in Los Angeles who order at lunch.`,
     "Primary Goal: Drive lunch app orders on rainy days.",
     "Primary CTAs: Order now",
     "Primary KPI: Lunch orders from the campaign",
-    "Agent Guardrails: Sample Kitchen brand voice; no discounts over 20 percent. Requested channel: Mobile app push.",
+    `Agent Guardrails: ${RESTAURANT_BRAND} brand voice; no discounts over 20 percent. Requested channel: Mobile app push.`,
     "Priority: High",
   ].join("\n");
 }
@@ -2231,7 +2233,7 @@ export class MarketingOrchestrator extends AIChatAgent<
         { error: { code: "CONFLICT", message: "The confirmation has no case contents." } },
         { status: 409 },
       );
-    const subject = `Low stock before forecast weather: Sample Kitchen ${details.city}`;
+    const subject = `Low stock before forecast weather: Store ${details.city}`;
     let result: {
       source: "salesforce" | "local-fixture";
       caseId: string;
@@ -2915,7 +2917,9 @@ export class MarketingOrchestrator extends AIChatAgent<
       content: [{ type: "text", text: JSON.stringify(data) }],
     });
     this.ingestToolResult("context_get_weather_forecast", { location, days: 3 }, mcp(forecast));
-    const spec = KNOWLEDGE_GRAPH_TOOL_SPECS.find((entry) => entry.name === "map_weather_demand");
+    const spec = ALL_KNOWLEDGE_GRAPH_TOOL_SPECS.find(
+      (entry) => entry.name === "map_weather_demand",
+    );
     const demandInput = { location, conditions: forecast.demandConditions };
     const demand = await spec?.run(knowledgeGraphBackend(this.env), demandInput as never);
     this.ingestToolResult("graph_map_weather_demand", demandInput, mcp(demand));
@@ -2928,7 +2932,7 @@ export class MarketingOrchestrator extends AIChatAgent<
     const risk = this.state.inventoryRisk;
     if (!risk) return "The inventory check could not complete locally.";
     return [
-      `**Inventory check for Sample Kitchen ${risk.city}** (local fixture forecast: ${risk.conditions.join(", ")}).\n\n`,
+      `**Inventory check for ${RESTAURANT_BRAND} ${risk.city}** (local fixture forecast: ${risk.conditions.join(", ")}).\n\n`,
       risk.lowItems.length
         ? `${risk.lowItems.length} item${risk.lowItems.length === 1 ? "" : "s"} won't cover the forecast:\n\n${risk.lowItems
             .map(
@@ -3364,7 +3368,7 @@ export class MarketingOrchestrator extends AIChatAgent<
             parts: [
               {
                 type: "text",
-                text: "Summarize Salesforce Campaign 701jV000004GglIQAS using only live Salesforce evidence.",
+                text: `Summarize Salesforce Campaign ${SAMPLE_CAMPAIGN_ID} using only live Salesforce evidence.`,
               },
             ],
           },

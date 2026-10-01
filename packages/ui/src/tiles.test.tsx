@@ -15,7 +15,7 @@ import {
 afterEach(cleanup);
 
 const campaignCard: InsightTile = {
-  id: "salesforce:summarize_campaign:701jV000004GglIQAS",
+  id: "salesforce:summarize_campaign:701xx0000A1B2C3D4E",
   kind: "campaign-summary",
   eyebrow: "Campaign summary",
   title: "Fall Loyalty Reactivation",
@@ -28,7 +28,7 @@ const campaignCard: InsightTile = {
     status: "ready",
   },
   details: ["Open rate 38.2%"],
-  recordRef: { system: "salesforce", objectType: "Campaign", recordId: "701jV000004GglIQAS" },
+  recordRef: { system: "salesforce", objectType: "Campaign", recordId: "701xx0000A1B2C3D4E" },
 };
 const readinessCard: InsightTile = {
   ...campaignCard,
@@ -99,7 +99,7 @@ describe("InsightBoard", () => {
     expect(screen.getByText("Native fallback")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /Open in Salesforce/ })[0]).toHaveAttribute(
       "href",
-      "https://pu1788182184076.my.salesforce.com/lightning/r/Campaign/701jV000004GglIQAS/view",
+      "https://pu1788182184076.my.salesforce.com/lightning/r/Campaign/701xx0000A1B2C3D4E/view",
     );
   });
   it("links records in any system only when that system has a link", () => {

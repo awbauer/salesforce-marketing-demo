@@ -26,7 +26,7 @@ private class WorkbenchMarketingAgentTest {
 
     @IsTest
     static void checksAgentWritesAsTheUser() {
-        Brief brief = new Brief(Name = 'Sample Kitchen rainy-day lunch', KeyMessage = 'Soup is on.');
+        Brief brief = new Brief(Name = 'Rainy-day lunch', KeyMessage = 'Soup is on.');
         insert brief;
         WorkbenchCheckWriteAccess.Input saveBrief = new WorkbenchCheckWriteAccess.Input();
         saveBrief.action = 'save-marketing-brief';
@@ -53,7 +53,7 @@ private class WorkbenchMarketingAgentTest {
         Brief brief;
         System.runAs(new User(Id = UserInfo.getUserId())) {
             brief = new Brief(
-                Name = 'Sample Kitchen rainy-day lunch',
+                Name = 'Rainy-day lunch',
                 KeyMessage = 'Soup is on.',
                 TargetAudience = 'Los Angeles app users'
             );
@@ -74,13 +74,13 @@ private class WorkbenchMarketingAgentTest {
         System.assertEquals(true, results[0].found);
         System.assertEquals(true, results[0].readBack);
         Map<String, Object> records = (Map<String, Object>) JSON.deserializeUntyped(results[0].recordsJson);
-        System.assertEquals('Sample Kitchen rainy-day lunch', ((Map<String, Object>) records.get('brief')).get('name'));
+        System.assertEquals('Rainy-day lunch', ((Map<String, Object>) records.get('brief')).get('name'));
         System.assertEquals(1, ((List<Object>) records.get('steps')).size());
         System.assertEquals('Rainy Day Comfort', ((Map<String, Object>) records.get('campaign')).get('name'));
         System.assertEquals(false, results[1].found);
         System.runAs(user) {
             WorkbenchGetMarketingRecords.Input byName = new WorkbenchGetMarketingRecords.Input();
-            byName.briefName = 'Sample Kitchen rainy-day lunch';
+            byName.briefName = 'Rainy-day lunch';
             // The name lookup only returns briefs the caller created.
             System.assertEquals(false, WorkbenchGetMarketingRecords.run(
                 new List<WorkbenchGetMarketingRecords.Input>{ byName }

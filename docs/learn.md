@@ -14,23 +14,24 @@ A hands-on course in how an agent uses context, how GraphRAG grounds answers in 
   - [2.1 RAG in one page](#21-rag-in-one-page)
   - [2.2 GraphRAG](#22-graphrag)
   - [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag)
-- [Part 3: Every concept in the demo](#part-3-every-concept-in-the-demo): Every moving part of the workbench (16 lessons, 20 min)
+- [Part 3: Every concept in the demo](#part-3-every-concept-in-the-demo): Every moving part of the workbench (17 lessons, 20 min)
   - [3.1 The orchestrator agent](#31-the-orchestrator-agent)
   - [3.2 The workspace: focus, context, and records](#32-the-workspace-focus-context-and-records)
   - [3.3 The model: a local gpt-oss by default, hosted by choice](#33-the-model-a-local-gpt-oss-by-default-hosted-by-choice)
-  - [3.4 Tools and the Model Context Protocol (MCP)](#34-tools-and-the-model-context-protocol-mcp)
-  - [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions)
-  - [3.6 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#36-marketing-cloud-next-agent-built-briefs-campaigns-and-flows)
-  - [3.7 Routing: policy router, intent router, and tool plans](#37-routing-policy-router-intent-router-and-tool-plans)
-  - [3.8 Reliability guards for tool calling](#38-reliability-guards-for-tool-calling)
-  - [3.9 Governance: permissions, confirmations, and kill switches](#39-governance-permissions-confirmations-and-kill-switches)
-  - [3.10 Structured UI: Markdown, HXL cards, and native fallbacks](#310-structured-ui-markdown-hxl-cards-and-native-fallbacks)
-  - [3.11 Observability: technical trace, turn history, and audit export](#311-observability-technical-trace-turn-history-and-audit-export)
-  - [3.12 Evaluations](#312-evaluations)
-  - [3.13 Campaign image workflow](#313-campaign-image-workflow)
-  - [3.14 Campaign context: restaurant data and live weather](#314-campaign-context-restaurant-data-and-live-weather)
-  - [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services)
-  - [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats)
+  - [3.4 Your instance: profile and industry packs](#34-your-instance-profile-and-industry-packs)
+  - [3.5 Tools and the Model Context Protocol (MCP)](#35-tools-and-the-model-context-protocol-mcp)
+  - [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions)
+  - [3.7 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#37-marketing-cloud-next-agent-built-briefs-campaigns-and-flows)
+  - [3.8 Routing: policy router, intent router, and tool plans](#38-routing-policy-router-intent-router-and-tool-plans)
+  - [3.9 Reliability guards for tool calling](#39-reliability-guards-for-tool-calling)
+  - [3.10 Governance: permissions, confirmations, and kill switches](#310-governance-permissions-confirmations-and-kill-switches)
+  - [3.11 Structured UI: Markdown, HXL cards, and native fallbacks](#311-structured-ui-markdown-hxl-cards-and-native-fallbacks)
+  - [3.12 Observability: technical trace, turn history, and audit export](#312-observability-technical-trace-turn-history-and-audit-export)
+  - [3.13 Evaluations](#313-evaluations)
+  - [3.14 Campaign image workflow](#314-campaign-image-workflow)
+  - [3.15 Campaign context: restaurant data and live weather](#315-campaign-context-restaurant-data-and-live-weather)
+  - [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services)
+  - [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats)
 - [Glossary](#glossary)
 - [Reference: every concept in the code](#reference-every-concept-in-the-code)
 
@@ -125,7 +126,7 @@ flowchart TB
 
 **The audit trail** is never sent to the model. It exists for people: the History view and the audit export.
 
-**Long-term memory** belongs in the graph because it's retrieved *by relationship* ("what did we decide about the Coastline push?"), not by recency, and it needs provenance. It's never sent automatically: the model reads it through recall tools, only when a question asks about earlier work. See *Long-term memory* under the demo concepts.
+**Long-term memory** belongs in the graph because it's retrieved *by relationship* ("what did we decide about the Sample Kitchen push?"), not by recency, and it needs provenance. It's never sent automatically: the model reads it through recall tools, only when a question asks about earlier work. See *Long-term memory* under the demo concepts.
 
 **Try it**
 
@@ -329,13 +330,13 @@ flowchart TB
 
 > **Key idea:** Nine curated, read-only queries, each returning evidence paths, with a local copy that must match Neo4j exactly.
 
-- **The graph:** a deterministic, fictional dataset of about 2,400 nodes and 20,300 relationships. **Workbench** is the parent brand, with B2B accounts (each with a headquarters country), buying-role personas, campaigns, segments, content, brand rules, and consent scopes. **Coastline Kitchen** is a restaurant brand under Workbench: its locations, menu, and dayparts come from the restaurant system with the same ids. Its campaigns run on the **mobile app** and **email** channels. Each of its 1,500 past push sends and 600 past email sends links to its campaign, its content (push or email), app segment, consent for that channel, location, daypart, weather, and featured menu item, so an email campaign learns from past emails and a push from past pushes. Each location's app segment holds **marketing consent per channel**: separate push, email, and SMS opt-in counts, because consent to one channel isn't consent to another. **Harborstone Wealth** is a wealth-management brand under Workbench: regulated content with its approval records and required disclosures, an embargoed acquisition with its release package, and institutional clients with their holdings, signals, advisors, and contacts.
+- **The graph:** a deterministic, fictional dataset of about 2,400 nodes and 20,300 relationships. **Workbench** is the parent brand, with B2B accounts (each with a headquarters country), buying-role personas, campaigns, segments, content, brand rules, and consent scopes. **Sample Kitchen** is a restaurant brand under Workbench: its locations, menu, and dayparts come from the restaurant system with the same ids. Its campaigns run on the **mobile app** and **email** channels. Each of its 1,500 past push sends and 600 past email sends links to its campaign, its content (push or email), app segment, consent for that channel, location, daypart, weather, and featured menu item, so an email campaign learns from past emails and a push from past pushes. Each location's app segment holds **marketing consent per channel**: separate push, email, and SMS opt-in counts, because consent to one channel isn't consent to another. **Sample Wealth** is a wealth-management brand under Workbench: regulated content with its approval records and required disclosures, an embargoed acquisition with its release package, and institutional clients with their holdings, signals, advisors, and contacts.
 - **The store:** Neo4j AuraDB, reached over the HTTPS **Query API**, because Workers can't open Bolt connections. Every tool query runs in **read access mode**, so the database itself rejects writes. The only writes are the server's fixed long-term memory statements, which keep to their own dataset.
 - **The tools:** `explain_buyer_group`, `find_audience_overlap`, `check_consent_coverage`, `find_similar_past_pushes`, `trace_content_lineage`, `get_graph_overview`, three that power the sales and service use cases (`plan_account_outreach`, `assess_location_impact`, and `map_weather_demand`), and three for financial services (`match_news_to_approved_content`, `prepare_deal_release`, and `build_aum_account_plan`). Each returns an answer plus up to 25 **evidence paths**.
 - **Parity:** every tool also has an in-memory implementation over the same dataset. `pnpm kg:parity` proves both return identical results, so local development and evals match production. It also reports tool latency; the median stays under 500 ms.
 - **Grounding:** evaluations check that a graph answer names only accounts, people, campaigns, and menu items that appear in what the tools returned.
 - **In a flow:** the restaurant push campaign calls `find_similar_past_pushes` to learn what worked before in the same weather and daypart, then passes that to the Salesforce content tool.
-- **Graph explorer:** the Graph page's brand filter narrows the canvas to one brand's own nodes: a node counts as a brand's own when it's at least as close to that brand as to any other, walking loaded relationships without crossing through another brand. That's how Coastline Kitchen keeps its campaigns, locations, and shared channels and consent, without pulling in Workbench's B2B accounts through the parent brand.
+- **Graph explorer:** the Graph page's brand filter narrows the canvas to one brand's own nodes: a node counts as a brand's own when it's at least as close to that brand as to any other, walking loaded relationships without crossing through another brand. That's how Sample Kitchen keeps its campaigns, locations, and shared channels and consent, without pulling in Workbench's B2B accounts through the parent brand.
 
 **Try it**
 
@@ -373,7 +374,7 @@ Which question needs GraphRAG rather than plain vector RAG?
 
 ## Part 3: Every concept in the demo
 
-*Every moving part of the workbench* · 16 lessons · 20 min
+*Every moving part of the workbench* · 17 lessons · 20 min
 
 Each piece of the workbench, how it works, and where to see it.
 
@@ -491,7 +492,7 @@ Four properties make it trustworthy:
 
 **Try it**
 
-- Draft an email and watch the workspace fill: “Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu”
+- Draft an email and watch the workspace fill: “Draft an email campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu”
 
 **In this demo**
 
@@ -515,8 +516,8 @@ Four properties make it trustworthy:
 flowchart TB
   subgraph model_guards0_lane0["Every turn"]
     direction LR
-    model_guards0_0_0["◆ gpt-oss-20b<br/>open-weight reasoning model"]
-    model_guards0_0_1["⛨ AI Gateway<br/>logs, cost, caching"]
+    model_guards0_0_0["◆ Your chat model<br/>local gpt-oss by default"]
+    model_guards0_0_1["⛨ AI Gateway<br/>Cloudflare only: logs, cost, caching"]
     model_guards0_0_0 --> model_guards0_0_1
   end
   subgraph model_guards0_lane1["Known quirks"]
@@ -559,7 +560,66 @@ The orchestrator's chat model comes from the **instance profile** (`models.chat`
 - Docs: [Cloudflare Workers AI](https://developers.cloudflare.com/workers-ai/)
 - Docs: [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/)
 
-### 3.4 Tools and the Model Context Protocol (MCP)
+### 3.4 Your instance: profile and industry packs
+
+*One profile and one industry pack make this workbench yours for a client demo.*
+
+**Diagram: From profile to demo**
+
+```mermaid
+flowchart TB
+  instance_profile0_0["1. ✎ workbench.profile.json<br/>client, industry, use cases, models"]
+  instance_profile0_1["2. ▤ Industry pack<br/>vocabulary, modules, use cases"]
+  instance_profile0_2["3. ⚙ pnpm profile:build<br/>compiled into the app"]
+  instance_profile0_3["4. ◆ Graph, tools, prompts, screens<br/>say the client's name"]
+  instance_profile0_0 --> instance_profile0_1 --> instance_profile0_2 --> instance_profile0_3
+```
+
+```mermaid
+flowchart LR
+  subgraph instance_profile1_chips["Packs"]
+    direction LR
+    instance_profile1_0["✓ Retail"]
+    instance_profile1_1["✓ Restaurants (vertical)"]
+    instance_profile1_2["✓ Financial services (vertical)"]
+    instance_profile1_3["✓ Healthcare payers"]
+    instance_profile1_4["✓ B2B technology"]
+    instance_profile1_5["✓ Travel and hospitality"]
+    instance_profile1_6["✓ Full tour"]
+  end
+```
+
+*The profile and the pack are compiled into the app, so everything speaks for the client.*
+
+> **Key idea:** One profile and one industry pack decide the data, tools, prompts and screens, so a copy of the workbench can speak for any client.
+
+Everything that makes a copy of the workbench *yours* lives in one validated file, `workbench.profile.json`: the client's fictional brand, audience (internal or external), industry, the use cases to show, model providers, caps, retention, whether Salesforce is a sandbox or fixtures, and where it deploys. `pnpm workbench:init` asks for these and writes the file; `pnpm profile:build` compiles it into the app, because the Worker has no filesystem and tool schemas are built when the code loads.
+
+An **industry pack** supplies what the profile can't invent safely: a vocabulary (twelve fictional accounts, the five seasonal campaigns, content kinds and brand rules), the use cases the pack supports, and a paragraph of industry context for the orchestrator's prompt.
+
+- **Tiers.** *Vertical* packs (restaurant, financial services) also switch on a module: extra graph data, tools and scenarios built for that industry, such as weather-driven inventory or pre-approved regulated content. *Core* packs (retail, healthcare, B2B technology, travel) run every core marketing flow with the industry's vocabulary. The *tour* pack turns everything on.
+- **Brand names.** The client brand becomes the vertical module's brand (and the parent is "Brand Group"), so the graph, tools, prompts and screens say the client's name. Other modules use sample names and stay off.
+- **Personalization.** The wizard can ask your local model to rename accounts and campaigns; the result is validated against the pack's schema and falls back to the pack's own values.
+- **Safety.** The writes, confirmations and data rules do not change per pack. `pnpm template:check` fails if instance files or example-client names are tracked, and tests, evals and the e2e suite run the full-tour profile so every module stays covered.
+
+**Try it**
+
+- Open the graph this pack built (opens the graph view)
+
+**In this demo**
+
+- profiles/example.profile.json and profiles/demo-composite.profile.json
+- packages/contracts/src/profile.ts, packages/contracts/src/pack.ts
+- packages/industry-packs/src/index.ts
+- scripts/build-profile.mjs, scripts/check-template.mjs
+- docs/decisions/ADR-009-portable-instances.md
+
+**Learn more**
+
+- Guide: [Effective context engineering for AI agents (Anthropic)](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+- Guide: [Building effective agents (Anthropic)](https://www.anthropic.com/engineering/building-effective-agents)
+
+### 3.5 Tools and the Model Context Protocol (MCP)
 
 *A standard way for agents to discover and call tools, and the three MCP servers here.*
 
@@ -612,7 +672,7 @@ The local servers are called **in-process** through an in-memory MCP transport. 
 - Guide: [Writing effective tools for agents (Anthropic)](https://www.anthropic.com/engineering/writing-tools-for-agents)
 - Docs: [AI SDK: tools and tool calling](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling)
 
-### 3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions
+### 3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions
 
 *Salesforce is the system of record, and every Salesforce fact comes from its tools.*
 
@@ -657,7 +717,7 @@ Salesforce is **authoritative** for campaign data. The orchestrator never invent
 
 The model never holds a write tool: only the confirmation flow can call the write tools, and every write runs as you.
 
-Metadata (Apex, fields, the permission set, and the MCP definition) deploys through a gated CI pipeline to one approved proof org.
+Metadata (Apex, fields, the permission set, and the MCP definition) deploys through a gated CI pipeline to the approved sandbox.
 
 **Try it**
 
@@ -676,7 +736,7 @@ Metadata (Apex, fields, the permission set, and the MCP definition) deploys thro
 - Course: [Introduction to Agentforce (Trailhead)](https://trailhead.salesforce.com/content/learn/modules/introduction-to-agentforce)
 - Guide: [Salesforce Agentforce](https://www.salesforce.com/agentforce/)
 
-### 3.6 Marketing Cloud Next: agent-built briefs, campaigns, and flows
+### 3.7 Marketing Cloud Next: agent-built briefs, campaigns, and flows
 
 *The workbench asks Salesforce's Campaign Creation agent to create briefs and campaigns, the way the Marketing app does.*
 
@@ -726,7 +786,7 @@ In **Marketing Cloud Next**, a campaign starts as a **brief** and becomes a **ca
 Its **Campaign Refinement** subagent runs **Refine Campaign Preview** to change a saved preview ("make the second email shorter").
 
 **How the workbench uses it.**
-1. A campaign request (the Coastline plan, or "create a campaign in Marketing Cloud") ends with `draft_campaign_brief`. The agent's brief becomes the workspace focus, field for field.
+1. A campaign request (the Sample Kitchen plan, or "create a campaign in Marketing Cloud") ends with `draft_campaign_brief`. The agent's brief becomes the workspace focus, field for field.
 2. **Save brief** (an action card, then a confirmation card): `save_marketing_brief` asks the agent to run steps 2 and 3.
 3. **Create the campaign** (a second card): `create_marketing_campaign` asks it to run steps 4 and 5.
 4. After each write, `get_marketing_records` (read-only Apex) reads the Brief, its steps, the Campaign, and the flow back from Salesforce. The workspace shows only what Salesforce returned, never the agent's say-so.
@@ -741,8 +801,8 @@ Its **Campaign Refinement** subagent runs **Refine Campaign Preview** to change 
 
 **Try it**
 
-- Draft the Coastline Kitchen email: “Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu”
-- Create a campaign in Marketing Cloud: “Create a campaign in Marketing Cloud for Coastline Kitchen's late-night tacos”
+- Draft the Sample Kitchen email: “Draft an email campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu”
+- Create a campaign in Marketing Cloud: “Create a campaign in Marketing Cloud for Sample Kitchen's late-night tacos”
 
 **In this demo**
 
@@ -758,7 +818,7 @@ Its **Campaign Refinement** subagent runs **Refine Campaign Preview** to change 
 - Course: [Create and customize a marketing campaign with Agentforce (Trailhead)](https://trailhead.salesforce.com/content/learn/modules/ai-in-marketing-cloud-next/create-and-customize-a-marketing-campaign-with-agentforce)
 - Docs: [Expose Agentforce agents as Hosted MCP tools (Salesforce Developers)](https://developer.salesforce.com/docs/platform/hosted-mcp-servers/guide/agentforce.html)
 
-### 3.7 Routing: policy router, intent router, and tool plans
+### 3.8 Routing: policy router, intent router, and tool plans
 
 *Deterministic decisions before and around the model.*
 
@@ -805,8 +865,8 @@ Not every decision should be left to the model. Each turn passes through two det
    - Inventory, stock, or ingredients at a location → `get_weather_forecast` → `map_weather_demand` → `get_location_inventory`
    - Fed or interest-rate news and approved content → `get_fed_announcements` → `match_news_to_approved_content` for the event it maps to; market volatility → `match_news_to_approved_content` alone
    - An acquisition announcement → `prepare_deal_release`
-   - An account plan, AUM, or a Harborstone client's plays → `build_aum_account_plan`
-   - A Coastline Kitchen email or push campaign → profile → weather → past sends on that channel → the Campaign Creation agent's brief, which becomes the focus
+   - An account plan, AUM, or a Sample Wealth client's plays → `build_aum_account_plan`
+   - A Sample Kitchen email or push campaign → profile → weather → past sends on that channel → the Campaign Creation agent's brief, which becomes the focus
    - "Create a campaign … in Salesforce" or "in Marketing Cloud" → the Campaign Creation agent's brief, then the save is prepared for confirmation
    - A change to a brief ("make it warmer") → back to the agent: a re-drafted brief before it's saved, or **Refine Campaign Preview** after
    - A change to other drafts → no tools; the model rewrites the draft, which is saved as the next version
@@ -828,7 +888,7 @@ After a plan finishes, the model gets **no tools** and must write the answer.
 - Guide: [Building effective agents (Anthropic)](https://www.anthropic.com/engineering/building-effective-agents)
 - Guide: [Writing effective tools for agents (Anthropic)](https://www.anthropic.com/engineering/writing-tools-for-agents)
 
-### 3.8 Reliability guards for tool calling
+### 3.9 Reliability guards for tool calling
 
 *How the demo keeps a small model's tool calls on track.*
 
@@ -892,7 +952,7 @@ At the turn level:
 - Docs: [AI SDK: tools and tool calling](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling)
 - Guide: [The harmony response format (OpenAI Cookbook)](https://cookbook.openai.com/articles/openai-harmony)
 
-### 3.9 Governance: permissions, confirmations, and kill switches
+### 3.10 Governance: permissions, confirmations, and kill switches
 
 *Salesforce decides who may write, a person approves every write, and operators can turn things off.*
 
@@ -949,14 +1009,14 @@ You watch both halves step by step. While a confirmation is prepared, the steps 
 - Draft something → the Save to Salesforce action card in the chat → confirmation card with the permission check
 - Check readiness → the Request a review action card → confirmation card
 - Attach to campaign on a generated image
-- infra/cloudflare/pot/README.md (operator runbook)
+- templates/cloudflare/README.md (operator runbook)
 
 **Learn more**
 
 - Guide: [OWASP Top 10 for LLM Applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 - Guide: [Building effective agents (Anthropic)](https://www.anthropic.com/engineering/building-effective-agents)
 
-### 3.10 Structured UI: Markdown, HXL cards, and native fallbacks
+### 3.11 Structured UI: Markdown, HXL cards, and native fallbacks
 
 *Answers render as rich text, and records render as governed cards.*
 
@@ -994,7 +1054,7 @@ flowchart LR
 - Code: [react-markdown](https://github.com/remarkjs/react-markdown)
 - Guide: [WCAG overview (W3C)](https://www.w3.org/WAI/standards-guidelines/wcag/)
 
-### 3.11 Observability: technical trace, turn history, and audit export
+### 3.12 Observability: technical trace, turn history, and audit export
 
 *See exactly what happened in every turn.*
 
@@ -1037,7 +1097,7 @@ flowchart LR
 - Docs: [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/)
 - Guide: [Effective context engineering for AI agents (Anthropic)](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
 
-### 3.12 Evaluations
+### 3.13 Evaluations
 
 *Measure the whole pipeline across models, and publish the real results.*
 
@@ -1081,7 +1141,7 @@ Each turn is scored on:
 
 Latency and tokens are recorded too, and the Evaluations view shows each turn's seconds with its tokens and tool calls, plus the mean tokens and tool calls per turn for each model. Runs recorded before the grounding check show no rate for it.
 
-**What good looks like.** Pass/fail says the pipeline behaved; it doesn't say the answer was *good*. Each demo scenario has a written **rubric** in `packages/evals/src/rubric.ts`: a goal, an audience persona where a customer is involved, deterministic **criteria** (for the weather-aware Coastline campaign: names a menu item, uses the real weather and time of day, cites what worked before, a key message of 160 characters or fewer, a measurable KPI), and weights saying which quality dimensions matter. Criteria are reported as "criteria met" beside the pass gate, so pass rates stay comparable with earlier runs.
+**What good looks like.** Pass/fail says the pipeline behaved; it doesn't say the answer was *good*. Each demo scenario has a written **rubric** in `packages/evals/src/rubric.ts`: a goal, an audience persona where a customer is involved, deterministic **criteria** (for the weather-aware Sample Kitchen campaign: names a menu item, uses the real weather and time of day, cites what worked before, a key message of 160 characters or fewer, a measurable KPI), and weights saying which quality dimensions matter. Criteria are reported as "criteria met" beside the pass gate, so pass rates stay comparable with earlier runs.
 
 **Quantifying the qualitative.** A panel of two strong models from different families (GLM-5.3 and DeepSeek V4 Pro; a model never judges its own family) rates each answer 1 to 5 on anchored scales: context fidelity, accuracy, clarity, brand voice, engagement, marketer usefulness, and **would act**. For "would act" the judge answers as the audience persona on a standard purchase-intent scale, and the report shows the share of ratings that are 4 or 5 (the top-2-box). Ratings combine into a 0 to 100 **Quality Index** with a 95% bootstrap interval, and the report shows how often the two judges agree. Before a run is published, `pnpm eval:calibrate` has each judge score hand-written strong, mediocre, and weak answers and requires the right ordering. These are judge scores, not customer behavior: use them to rank models, not to forecast click rates.
 
@@ -1105,7 +1165,7 @@ Latency and tokens are recorded too, and the Evaluations view shows each turn's 
 - Guide: [Your AI product needs evals (Hamel Husain)](https://hamel.dev/blog/posts/evals/)
 - Guide: [Building effective agents (Anthropic)](https://www.anthropic.com/engineering/building-effective-agents)
 
-### 3.13 Campaign image workflow
+### 3.14 Campaign image workflow
 
 *Generate reviewable variants, then attach one to Salesforce after confirmation.*
 
@@ -1140,11 +1200,11 @@ flowchart TB
 - Docs: [Cloudflare R2](https://developers.cloudflare.com/r2/)
 - Docs: [Cloudflare D1](https://developers.cloudflare.com/d1/)
 
-### 3.14 Campaign context: restaurant data and live weather
+### 3.15 Campaign context: restaurant data and live weather
 
 *External context that makes a campaign draft specific to the moment.*
 
-**Diagram: The Coastline campaign tool plan**
+**Diagram: The Sample Kitchen campaign tool plan**
 
 ```mermaid
 flowchart TB
@@ -1162,17 +1222,17 @@ flowchart TB
 
 The **campaign-context** MCP server gives the orchestrator facts Salesforce doesn't have:
 
-- `get_restaurant_profile`: the restaurant system's own data for **Coastline Kitchen**, a fictional fast-casual brand under Workbench that is open 24/7: its five California locations, menu, favorites, dayparts, app audience with opt-ins **by channel** (push, email, SMS), brand voice, and promotion rules. Locations and menu items carry the same ids as their knowledge-graph nodes.
+- `get_restaurant_profile`: the restaurant system's own data for **Sample Kitchen**, a fictional fast-casual brand under Workbench that is open 24/7: its five California locations, menu, favorites, dayparts, app audience with opt-ins **by channel** (push, email, SMS), brand voice, and promotion rules. Locations and menu items carry the same ids as their knowledge-graph nodes.
 - `get_current_weather`: live conditions from **Open-Meteo**, which is free, keyless, and CC BY 4.0, for a California city.
 - `get_weather_forecast`: Open-Meteo's daily forecast, with each day's demand-planning weather (heat, rain, fog, cloudy, or clear).
 - `get_location_inventory`: a restaurant's stock from a randomized **store inventory** mock, with par levels and typical daily use from the menu's recipes. See *The use-case library*.
 
-The Coastline campaign plan (email or push) chains these with the knowledge graph's past performance and the Salesforce content tool. The plan is **channel-aware**: the channel you ask for (or the draft's channel) is pinned on the past-performance lookup by the server, so an email campaign cites email opt-ins, never push opt-ins, whatever the model passed. The finished draft is saved to the workspace **focus**. The draft fits the menu, the time of day, the weather, and what worked before, and "make it warmer" revises it as a new version.
+The Sample Kitchen campaign plan (email or push) chains these with the knowledge graph's past performance and the Salesforce content tool. The plan is **channel-aware**: the channel you ask for (or the draft's channel) is pinned on the past-performance lookup by the server, so an email campaign cites email opt-ins, never push opt-ins, whatever the model passed. The finished draft is saved to the workspace **focus**. The draft fits the menu, the time of day, the weather, and what worked before, and "make it warmer" revises it as a new version.
 
 **Try it**
 
-- Draft the Coastline Kitchen email: “Draft an email campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu”
-- Draft the Coastline Kitchen push: “Draft a push notification campaign for Coastline Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu”
+- Draft the Sample Kitchen email: “Draft an email campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu”
+- Draft the Sample Kitchen push: “Draft a push notification campaign for Sample Kitchen, our fast casual restaurant in California, tailored to the current weather, time of day, and our menu”
 
 **In this demo**
 
@@ -1184,7 +1244,7 @@ The Coastline campaign plan (email or push) chains these with the knowledge grap
 - Docs: [Open-Meteo API docs](https://open-meteo.com/en/docs)
 - Docs: [Model Context Protocol: introduction](https://modelcontextprotocol.io/docs/getting-started/intro)
 
-### 3.15 The use-case library: marketing, sales, service, and financial services
+### 3.16 The use-case library: marketing, sales, service, and financial services
 
 *Every scenario the demo runs, how data flows through it, the ones that reach beyond marketing, and three for a regulated industry.*
 
@@ -1248,7 +1308,7 @@ Both APIs are free and keyless, called live from the Worker through a new in-pro
 
 The graph and prompts carry the manager's name only, never contact details. Nothing is ordered.
 
-**Financial services: Harborstone Wealth.** Three use cases (filter **Financial services**) show the graph in a regulated industry, where only content a registered principal approved can go out, exactly as approved, with its required disclosures. Harborstone is a fictional wealth-management brand under Workbench.
+**Financial services: Sample Wealth.** Three use cases (filter **Financial services**) show the graph in a regulated industry, where only content a registered principal approved can go out, exactly as approved, with its required disclosures. Sample Wealth is a fictional wealth-management brand under Workbench.
 - **Market news to pre-approved content.** "The Fed just announced its rate decision. What pre-approved content can we send clients today?"
   1. `get_fed_announcements` reads the Federal Reserve's public press feed, finds the latest FOMC statement, and reads its rate decision: raise, lower, or maintain, the size, and the new target range. It maps the decision to a market event.
   2. `match_news_to_approved_content` walks MarketEvent ← **RESPONDS_TO** ← ContentAsset → **APPROVED_UNDER** → Approval and → **REQUIRES** → Disclosure. It returns what's ready to send, with approval IDs, expiry, and disclosures; what's blocked and exactly why (an expired approval, one still pending, or a **FAILED** compliance rule); reach per channel under marketing consent; and past responses, which show that sending within hours of the news opened far better than the next day.
@@ -1278,7 +1338,7 @@ The graph and prompts carry the manager's name only, never contact details. Noth
 - Docs: [FINRA Rule 2210: communications with the public](https://www.finra.org/rules-guidance/rulebooks/finra-rules/2210)
 - Docs: [Model Context Protocol: introduction](https://modelcontextprotocol.io/docs/getting-started/intro)
 
-### 3.16 Long-term memory: remembering across chats
+### 3.17 Long-term memory: remembering across chats
 
 *Drafts and decisions stored in the graph by the server, recalled by tools, and forgotten on request.*
 
@@ -1322,7 +1382,7 @@ A new chat starts with an empty workspace, but some work should outlive it: the 
 **How it's stored.** Each memory is a small subgraph in its own dataset, next to the demo graph:
 - a `Draft` node per version, linked to the version it replaced (`SUPERSEDES`)
 - a `Decision` node, linked to the draft it saved (`DECIDED_ON`) and the Salesforce record it created (`RECORDED_IN`)
-- `ABOUT` links to the `Campaign` and `Brand` nodes involved, so "what did we decide about Coastline?" is a graph question
+- `ABOUT` links to the `Campaign` and `Brand` nodes involved, so "what did we decide about Sample Kitchen?" is a graph question
 
 Every node carries its workspace and an expiry. The person who acted is stored only as a hash.
 
@@ -1353,7 +1413,7 @@ Memory may be stale, so reopening never marks a draft as saved, and a remembered
 - Chat: “Remember this draft”, then New chat and “What did we decide about …?”
 - History → Memory (Reopen, Forget, Remember current draft)
 - packages/knowledge-graph/src/memory.ts, apps/edge/src/memory.ts
-- docs/decisions/ADR-007-long-term-graph-memory.md
+- docs/archive/proof/decisions/ADR-007-long-term-graph-memory.md
 
 **Learn more**
 
@@ -1403,95 +1463,95 @@ Who decides whether you may create a campaign from the workbench?
 
 | Name | What it is | Taught in |
 | --- | --- | --- |
-| `summarize_campaign` | Agent-backed summary of a campaign's status, dates, and performance from Salesforce. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `generate_campaign_insights` | Agent-backed insights on a campaign's engagement and opportunities. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `check_campaign_readiness` | Checks a campaign for launch blockers, such as missing dates, consent, or accessibility copy. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `draft_campaign_brief` | The Campaign Creation agent's Draft a Campaign Brief action; the brief becomes the workspace focus. | [3.6 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#36-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
-| `refine_campaign_preview` | The Campaign Creation agent's Refine Campaign Preview action, on a brief saved in Marketing Cloud. | [3.6 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#36-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
-| `draft_campaign_content` | The Content Builder agent's Draft Content action: copy for an email, push, or SMS. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `create_content_section` | The Content Builder agent's Create Section with Content action: a hero, header, or footer. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `validate_content_against_brand` | Checks copy against Workbench brand rules and reports what passed or failed. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `get_account_marketing_signals` | Account-level marketing signals from Salesforce. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `recommend_buyer_group_members` | Suggests buyer-group members for an account from Salesforce signals. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `summarize_account_engagement` | Summarizes how an account has engaged with recent campaigns. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `check_write_access` | Read-only Apex check, run as the signed-in user, of every permission a write needs. | [3.9 Governance: permissions, confirmations, and kill switches](#39-governance-permissions-confirmations-and-kill-switches) |
-| `save_marketing_brief` | Confirmed write: the Campaign Creation agent saves the brief (Save Campaign Brief) and drafts its preview. | [3.6 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#36-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
-| `create_marketing_campaign` | Confirmed write: the Campaign Creation agent creates the campaign and its flow (Create Campaign, Save Campaign). | [3.6 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#36-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
-| `get_marketing_records` | Read-back of a Brief, its preview steps, and the Campaign and flow created from it. | [3.6 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#36-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
-| `create_campaign_review_request` | Confirmed write: creates a Salesforce review task with context and a checklist. | [3.9 Governance: permissions, confirmations, and kill switches](#39-governance-permissions-confirmations-and-kill-switches) |
-| `create_inventory_case` | Confirmed write: opens a Salesforce Case for a store manager listing items that won't cover the forecast. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `attach_campaign_image` | Confirmed write: attaches a generated image to a campaign after Salesforce verifies its hash. | [3.13 Campaign image workflow](#313-campaign-image-workflow) |
-| `get_restaurant_profile` | Coastline Kitchen's locations, menu, favorites, dayparts, and brand voice from the restaurant system. | [3.14 Campaign context: restaurant data and live weather](#314-campaign-context-restaurant-data-and-live-weather) |
-| `get_current_weather` | Live weather from Open-Meteo for a California city. | [3.14 Campaign context: restaurant data and live weather](#314-campaign-context-restaurant-data-and-live-weather) |
-| `get_weather_forecast` | The daily Open-Meteo forecast for a city, with each day's demand-planning weather. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `get_location_inventory` | Stock counts for a Coastline Kitchen restaurant from a randomized store inventory mock. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `get_public_holidays` | Upcoming public holidays for a country from Nager.Date, a free public API. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `get_weather_alerts` | Active National Weather Service alerts at a Coastline Kitchen location, most severe first. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `get_fed_announcements` | The latest FOMC rate decision from the Federal Reserve's public press feed, and the market event it maps to. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `summarize_campaign` | Agent-backed summary of a campaign's status, dates, and performance from Salesforce. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `generate_campaign_insights` | Agent-backed insights on a campaign's engagement and opportunities. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `check_campaign_readiness` | Checks a campaign for launch blockers, such as missing dates, consent, or accessibility copy. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `draft_campaign_brief` | The Campaign Creation agent's Draft a Campaign Brief action; the brief becomes the workspace focus. | [3.7 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#37-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
+| `refine_campaign_preview` | The Campaign Creation agent's Refine Campaign Preview action, on a brief saved in Marketing Cloud. | [3.7 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#37-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
+| `draft_campaign_content` | The Content Builder agent's Draft Content action: copy for an email, push, or SMS. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `create_content_section` | The Content Builder agent's Create Section with Content action: a hero, header, or footer. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `validate_content_against_brand` | Checks copy against Workbench brand rules and reports what passed or failed. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `get_account_marketing_signals` | Account-level marketing signals from Salesforce. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `recommend_buyer_group_members` | Suggests buyer-group members for an account from Salesforce signals. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `summarize_account_engagement` | Summarizes how an account has engaged with recent campaigns. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `check_write_access` | Read-only Apex check, run as the signed-in user, of every permission a write needs. | [3.10 Governance: permissions, confirmations, and kill switches](#310-governance-permissions-confirmations-and-kill-switches) |
+| `save_marketing_brief` | Confirmed write: the Campaign Creation agent saves the brief (Save Campaign Brief) and drafts its preview. | [3.7 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#37-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
+| `create_marketing_campaign` | Confirmed write: the Campaign Creation agent creates the campaign and its flow (Create Campaign, Save Campaign). | [3.7 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#37-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
+| `get_marketing_records` | Read-back of a Brief, its preview steps, and the Campaign and flow created from it. | [3.7 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#37-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
+| `create_campaign_review_request` | Confirmed write: creates a Salesforce review task with context and a checklist. | [3.10 Governance: permissions, confirmations, and kill switches](#310-governance-permissions-confirmations-and-kill-switches) |
+| `create_inventory_case` | Confirmed write: opens a Salesforce Case for a store manager listing items that won't cover the forecast. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `attach_campaign_image` | Confirmed write: attaches a generated image to a campaign after Salesforce verifies its hash. | [3.14 Campaign image workflow](#314-campaign-image-workflow) |
+| `get_restaurant_profile` | Sample Kitchen's locations, menu, favorites, dayparts, and brand voice from the restaurant system. | [3.15 Campaign context: restaurant data and live weather](#315-campaign-context-restaurant-data-and-live-weather) |
+| `get_current_weather` | Live weather from Open-Meteo for a California city. | [3.15 Campaign context: restaurant data and live weather](#315-campaign-context-restaurant-data-and-live-weather) |
+| `get_weather_forecast` | The daily Open-Meteo forecast for a city, with each day's demand-planning weather. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `get_location_inventory` | Stock counts for a Sample Kitchen restaurant from a randomized store inventory mock. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `get_public_holidays` | Upcoming public holidays for a country from Nager.Date, a free public API. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `get_weather_alerts` | Active National Weather Service alerts at a Sample Kitchen location, most severe first. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `get_fed_announcements` | The latest FOMC rate decision from the Federal Reserve's public press feed, and the market event it maps to. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
 | `get_graph_overview` | Counts of nodes and relationships in the knowledge graph, and its dataset version. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `explain_buyer_group` | Ranks an account's people for a buyer group, with the engagement paths behind each. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `find_audience_overlap` | Finds other campaigns whose audiences share people with a campaign's audience. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `check_consent_coverage` | How much of a campaign's audience holds consent for a channel, with uncovered examples. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
-| `find_similar_past_pushes` | Past Coastline sends on the campaign's channel (emails or pushes) for a location, daypart, and weather, which menu items and content performed best, and the audience's opt-ins for that channel. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
-| `plan_account_outreach` | An account's contacts in priority order, their consented channels, and the account's country. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `map_weather_demand` | The dishes forecast weather lifts, what they're made with, and the location's store manager. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `assess_location_impact` | The app audience near a location, how many can be reached on each channel, and campaigns to pause. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `match_news_to_approved_content` | Harborstone's pre-approved content for a market event: what's ready to send, what's blocked and why, reach by consent, and past response speed. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `prepare_deal_release` | The embargoed acquisition package in release order, with each piece's audience, consent basis, approval, and blockers. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `build_aum_account_plan` | A Harborstone client's signals, ranked plays with peer adoption and approved content, and contacts with consented channels. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `find_similar_past_pushes` | Past Sample Kitchen sends on the campaign's channel (emails or pushes) for a location, daypart, and weather, which menu items and content performed best, and the audience's opt-ins for that channel. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
+| `plan_account_outreach` | An account's contacts in priority order, their consented channels, and the account's country. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `map_weather_demand` | The dishes forecast weather lifts, what they're made with, and the location's store manager. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `assess_location_impact` | The app audience near a location, how many can be reached on each channel, and campaigns to pause. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `match_news_to_approved_content` | Sample Wealth's pre-approved content for a market event: what's ready to send, what's blocked and why, reach by consent, and past response speed. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `prepare_deal_release` | The embargoed acquisition package in release order, with each piece's audience, consent basis, approval, and blockers. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `build_aum_account_plan` | A Sample Wealth client's signals, ranked plays with peer adoption and approved content, and contacts with consented channels. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
 | `trace_content_lineage` | Traces a campaign's content back to its brief and brand-rule results. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
-| `recall_decisions` | Recalls remembered drafts and decisions about a subject in this workspace, dated and sourced. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
-| `recall_recent_work` | Lists this workspace's most recent remembered drafts and decisions. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
-| `explain_memory` | Shows where one memory came from: its record, the draft versions it replaced, and its subjects. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
+| `recall_decisions` | Recalls remembered drafts and decisions about a subject in this workspace, dated and sourced. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
+| `recall_recent_work` | Lists this workspace's most recent remembered drafts and decisions. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
+| `explain_memory` | Shows where one memory came from: its record, the draft versions it replaced, and its subjects. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
 
 ### Write actions (5)
 
 | Name | What it is | Taught in |
 | --- | --- | --- |
-| `save-marketing-brief` | Have the Campaign Creation agent save the focus as a Marketing Cloud brief. Needs a permission check and your confirmation. | [3.6 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#36-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
-| `create-marketing-campaign` | Have the Campaign Creation agent create the campaign and its flow from the saved brief. Needs a permission check and your confirmation. | [3.6 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#36-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
-| `create-review-task` | Create a Salesforce review task for the open campaign. Needs a permission check and your confirmation. | [3.9 Governance: permissions, confirmations, and kill switches](#39-governance-permissions-confirmations-and-kill-switches) |
-| `attach-generated-image` | Attach an approved generated image to the open campaign. Needs a permission check and your confirmation. | [3.9 Governance: permissions, confirmations, and kill switches](#39-governance-permissions-confirmations-and-kill-switches) |
-| `create-inventory-case` | Open a Salesforce case for a store manager from an inventory check's low items. Needs a permission check and your confirmation. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `save-marketing-brief` | Have the Campaign Creation agent save the focus as a Marketing Cloud brief. Needs a permission check and your confirmation. | [3.7 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#37-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
+| `create-marketing-campaign` | Have the Campaign Creation agent create the campaign and its flow from the saved brief. Needs a permission check and your confirmation. | [3.7 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#37-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
+| `create-review-task` | Create a Salesforce review task for the open campaign. Needs a permission check and your confirmation. | [3.10 Governance: permissions, confirmations, and kill switches](#310-governance-permissions-confirmations-and-kill-switches) |
+| `attach-generated-image` | Attach an approved generated image to the open campaign. Needs a permission check and your confirmation. | [3.10 Governance: permissions, confirmations, and kill switches](#310-governance-permissions-confirmations-and-kill-switches) |
+| `create-inventory-case` | Open a Salesforce case for a store manager from an inventory check's low items. Needs a permission check and your confirmation. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
 
 ### Graph nodes (34)
 
 | Name | What it is | Taught in |
 | --- | --- | --- |
-| `Brand` | Workbench and its brands: Coastline Kitchen (restaurants) and Harborstone Wealth (wealth management). | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
+| `Brand` | Workbench and its brands: Sample Kitchen (restaurants) and Sample Wealth (wealth management). | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `Channel` | Email, SMS, and the mobile app. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `ConsentScope` | A consent a person or segment holds for a channel. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `BrandRule` | A brand rule that content passes or fails. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
-| `Campaign` | A marketing campaign, for Workbench or Coastline Kitchen. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
+| `Campaign` | A marketing campaign, for Workbench or Sample Kitchen. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `Brief` | The brief a campaign's content is built from. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `ContentAsset` | An email, push, or other piece of campaign content. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `Segment` | An audience a campaign targets. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `Account` | A fictional B2B customer account. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `Persona` | A buying role at an account; roles, not real people. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
-| `Daypart` | A time of day: breakfast, lunch, afternoon, dinner, and so on. | [3.14 Campaign context: restaurant data and live weather](#314-campaign-context-restaurant-data-and-live-weather) |
-| `WeatherCondition` | A weather bucket: clear, cloudy, fog, rain, or heat. | [3.14 Campaign context: restaurant data and live weather](#314-campaign-context-restaurant-data-and-live-weather) |
-| `Menu` | Coastline Kitchen's menu. | [3.14 Campaign context: restaurant data and live weather](#314-campaign-context-restaurant-data-and-live-weather) |
-| `MenuItem` | A dish on the menu, with its order rate. | [3.14 Campaign context: restaurant data and live weather](#314-campaign-context-restaurant-data-and-live-weather) |
-| `Location` | A Coastline Kitchen restaurant in California. | [3.14 Campaign context: restaurant data and live weather](#314-campaign-context-restaurant-data-and-live-weather) |
-| `InventoryItem` | Stock a restaurant keeps, counted in kitchen units. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `StoreManager` | A restaurant's store manager, by name only. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `Daypart` | A time of day: breakfast, lunch, afternoon, dinner, and so on. | [3.15 Campaign context: restaurant data and live weather](#315-campaign-context-restaurant-data-and-live-weather) |
+| `WeatherCondition` | A weather bucket: clear, cloudy, fog, rain, or heat. | [3.15 Campaign context: restaurant data and live weather](#315-campaign-context-restaurant-data-and-live-weather) |
+| `Menu` | Sample Kitchen's menu. | [3.15 Campaign context: restaurant data and live weather](#315-campaign-context-restaurant-data-and-live-weather) |
+| `MenuItem` | A dish on the menu, with its order rate. | [3.15 Campaign context: restaurant data and live weather](#315-campaign-context-restaurant-data-and-live-weather) |
+| `Location` | A Sample Kitchen restaurant in California. | [3.15 Campaign context: restaurant data and live weather](#315-campaign-context-restaurant-data-and-live-weather) |
+| `InventoryItem` | Stock a restaurant keeps, counted in kitchen units. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `StoreManager` | A restaurant's store manager, by name only. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
 | `PushSend` | One past push notification send and how it performed. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
-| `EmailSend` | One past Coastline email send: its opens, clicks, and orders. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
-| `Approval` | A compliance approval record: approved, expired, or pending, with its dates and any embargo. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `Disclosure` | Required disclosure text a regulated asset must carry. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `MarketEvent` | A market event Harborstone prepares approved content for. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `ClientSend` | A past Harborstone response: hours after the news, opens, clicks. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `Deal` | Harborstone's embargoed acquisition. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `Firm` | The firm being acquired. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `Client` | A Harborstone client: a foundation, business, or family office. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `Advisor` | The Harborstone advisor who covers a client. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `Product` | A Harborstone product or service a client can hold. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `Signal` | Something the relationship team noticed about a client. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `Workspace` | The workspace that owns a memory. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
-| `MemoryEvent` | The server event that created a memory, with a hashed actor. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
-| `Draft` | One remembered version of a focus draft. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
-| `Decision` | A confirmed save, review, or image attachment. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
-| `RecordRef` | The Salesforce record a decision was recorded in. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
+| `EmailSend` | One past Sample Kitchen email send: its opens, clicks, and orders. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
+| `Approval` | A compliance approval record: approved, expired, or pending, with its dates and any embargo. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `Disclosure` | Required disclosure text a regulated asset must carry. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `MarketEvent` | A market event Sample Wealth prepares approved content for. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `ClientSend` | A past Sample Wealth response: hours after the news, opens, clicks. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `Deal` | Sample Wealth's embargoed acquisition. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `Firm` | The firm being acquired. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `Client` | A Sample Wealth client: a foundation, business, or family office. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `Advisor` | The Sample Wealth advisor who covers a client. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `Product` | A Sample Wealth product or service a client can hold. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `Signal` | Something the relationship team noticed about a client. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `Workspace` | The workspace that owns a memory. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
+| `MemoryEvent` | The server event that created a memory, with a hashed actor. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
+| `Draft` | One remembered version of a focus draft. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
+| `Decision` | A confirmed save, review, or image attachment. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
+| `RecordRef` | The Salesforce record a decision was recorded in. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
 
 ### Graph relationships (53)
 
@@ -1511,65 +1571,65 @@ Who decides whether you may create a campaign from the workbench?
 | `ENGAGED_WITH` | A persona that engaged with a content asset. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `INCLUDES` | A segment including a persona. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `HAS_CONSENT` | A persona or segment holding a consent scope; segments carry opt-in counts per channel. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
-| `MENU_OF` | A menu belonging to its brand. | [3.14 Campaign context: restaurant data and live weather](#314-campaign-context-restaurant-data-and-live-weather) |
-| `ON_MENU` | A menu item on the menu. | [3.14 Campaign context: restaurant data and live weather](#314-campaign-context-restaurant-data-and-live-weather) |
-| `AVAILABLE_DURING` | A menu item offered during a daypart. | [3.14 Campaign context: restaurant data and live weather](#314-campaign-context-restaurant-data-and-live-weather) |
-| `FAVORITE` | A brand's favorite menu item. | [3.14 Campaign context: restaurant data and live weather](#314-campaign-context-restaurant-data-and-live-weather) |
-| `OPERATES` | A brand operating a location. | [3.14 Campaign context: restaurant data and live weather](#314-campaign-context-restaurant-data-and-live-weather) |
-| `SERVES` | A location serving a menu. | [3.14 Campaign context: restaurant data and live weather](#314-campaign-context-restaurant-data-and-live-weather) |
+| `MENU_OF` | A menu belonging to its brand. | [3.15 Campaign context: restaurant data and live weather](#315-campaign-context-restaurant-data-and-live-weather) |
+| `ON_MENU` | A menu item on the menu. | [3.15 Campaign context: restaurant data and live weather](#315-campaign-context-restaurant-data-and-live-weather) |
+| `AVAILABLE_DURING` | A menu item offered during a daypart. | [3.15 Campaign context: restaurant data and live weather](#315-campaign-context-restaurant-data-and-live-weather) |
+| `FAVORITE` | A brand's favorite menu item. | [3.15 Campaign context: restaurant data and live weather](#315-campaign-context-restaurant-data-and-live-weather) |
+| `OPERATES` | A brand operating a location. | [3.15 Campaign context: restaurant data and live weather](#315-campaign-context-restaurant-data-and-live-weather) |
+| `SERVES` | A location serving a menu. | [3.15 Campaign context: restaurant data and live weather](#315-campaign-context-restaurant-data-and-live-weather) |
 | `NEAR` | An app segment near a location. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
-| `MADE_WITH` | A menu item made with an inventory item, per serving. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `LIFTS_DEMAND` | Weather that raises a menu item's orders, learned from past pushes. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `MANAGED_BY` | A location managed by its store manager. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `APPROVED_UNDER` | Regulated content and the approval it was released under. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `REQUIRES` | Regulated content and a disclosure it must carry. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `APPROVED_FOR` | Regulated content and the channel it's approved for. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `RESPONDS_TO` | Content or a past response prepared for a market event. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `EXPLAINS` | Content explaining a product. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `RELEASED_WITH` | An announcement asset, its release step, and timing. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `ADDRESSED_TO` | An announcement asset and the audience it goes to. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `ANNOUNCED_BY` | A deal announced by its brand. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `ANNOUNCES` | A campaign announcing a deal. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `ACQUIRES` | A deal and the firm it acquires. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `CLIENT_OF` | A client of a brand, or a segment of a firm's clients. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `COVERED_BY` | A client and the advisor who covers it. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `HOLDS` | A client holding a product, with its assets in $ millions. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `HAS_SIGNAL` | A client showing a signal, and when it was detected. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `SUGGESTS` | A signal pointing to a product, with the share it might capture. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `OFFERS` | A brand offering a product. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
-| `ADVISES_FOR` | An advisor at a brand. | [3.15 The use-case library: marketing, sales, service, and financial services](#315-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `MADE_WITH` | A menu item made with an inventory item, per serving. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `LIFTS_DEMAND` | Weather that raises a menu item's orders, learned from past pushes. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `MANAGED_BY` | A location managed by its store manager. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `APPROVED_UNDER` | Regulated content and the approval it was released under. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `REQUIRES` | Regulated content and a disclosure it must carry. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `APPROVED_FOR` | Regulated content and the channel it's approved for. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `RESPONDS_TO` | Content or a past response prepared for a market event. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `EXPLAINS` | Content explaining a product. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `RELEASED_WITH` | An announcement asset, its release step, and timing. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `ADDRESSED_TO` | An announcement asset and the audience it goes to. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `ANNOUNCED_BY` | A deal announced by its brand. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `ANNOUNCES` | A campaign announcing a deal. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `ACQUIRES` | A deal and the firm it acquires. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `CLIENT_OF` | A client of a brand, or a segment of a firm's clients. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `COVERED_BY` | A client and the advisor who covers it. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `HOLDS` | A client holding a product, with its assets in $ millions. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `HAS_SIGNAL` | A client showing a signal, and when it was detected. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `SUGGESTS` | A signal pointing to a product, with the share it might capture. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `OFFERS` | A brand offering a product. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
+| `ADVISES_FOR` | An advisor at a brand. | [3.16 The use-case library: marketing, sales, service, and financial services](#316-the-use-case-library-marketing-sales-service-and-financial-services) |
 | `USED` | A push send that used a content asset. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `SENT_TO` | A push send delivered to a segment. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `SENT_UNDER` | A push send made under a consent scope. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `FEATURED` | A push send featuring a menu item. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `SENT_DURING` | A push send made during a daypart. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
 | `UNDER` | A push send made under a weather condition. | [2.3 How this demo does GraphRAG](#23-how-this-demo-does-graphrag) |
-| `IN_WORKSPACE` | A memory event in its workspace. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
-| `CREATED` | The memory event that created a draft or decision. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
-| `SUPERSEDES` | A draft version replacing the one before it. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
-| `ABOUT` | A memory about a campaign or brand in the demo graph. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
-| `DECIDED_ON` | A decision about the draft version it saved. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
-| `RECORDED_IN` | A decision recorded in a Salesforce record. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
+| `IN_WORKSPACE` | A memory event in its workspace. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
+| `CREATED` | The memory event that created a draft or decision. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
+| `SUPERSEDES` | A draft version replacing the one before it. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
+| `ABOUT` | A memory about a campaign or brand in the demo graph. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
+| `DECIDED_ON` | A decision about the draft version it saved. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
+| `RECORDED_IN` | A decision recorded in a Salesforce record. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
 
 ### Operator controls (3)
 
 | Name | What it is | Taught in |
 | --- | --- | --- |
-| `WRITES_ENABLED` | Set to false to pause every Salesforce write without a deploy. | [3.9 Governance: permissions, confirmations, and kill switches](#39-governance-permissions-confirmations-and-kill-switches) |
-| `DISABLED_TOOLS` | A comma-separated list of tools to withhold from the model or block as writes. | [3.9 Governance: permissions, confirmations, and kill switches](#39-governance-permissions-confirmations-and-kill-switches) |
-| `MEMORY_ENABLED` | Set to false to stop remembering and withhold the recall tools. | [3.16 Long-term memory: remembering across chats](#316-long-term-memory-remembering-across-chats) |
+| `WRITES_ENABLED` | Set to false to pause every Salesforce write without a deploy. | [3.10 Governance: permissions, confirmations, and kill switches](#310-governance-permissions-confirmations-and-kill-switches) |
+| `DISABLED_TOOLS` | A comma-separated list of tools to withhold from the model or block as writes. | [3.10 Governance: permissions, confirmations, and kill switches](#310-governance-permissions-confirmations-and-kill-switches) |
+| `MEMORY_ENABLED` | Set to false to stop remembering and withhold the recall tools. | [3.17 Long-term memory: remembering across chats](#317-long-term-memory-remembering-across-chats) |
 
 ### Salesforce components (10)
 
 | Name | What it is | Taught in |
 | --- | --- | --- |
-| `WorkbenchCheckWriteAccess` | Apex: the read-only permission check run as the user. | [3.9 Governance: permissions, confirmations, and kill switches](#39-governance-permissions-confirmations-and-kill-switches) |
-| `WorkbenchConfirmationVerifier` | Apex: verifies the signed confirmation before any write. | [3.9 Governance: permissions, confirmations, and kill switches](#39-governance-permissions-confirmations-and-kill-switches) |
-| `WorkbenchGetMarketingRecords` | Apex: reads back the Brief, preview steps, Campaign, and flow the agent created. | [3.6 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#36-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
-| `WorkbenchCreateCampaignReviewRequest` | Apex action behind create_campaign_review_request. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `WorkbenchCreateInventoryCase` | Apex action behind create_inventory_case; checks the contents' hash. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `WorkbenchAttachCampaignImage` | Apex action behind attach_campaign_image; checks the hash. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `WorkbenchGetCampaignContext` | Apex action: bounded campaign context for the readiness check. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `WorkbenchGetConsentSummary` | Apex action: aggregate consent evidence, no customer fields. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `WorkbenchValidateCampaignContent` | Apex action: readiness checks on campaign fields, including instruction-like text. | [3.5 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#35-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
-| `Workbench_Confirmation_Config__c` | Custom setting holding the key Apex uses to verify signed confirmations. | [3.9 Governance: permissions, confirmations, and kill switches](#39-governance-permissions-confirmations-and-kill-switches) |
+| `WorkbenchCheckWriteAccess` | Apex: the read-only permission check run as the user. | [3.10 Governance: permissions, confirmations, and kill switches](#310-governance-permissions-confirmations-and-kill-switches) |
+| `WorkbenchConfirmationVerifier` | Apex: verifies the signed confirmation before any write. | [3.10 Governance: permissions, confirmations, and kill switches](#310-governance-permissions-confirmations-and-kill-switches) |
+| `WorkbenchGetMarketingRecords` | Apex: reads back the Brief, preview steps, Campaign, and flow the agent created. | [3.7 Marketing Cloud Next: agent-built briefs, campaigns, and flows](#37-marketing-cloud-next-agent-built-briefs-campaigns-and-flows) |
+| `WorkbenchCreateCampaignReviewRequest` | Apex action behind create_campaign_review_request. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `WorkbenchCreateInventoryCase` | Apex action behind create_inventory_case; checks the contents' hash. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `WorkbenchAttachCampaignImage` | Apex action behind attach_campaign_image; checks the hash. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `WorkbenchGetCampaignContext` | Apex action: bounded campaign context for the readiness check. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `WorkbenchGetConsentSummary` | Apex action: aggregate consent evidence, no customer fields. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `WorkbenchValidateCampaignContent` | Apex action: readiness checks on campaign fields, including instruction-like text. | [3.6 Salesforce: Agentforce agents, Hosted MCP, and Apex actions](#36-salesforce-agentforce-agents-hosted-mcp-and-apex-actions) |
+| `Workbench_Confirmation_Config__c` | Custom setting holding the key Apex uses to verify signed confirmations. | [3.10 Governance: permissions, confirmations, and kill switches](#310-governance-permissions-confirmations-and-kill-switches) |

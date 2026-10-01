@@ -31,8 +31,15 @@ export const SECTION_SOURCES: Record<string, readonly string[]> = {
     "apps/edge/src/orchestrator.ts",
     "apps/edge/src/index.ts",
     "apps/edge/src/models.ts",
+  ],
+  instance: [
     "packages/contracts/src/profile.ts",
+    "packages/contracts/src/pack.ts",
+    "packages/contracts/src/brands.ts",
+    "packages/industry-packs/src/",
     "scripts/build-profile.mjs",
+    "scripts/lib/instance.mjs",
+    "scripts/check-template.mjs",
   ],
   workspace: [
     "apps/edge/src/working-set.ts",
@@ -160,9 +167,9 @@ export const UNTAUGHT_SOURCES: ReadonlyArray<{ path: string; reason: string }> =
   { path: "scripts/install-git-hooks.mjs", reason: "Developer setup" },
   { path: "scripts/verify.mjs", reason: "Delivery gate runner" },
   { path: "scripts/lib/report.mjs", reason: "Gate report helper" },
-  { path: "scripts/prove-salesforce-mcp.mjs", reason: "One-time OAuth proof" },
-  { path: "scripts/run-live-proof.mjs", reason: "Production smoke test" },
-  { path: "scripts/test-production-chat.mjs", reason: "Production smoke test" },
+  { path: "scripts/prove-salesforce-mcp.mjs", reason: "One-time OAuth check" },
+  { path: "scripts/run-live-proof.mjs", reason: "Deployed-instance smoke test" },
+  { path: "scripts/test-production-chat.mjs", reason: "Deployed-instance smoke test" },
   { path: "scripts/validate-salesforce.mjs", reason: "Salesforce CI validation" },
 ];
 

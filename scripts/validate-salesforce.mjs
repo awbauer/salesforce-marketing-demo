@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { report } from "./lib/report.mjs";
 
 const targetOrg = process.env.SF_TARGET_ORG?.trim();
-const approvedProofOrgId = process.env.SF_APPROVED_PROOF_ORG_ID?.trim();
+const approvedOrgId = process.env.SF_APPROVED_ORG_ID?.trim();
 const checks = [];
 const failures = [];
 const observations = {};
@@ -43,17 +43,14 @@ if (!targetOrg) {
   );
   const organizationRecord = organization?.records?.[0];
   const isSandbox = organizationRecord?.IsSandbox === true;
-  const isApprovedProofOrg =
-    targetOrg === "workbench-pot" &&
-    Boolean(approvedProofOrgId) &&
-    approvedProofOrgId === organizationRecord?.Id;
+  const isApprovedOrg = Boolean(approvedOrgId) && approvedOrgId === organizationRecord?.Id;
   checks.push({
-    label: "sandbox or exact approved proof-org classification",
-    passed: isSandbox || isApprovedProofOrg,
+    label: "sandbox or exact approved org classification",
+    passed: isSandbox || isApprovedOrg,
   });
-  if (!isSandbox && !isApprovedProofOrg) {
+  if (!isSandbox && !isApprovedOrg) {
     failures.push(
-      "SF_TARGET_ORG is not a sandbox or the exact user-approved proof org; Phase 2 forbids business-data checks or deployment.",
+      "SF_TARGET_ORG is not a sandbox or the exact approved org; the workbench forbids business-data checks or deployment.",
     );
   } else {
     const campaigns = sf(
@@ -144,7 +141,7 @@ if (!targetOrg) {
 await report("salesforce-validation", {
   status: failures.length ? "blocked" : "passed",
   targetProvided: Boolean(targetOrg),
-  exactProofOrgApprovalProvided: Boolean(approvedProofOrgId),
+  exactOrgApprovalProvided: Boolean(approvedOrgId),
   sandboxRequired: true,
   apiVersionRequired: "67.0",
   observations,

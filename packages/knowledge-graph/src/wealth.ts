@@ -1,3 +1,4 @@
+import { WEALTH_BRAND } from "../../contracts/src/brands.ts";
 /**
  * Sample Wealth: a fictional wealth-management brand under Workbench, for the financial
  * services use cases. Everything here is invented. Regulated content is only released when it is
@@ -7,7 +8,7 @@
 
 export const WEALTH = {
   id: "brand-wealth",
-  name: "Sample Wealth",
+  name: `${WEALTH_BRAND}`,
   voice:
     "Calm, plain-spoken, and fiduciary: explain what a change means for the client, never predict markets or promise returns.",
 } as const;
@@ -42,7 +43,7 @@ export const DISCLOSURES = {
   },
   "tax-legal": {
     name: "Tax and legal advice",
-    text: "Sample Wealth does not provide tax or legal advice.",
+    text: `${WEALTH_BRAND} does not provide tax or legal advice.`,
   },
 } as const;
 export type DisclosureKey = keyof typeof DISCLOSURES;
@@ -165,7 +166,7 @@ const approved = (id: string, approvedOn: string, expiresOn: string): Approval =
 /** Sample Wealth's rapid-response program: responses to market events, approved ahead of time. */
 export const MARKET_MOMENTS_CAMPAIGN = {
   id: "camp-wealth-market-moments",
-  name: "Sample Wealth Market Moments",
+  name: `${WEALTH_BRAND} Market Moments`,
   status: "Active",
 } as const;
 
@@ -346,7 +347,7 @@ export const PAST_RESPONSES = [
 export const WEALTH_SEGMENTS = [
   {
     id: "segment-wealth-clients",
-    name: "Sample Wealth clients",
+    name: `${WEALTH_BRAND} clients`,
     size: 48_200,
     audienceType: "clients",
     consent: [
@@ -357,7 +358,7 @@ export const WEALTH_SEGMENTS = [
   },
   {
     id: "segment-wealth-subscribers",
-    name: "Sample Wealth Insights subscribers",
+    name: `${WEALTH_BRAND} Insights subscribers`,
     size: 22_500,
     audienceType: "prospects",
     consent: [["consent-email-marketing", 22_500]],
@@ -371,7 +372,7 @@ export const WEALTH_SEGMENTS = [
   },
   {
     id: "segment-wealth-advisors",
-    name: "Sample Wealth advisors",
+    name: `${WEALTH_BRAND} advisors`,
     size: 340,
     audienceType: "internal",
     consent: [],
@@ -381,7 +382,7 @@ export type WealthSegmentId = (typeof WEALTH_SEGMENTS)[number]["id"];
 
 export const DEAL = {
   id: "deal-bayview",
-  name: "Sample Wealth to acquire Bayview Retirement Advisors",
+  name: `${WEALTH_BRAND} to acquire Bayview Retirement Advisors`,
   status: "Signed; announcement embargoed",
   firm: { id: "firm-bayview", name: "Bayview Retirement Advisors", clients: 12_600 },
   campaign: { id: "camp-wealth-bayview", name: "Bayview Welcome", status: "Embargoed" },
@@ -484,7 +485,7 @@ export const DEAL_ASSETS: DealAsset[] = [
 /** Relationship-growth content: one approved explainer per product, used in account plans. */
 export const GROWTH_CAMPAIGN = {
   id: "camp-wealth-growth",
-  name: "Sample Wealth Relationship Growth",
+  name: `${WEALTH_BRAND} Relationship Growth`,
   status: "Active",
 } as const;
 

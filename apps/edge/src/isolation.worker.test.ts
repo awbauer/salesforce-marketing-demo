@@ -1,12 +1,11 @@
 import { env } from "cloudflare:test";
-import { DEFAULTS } from "@workbench/contracts";
+import { INSTANCE_PROFILE } from "@workbench/contracts";
 import { getAgentByName } from "agents";
 import { describe, expect, it } from "vitest";
 import { deriveAgentKey } from "./auth";
-import { INSTANCE_PROFILE } from "./generated/profile";
 import { openCatalogCampaign } from "./worker.test-helpers";
 
-const CAMPAIGN_ID = "701jV000004GglIQAS";
+const CAMPAIGN_ID = "701xx0000A1B2C3D4E";
 const PNG = Uint8Array.from(
   atob(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
@@ -21,7 +20,7 @@ async function agentFor(subject: string) {
       subject,
       email: `${subject}@workbench.example`,
       role: "evaluator",
-      tenantId: "workbench-pot",
+      tenantId: INSTANCE_PROFILE.instance.id,
     },
     INSTANCE_PROFILE.instance.id,
   );

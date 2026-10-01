@@ -1,5 +1,6 @@
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
+import { RESTAURANT_BRAND } from "@workbench/contracts";
 import { jsonSchema, type ToolSet, tool } from "ai";
 import { z } from "zod";
 import { LOCATION_IDS, LOCATIONS } from "../campaign-context/open-meteo.ts";
@@ -61,9 +62,9 @@ export function createExternalServicesMcpServer(dependencies: ExternalServicesDe
     "get_weather_alerts",
     {
       title: "Get weather alerts",
-      description: `Active National Weather Service watches, warnings, and advisories at a Sample Kitchen location (free public API), most severe first, plus other active alerts elsewhere in California. Locations: ${LOCATION_IDS.map((id) => `${id} (${LOCATIONS[id].city})`).join(", ")}.`,
+      description: `Active National Weather Service watches, warnings, and advisories at a ${RESTAURANT_BRAND} location (free public API), most severe first, plus other active alerts elsewhere in California. Locations: ${LOCATION_IDS.map((id) => `${id} (${LOCATIONS[id].city})`).join(", ")}.`,
       inputSchema: z.object({
-        location: z.enum(LOCATION_IDS).describe("Sample Kitchen location (city id)"),
+        location: z.enum(LOCATION_IDS).describe(`${RESTAURANT_BRAND} location (city id)`),
       }),
       annotations: { readOnlyHint: true, openWorldHint: true },
     },

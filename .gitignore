@@ -13,4 +13,6 @@ dist/
 
 /workbench.profile.json
 /.workbench/
-/apps/edge/src/generated/
+/packages/contracts/src/generated/
+
+/artifacts/

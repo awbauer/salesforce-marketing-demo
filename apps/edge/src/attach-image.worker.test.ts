@@ -1,9 +1,9 @@
 import { env, SELF } from "cloudflare:test";
+import { INSTANCE_PROFILE } from "@workbench/contracts";
 import { beforeEach, describe, expect, it } from "vitest";
-import { INSTANCE_PROFILE } from "./generated/profile";
 import { openCatalogCampaign } from "./worker.test-helpers";
 
-const CAMPAIGN_ID = "701jV000004GglIQAS";
+const CAMPAIGN_ID = "701xx0000A1B2C3D4E";
 // A valid 1x1 PNG; fictional test content only.
 const PNG = Uint8Array.from(
   atob(
@@ -113,7 +113,7 @@ describe("confirmed campaign image attachment", () => {
   it("rejects unknown images and drafts generated for another campaign", async () => {
     expect((await preflight(crypto.randomUUID())).status).toBe(400);
     const imageId = crypto.randomUUID();
-    await seedDraft(imageId, "701jV000009ZZZZQAS");
+    await seedDraft(imageId, "701xx0000Z9Y8X7W6V");
     expect((await preflight(imageId)).status).toBe(400);
   });
 

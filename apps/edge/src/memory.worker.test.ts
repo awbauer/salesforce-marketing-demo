@@ -1,9 +1,8 @@
 import { runInDurableObject, SELF } from "cloudflare:test";
-import { DEFAULTS, type WorkingSet } from "@workbench/contracts";
+import { INSTANCE_PROFILE, type WorkingSet } from "@workbench/contracts";
 import { describe, expect, it } from "vitest";
 import { notMemoryCases, rememberCases } from "../../../packages/evals/src/cases";
 import type { FocusInput } from "./focus";
-import { INSTANCE_PROFILE } from "./generated/profile";
 import { connectKnowledgeGraphTools, knowledgeGraphBackend } from "./knowledge-graph/server";
 import { memoryActorHash, memorySubjects } from "./memory";
 import { isRecallRequest, isRememberRequest, requestedToolName } from "./turn-policy";
@@ -74,10 +73,10 @@ describe("long-term memory routing", () => {
         current: 1,
         versions: [{ ...draft("Rainy-day comfort"), version: 1, basedOn: [], createdAt: "" }],
       },
-      campaignIds: ["701jV000004GglIQAS", undefined],
+      campaignIds: ["701xx0000A1B2C3D4E", undefined],
     });
     expect(subjects).toEqual({
-      salesforceIds: ["701jV000004GglIQAS"],
+      salesforceIds: ["701xx0000A1B2C3D4E"],
       names: ["Sample Kitchen Weather Moments", "Sample Kitchen"],
     });
   });

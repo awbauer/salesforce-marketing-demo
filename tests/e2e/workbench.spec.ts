@@ -47,7 +47,7 @@ test("builds the workspace from the chat and completes a durable turn", async ({
   await expect(campaign).toContainText("Opened");
   await expect(campaign.getByRole("link", { name: /Open in Salesforce/ })).toHaveAttribute(
     "href",
-    "https://pu1788182184076.my.salesforce.com/lightning/r/Campaign/701jV000004GglIQAS/view",
+    "https://pu1788182184076.my.salesforce.com/lightning/r/Campaign/701xx0000A1B2C3D4E/view",
   );
   await expect(workspace.getByTestId("tile-readiness")).toContainText("Salesforce · local fixture");
   await expect(workspace.getByTestId("tile-campaign-summary")).toBeVisible();
@@ -111,7 +111,7 @@ test("builds the workspace from the chat and completes a durable turn", async ({
   await page.unroute("**/agent/suggestions/*/accept");
   await expect(preparingPanel).toHaveCount(0);
   await expect(
-    page.locator(".confirmation-card").getByRole("link", { name: /701jV000004GglIQAS/ }),
+    page.locator(".confirmation-card").getByRole("link", { name: /701xx0000A1B2C3D4E/ }),
   ).toBeVisible();
   await page.screenshot({
     path: `artifacts/evidence/WU-006/confirmation-${testInfo.project.name}.png`,
@@ -343,7 +343,7 @@ test("attaches a selected image draft only after an explicit confirmation", asyn
   const confirmation = {
     id: "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a4b",
     action: "attach-generated-image",
-    recordId: "701jV000004GglIQAS",
+    recordId: "701xx0000A1B2C3D4E",
     imageId,
     contentHash,
     principalSubject: "local-evaluator",
@@ -359,7 +359,7 @@ test("attaches a selected image draft only after an explicit confirmation", asyn
       status: 201,
       json: {
         id: imageId,
-        campaignId: "701jV000004GglIQAS",
+        campaignId: "701xx0000A1B2C3D4E",
         imageUrl: `/agent/images/${imageId}`,
         promptSummary: "A quiet trailhead at golden hour",
         channel: "email",
@@ -388,7 +388,7 @@ test("attaches a selected image draft only after an explicit confirmation", asyn
           source: "salesforce",
           recordId: "069jV000000AbCdQAK",
           contentVersionId: "068jV000000AbCdQAK",
-          campaignId: "701jV000004GglIQAS",
+          campaignId: "701xx0000A1B2C3D4E",
           title: "Workbench email campaign image",
           contentSize: 1_482_113,
           contentHash,
@@ -405,7 +405,7 @@ test("attaches a selected image draft only after an explicit confirmation", asyn
   await page.getByRole("button", { name: "Attach to campaign" }).click();
   expect(attachRequest).toEqual({
     action: "attach-generated-image",
-    recordId: "701jV000004GglIQAS",
+    recordId: "701xx0000A1B2C3D4E",
     imageId,
   });
   const card = page.locator(".confirmation-card");
@@ -648,7 +648,7 @@ test("reviews persisted image variants and rejects one so it cannot be attached"
   );
   const variant = (id: string, promptSummary: string) => ({
     id,
-    campaignId: "701jV000004GglIQAS",
+    campaignId: "701xx0000A1B2C3D4E",
     imageUrl: `/agent/images/${id}`,
     promptSummary,
     channel: "email",
@@ -834,12 +834,12 @@ test("filters the graph explorer to one brand's own nodes", async ({ page }) => 
     .click();
   await expect(page.getByRole("heading", { name: "Graph explorer" })).toBeVisible();
   const all = page.getByRole("button", { name: "All brands", exact: true });
-  const sample kitchen = page.getByRole("button", { name: "Sample Kitchen", exact: true });
+  const restaurantBrand = page.getByRole("button", { name: "Sample Kitchen", exact: true });
   const workbench = page.getByRole("button", { name: "Workbench", exact: true });
   await expect(all).toHaveAttribute("aria-pressed", "true");
 
-  await restaurant.click();
-  await expect(sample kitchen).toHaveAttribute("aria-pressed", "true");
+  await restaurantBrand.click();
+  await expect(restaurantBrand).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText(/loaded nodes connect to Sample Kitchen/)).toContainText(
     "Workbench, its parent brand, is hidden",
   );
@@ -875,8 +875,8 @@ test("filters the graph explorer to one brand's own nodes", async ({ page }) => 
   ).toBeVisible();
 
   // Sample Wealth keeps its regulated content, deal, and clients, not Sample Kitchen's menu.
-  const sample wealth = page.getByRole("button", { name: "Sample Wealth", exact: true });
-  await wealth.click();
+  const wealthBrand = page.getByRole("button", { name: "Sample Wealth", exact: true });
+  await wealthBrand.click();
   await expect(
     page.getByRole("img", { name: /Knowledge graph drawing with 158 nodes/ }),
   ).toBeVisible();

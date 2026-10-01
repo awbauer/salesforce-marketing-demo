@@ -456,6 +456,27 @@ Four properties make it trustworthy:
         resources: [R.gptOss20b, R.gptOssRepo, R.harmony, R.workersAi, R.aiGateway],
       },
       {
+        id: "instance",
+        title: "Your instance: profile and industry packs",
+        summary: "One profile and one industry pack make this workbench yours for a client demo.",
+        body: `Everything that makes a copy of the workbench *yours* lives in one validated file, \`workbench.profile.json\`: the client's fictional brand, audience (internal or external), industry, the use cases to show, model providers, caps, retention, whether Salesforce is a sandbox or fixtures, and where it deploys. \`pnpm workbench:init\` asks for these and writes the file; \`pnpm profile:build\` compiles it into the app, because the Worker has no filesystem and tool schemas are built when the code loads.
+
+An **industry pack** supplies what the profile can't invent safely: a vocabulary (twelve fictional accounts, the five seasonal campaigns, content kinds and brand rules), the use cases the pack supports, and a paragraph of industry context for the orchestrator's prompt.
+
+- **Tiers.** *Vertical* packs (restaurant, financial services) also switch on a module: extra graph data, tools and scenarios built for that industry, such as weather-driven inventory or pre-approved regulated content. *Core* packs (retail, healthcare, B2B technology, travel) run every core marketing flow with the industry's vocabulary. The *tour* pack turns everything on.
+- **Brand names.** The client brand becomes the vertical module's brand (and the parent is "Brand Group"), so the graph, tools, prompts and screens say the client's name. Other modules use sample names and stay off.
+- **Personalization.** The wizard can ask your local model to rename accounts and campaigns; the result is validated against the pack's schema and falls back to the pack's own values.
+- **Safety.** The writes, confirmations and data rules do not change per pack. \`pnpm template:check\` fails if instance files or example-client names are tracked, and tests, evals and the e2e suite run the full-tour profile so every module stays covered.`,
+        inDemo: [
+          "profiles/example.profile.json and profiles/demo-composite.profile.json",
+          "packages/contracts/src/profile.ts, packages/contracts/src/pack.ts",
+          "packages/industry-packs/src/index.ts",
+          "scripts/build-profile.mjs, scripts/check-template.mjs",
+          "docs/decisions/ADR-009-portable-instances.md",
+        ],
+        resources: [R.contextEngineering, R.buildingAgents],
+      },
+      {
         id: "mcp",
         title: "Tools and the Model Context Protocol (MCP)",
         summary:
@@ -497,7 +518,7 @@ The local servers are called **in-process** through an in-memory MCP transport. 
 
 The model never holds a write tool: only the confirmation flow can call the write tools, and every write runs as you.
 
-Metadata (Apex, fields, the permission set, and the MCP definition) deploys through a gated CI pipeline to one approved proof org.`,
+Metadata (Apex, fields, the permission set, and the MCP definition) deploys through a gated CI pipeline to the approved sandbox.`,
         inDemo: [
           "Use cases: Campaign performance summary, Launch readiness and review request",
           "“Salesforce agents” under each answer",
@@ -816,7 +837,7 @@ Memory may be stale, so reopening never marks a draft as saved, and a remembered
           "Chat: “Remember this draft”, then New chat and “What did we decide about …?”",
           "History → Memory (Reopen, Forget, Remember current draft)",
           "packages/knowledge-graph/src/memory.ts, apps/edge/src/memory.ts",
-          "docs/decisions/ADR-007-long-term-graph-memory.md",
+          "docs/archive/proof/decisions/ADR-007-long-term-graph-memory.md",
         ],
         resources: [R.contextEngineering, R.graphDb, R.cypher],
       },

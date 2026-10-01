@@ -49,7 +49,7 @@ describe("operator controls", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         action: "create-review-task",
-        recordId: "701jV000004GglIQAS",
+        recordId: "701xx0000A1B2C3D4E",
         summary: "Create a review task for the current blockers.",
       }),
     });

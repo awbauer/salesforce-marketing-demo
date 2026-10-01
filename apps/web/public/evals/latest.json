@@ -360,7 +360,7 @@
    "inputTokens": 1025,
    "outputTokens": 421,
    "steps": "stop,stop",
-   "excerpt": "According to the Salesforce summarization tool, the campaign with ID 701jV000004GglIQAS is named “VERO Phase 1 Launch.” It is currently in progress and is being executed as an email‑type campaign. To date, 12,400 emails have been sent. Rece"
+   "excerpt": "According to the Salesforce summarization tool, the campaign with ID 701xx0000A1B2C3D4E is named “VERO Phase 1 Launch.” It is currently in progress and is being executed as an email‑type campaign. To date, 12,400 emails have been sent. Rece"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -426,7 +426,7 @@
    "inputTokens": 1982,
    "outputTokens": 691,
    "steps": "stop,tool-calls,stop",
-   "excerpt": "The Salesforce record for campaign 701jV000004GglIQAS shows: - Campaign name: VERO Phase 1 Launch - Status: In Progress - Type: Email - Emails sent to date: 12,400 Recent performance metrics attached to the same record indicate: - Open rate",
+   "excerpt": "The Salesforce record for campaign 701xx0000A1B2C3D4E shows: - Campaign name: VERO Phase 1 Launch - Status: In Progress - Type: Email - Emails sent to date: 12,400 Recent performance metrics attached to the same record indicate: - Open rate",
    "failure": "noToolErrors"
   },
   {
@@ -449,7 +449,7 @@
    "inputTokens": 990,
    "outputTokens": 351,
    "steps": "stop,stop",
-   "excerpt": "Here is a draft of the campaign content for the **Fall loyalty reactivation** campaign (record ID 701jV000004GglIQAS). The copy is written for existing customers who haven’t purchased in the last six months and uses a warm, appreciative ton"
+   "excerpt": "Here is a draft of the campaign content for the **Fall loyalty reactivation** campaign (record ID 701xx0000A1B2C3D4E). The copy is written for existing customers who haven’t purchased in the last six months and uses a warm, appreciative ton"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -493,7 +493,7 @@
    "inputTokens": 1081,
    "outputTokens": 559,
    "steps": "stop,stop",
-   "excerpt": "Here is a draft of the email copy for the **Fall loyalty reactivation** campaign (record ID 701jV000004GglIQAS), aimed at the sample audience: - **Subject line:** Your trail is waiting – exclusive fall gear inside - **Pre‑header:** Members‑"
+   "excerpt": "Here is a draft of the email copy for the **Fall loyalty reactivation** campaign (record ID 701xx0000A1B2C3D4E), aimed at the sample audience: - **Subject line:** Your trail is waiting – exclusive fall gear inside - **Pre‑header:** Members‑"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -559,7 +559,7 @@
    "inputTokens": 1027,
    "outputTokens": 576,
    "steps": "stop,stop",
-   "excerpt": "The readiness check for the campaign (record 701jV000004GglIQAS) shows that 7 of 9 required checks are complete. Two items are still blocking the campaign from being fully ready. - Hero image alt text is missing The main visual for the camp"
+   "excerpt": "The readiness check for the campaign (record 701xx0000A1B2C3D4E) shows that 7 of 9 required checks are complete. Two items are still blocking the campaign from being fully ready. - Hero image alt text is missing The main visual for the camp"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -603,7 +603,7 @@
    "inputTokens": 997,
    "outputTokens": 317,
    "steps": "stop,stop",
-   "excerpt": "Readiness Check Summary for Campaign 701jV000004GglIQAS - Checks completed: 7 of 9 - Two blockers remain Blocker details: - Hero image alt text is missing – the primary visual for the campaign does not have alternative text defined, which i"
+   "excerpt": "Readiness Check Summary for Campaign 701xx0000A1B2C3D4E - Checks completed: 7 of 9 - Two blockers remain Blocker details: - Hero image alt text is missing – the primary visual for the campaign does not have alternative text defined, which i"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -625,7 +625,7 @@
    "inputTokens": 977,
    "outputTokens": 480,
    "steps": "stop,stop",
-   "excerpt": "Readiness check for the campaign (ID 701jV000004GglIQAS) shows 7 of 9 required checks completed. Two items are still blocking final review. - Hero image alt text is missing – the primary visual used in the campaign does not have descriptive"
+   "excerpt": "Readiness check for the campaign (ID 701xx0000A1B2C3D4E) shows 7 of 9 required checks completed. Two items are still blocking final review. - Hero image alt text is missing – the primary visual used in the campaign does not have descriptive"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1065,13 +1065,13 @@
    "inputTokens": 961,
    "outputTokens": 251,
    "steps": "stop,stop",
-   "excerpt": "The preview for the campaign **701jV000004GglIQAS** has been refined. The messaging now emphasizes the upcoming fall loyalty reactivation, includes a stronger call‑to‑action for members to claim exclusive offers, and the visual layout has b"
+   "excerpt": "The preview for the campaign **701xx0000A1B2C3D4E** has been refined. The messaging now emphasizes the upcoming fall loyalty reactivation, includes a stronger call‑to‑action for members to claim exclusive offers, and the visual layout has b"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
    "suite": "routing-pipeline",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 0,
    "route": "model",
@@ -1087,13 +1087,13 @@
    "inputTokens": 959,
    "outputTokens": 257,
    "steps": "stop,stop",
-   "excerpt": "The campaign with ID 701jV000004GglIQAS is titled **VERO Phase 1 Launch**. - It is an **Email**‑type campaign that is currently **In Progress**. - To date, **12,400** messages have been sent. Performance metrics show: - Open rate of **38 %*"
+   "excerpt": "The campaign with ID 701xx0000A1B2C3D4E is titled **VERO Phase 1 Launch**. - It is an **Email**‑type campaign that is currently **In Progress**. - To date, **12,400** messages have been sent. Performance metrics show: - Open rate of **38 %*"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
    "suite": "routing-pipeline",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 1,
    "route": "model",
@@ -1109,7 +1109,7 @@
    "inputTokens": 939,
    "outputTokens": 229,
    "steps": "stop,stop",
-   "excerpt": "The campaign with ID 701jV000004GglIQAS is titled **“VERO Phase 1 Launch.”** - Status: In Progress - Type: Email - Emails sent: 12,400 Performance indicators: - Open rate ≈ 38 % - Click‑through rate ≈ 7 % - Conversions ≈ 214 - Trend shows a"
+   "excerpt": "The campaign with ID 701xx0000A1B2C3D4E is titled **“VERO Phase 1 Launch.”** - Status: In Progress - Type: Email - Emails sent: 12,400 Performance indicators: - Open rate ≈ 38 % - Click‑through rate ≈ 7 % - Conversions ≈ 214 - Trend shows a"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1131,7 +1131,7 @@
    "inputTokens": 913,
    "outputTokens": 426,
    "steps": "stop,stop",
-   "excerpt": "Based on the current Salesforce evidence for the campaign 701jV000004GglIQAS, the available insight is: - Mobile email opens are exceeding desktop opens by roughly twelve percent. No additional performance metrics or readiness details were "
+   "excerpt": "Based on the current Salesforce evidence for the campaign 701xx0000A1B2C3D4E, the available insight is: - Mobile email opens are exceeding desktop opens by roughly twelve percent. No additional performance metrics or readiness details were "
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1197,7 +1197,7 @@
    "inputTokens": 965,
    "outputTokens": 429,
    "steps": "stop,stop",
-   "excerpt": "Here is a draft email for the **Fall loyalty reactivation** campaign (Campaign ID 701jV000004GglIQAS): - **Subject line:** Your trail is waiting – exclusive fall offers inside - **Pre‑header:** Members‑only gear picks for autumn hikes **Bod"
+   "excerpt": "Here is a draft email for the **Fall loyalty reactivation** campaign (Campaign ID 701xx0000A1B2C3D4E): - **Subject line:** Your trail is waiting – exclusive fall offers inside - **Pre‑header:** Members‑only gear picks for autumn hikes **Bod"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1247,7 +1247,7 @@
    "model": "@cf/openai/gpt-oss-120b",
    "suite": "routing-pipeline",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 0,
    "route": "model",
@@ -1263,14 +1263,14 @@
    "inputTokens": 403,
    "outputTokens": 111,
    "steps": "error",
-   "excerpt": "I can run a brand‑validation check, but I’ll need the specific copy you’d like reviewed. Please provide the text you want evaluated against the Northstar brand guidelines.",
+   "excerpt": "I can run a brand‑validation check, but I’ll need the specific copy you’d like reviewed. Please provide the text you want evaluated against the Workbench brand guidelines.",
    "failure": "toolCorrect"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
    "suite": "routing-pipeline",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 1,
    "route": "model",
@@ -1286,7 +1286,7 @@
    "inputTokens": 403,
    "outputTokens": 105,
    "steps": "error",
-   "excerpt": "I can run a brand‑validation check, but I need the specific copy or assets you’d like reviewed. Please share the content you want evaluated against the Northstar brand guidelines.",
+   "excerpt": "I can run a brand‑validation check, but I need the specific copy or assets you’d like reviewed. Please share the content you want evaluated against the Workbench brand guidelines.",
    "failure": "toolCorrect"
   },
   {
@@ -1398,7 +1398,7 @@
    "inputTokens": 1039,
    "outputTokens": 312,
    "steps": "stop,stop",
-   "excerpt": "Recent engagement for the account tied to the Fall loyalty reactivation campaign (ID 701jV000004GglIQAS) shows: - Last activity: attended a webinar - Engagement score: 72 (out of 100) - Trend: engagement is rising"
+   "excerpt": "Recent engagement for the account tied to the Fall loyalty reactivation campaign (ID 701xx0000A1B2C3D4E) shows: - Last activity: attended a webinar - Engagement score: 72 (out of 100) - Trend: engagement is rising"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1552,7 +1552,7 @@
    "inputTokens": 884,
    "outputTokens": 304,
    "steps": "stop,stop",
-   "excerpt": "The readiness check for campaign 701jV000004GglIQAS shows 7 of 9 checks passed. The two blockers reported relate to hero‑image alt text and commercial‑consent scope; no blocker mentions missing dates or an incomplete brief. Therefore, the c"
+   "excerpt": "The readiness check for campaign 701xx0000A1B2C3D4E shows 7 of 9 checks passed. The two blockers reported relate to hero‑image alt text and commercial‑consent scope; no blocker mentions missing dates or an incomplete brief. Therefore, the c"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -1955,7 +1955,7 @@
    "model": "@cf/openai/gpt-oss-120b",
    "suite": "routing-model-only",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 0,
    "route": "model",
@@ -1971,13 +1971,13 @@
    "inputTokens": 2013,
    "outputTokens": 170,
    "steps": "tool-calls,stop",
-   "excerpt": "Campaign 701jV000004GglIQAS – “VERO Phase 1 Launch” – is an email campaign currently marked **In Progress**. - Sent to 12,400 recipients. - Open rate 38 % and click‑through rate 6.7 %. - Generated 214 conversions, performing **8.4 % above**"
+   "excerpt": "Campaign 701xx0000A1B2C3D4E – “VERO Phase 1 Launch” – is an email campaign currently marked **In Progress**. - Sent to 12,400 recipients. - Open rate 38 % and click‑through rate 6.7 %. - Generated 214 conversions, performing **8.4 % above**"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
    "suite": "routing-model-only",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 1,
    "route": "model",
@@ -1993,7 +1993,7 @@
    "inputTokens": 2017,
    "outputTokens": 192,
    "steps": "tool-calls,stop",
-   "excerpt": "The campaign with ID 701jV000004GglIQAS is titled **VERO Phase 1 Launch**. - Status: In Progress - Type: Email - Emails sent: 12 400 Performance metrics: - Open rate: 38.2 % - Click‑through rate: 6.7 % - Conversions: 214 Overall, the campai"
+   "excerpt": "The campaign with ID 701xx0000A1B2C3D4E is titled **VERO Phase 1 Launch**. - Status: In Progress - Type: Email - Emails sent: 12 400 Performance metrics: - Open rate: 38.2 % - Click‑through rate: 6.7 % - Conversions: 214 Overall, the campai"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2037,7 +2037,7 @@
    "inputTokens": 2050,
    "outputTokens": 215,
    "steps": "tool-calls,stop",
-   "excerpt": "Here are the evidence‑backed insights for the campaign **701jV000004GglIQAS**: - Mobile opens outperform desktop by 12 percent."
+   "excerpt": "Here are the evidence‑backed insights for the campaign **701xx0000A1B2C3D4E**: - Mobile opens outperform desktop by 12 percent."
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2081,7 +2081,7 @@
    "inputTokens": 2141,
    "outputTokens": 504,
    "steps": "tool-calls,stop",
-   "excerpt": "I tried to retrieve the details of the campaign brief you referenced (record 701jV000004GglIQAS). The Salesforce tool returned a record that does not match that ID, so I don’t have authoritative information about the brief’s objectives, tar",
+   "excerpt": "I tried to retrieve the details of the campaign brief you referenced (record 701xx0000A1B2C3D4E). The Salesforce tool returned a record that does not match that ID, so I don’t have authoritative information about the brief’s objectives, tar",
    "failure": "toolCorrect"
   },
   {
@@ -2134,7 +2134,7 @@
    "model": "@cf/openai/gpt-oss-120b",
    "suite": "routing-model-only",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 0,
    "route": "model",
@@ -2150,14 +2150,14 @@
    "inputTokens": 907,
    "outputTokens": 135,
    "steps": "stop",
-   "excerpt": "Sure thing! Please paste the content you’d like me to review, and I’ll check it against the Northstar brand guidelines, accessibility standards, and policy requirements.",
+   "excerpt": "Sure thing! Please paste the content you’d like me to review, and I’ll check it against the Workbench brand guidelines, accessibility standards, and policy requirements.",
    "failure": "toolCorrect"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
    "suite": "routing-model-only",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 1,
    "route": "model",
@@ -2333,7 +2333,7 @@
    "inputTokens": 2007,
    "outputTokens": 178,
    "steps": "tool-calls,stop",
-   "excerpt": "Readiness check for the campaign (ID 701jV000004GglIQAS) shows: - 7 of 9 required checks completed - Blockers identified: - Hero image alt text is missing - Commercial consent scope is not confirmed"
+   "excerpt": "Readiness check for the campaign (ID 701xx0000A1B2C3D4E) shows: - 7 of 9 required checks completed - Blockers identified: - Hero image alt text is missing - Commercial consent scope is not confirmed"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2377,7 +2377,7 @@
    "inputTokens": 2043,
    "outputTokens": 234,
    "steps": "tool-calls,stop",
-   "excerpt": "- The readiness check for the campaign (ID 701jV000004GglIQAS) shows 7 of 9 required checks completed. - One of the remaining blockers is **“Commercial consent scope is not confirmed.”** Because consent coverage has not been confirmed, the "
+   "excerpt": "- The readiness check for the campaign (ID 701xx0000A1B2C3D4E) shows 7 of 9 required checks completed. - One of the remaining blockers is **“Commercial consent scope is not confirmed.”** Because consent coverage has not been confirmed, the "
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2445,7 +2445,7 @@
    "inputTokens": 2059,
    "outputTokens": 381,
    "steps": "tool-calls,stop",
-   "excerpt": "I wasn’t able to locate campaign‑date fields or any indication that the brief is marked complete for the campaign 701jV000004GglIQAS. The summarization tool returned only basic name, status, type and performance metrics, without date values",
+   "excerpt": "I wasn’t able to locate campaign‑date fields or any indication that the brief is marked complete for the campaign 701xx0000A1B2C3D4E. The summarization tool returned only basic name, status, type and performance metrics, without date values",
    "failure": "toolCorrect"
   },
   {
@@ -2490,7 +2490,7 @@
    "inputTokens": 2193,
    "outputTokens": 413,
    "steps": "tool-calls,stop",
-   "excerpt": "Here is a draft of the copy for the campaign (ID 701jV000004GglIQAS). This is a complete set of elements you can review and edit before any publishing or activation step. - Subject line: Your trail is waiting - Pre‑header: Members‑only gear"
+   "excerpt": "Here is a draft of the copy for the campaign (ID 701xx0000A1B2C3D4E). This is a complete set of elements you can review and edit before any publishing or activation step. - Subject line: Your trail is waiting - Pre‑header: Members‑only gear"
   },
   {
    "model": "@cf/openai/gpt-oss-120b",
@@ -2778,7 +2778,7 @@
    "inputTokens": 893,
    "outputTokens": 435,
    "steps": "tool-calls,stop",
-   "excerpt": "The campaign identified by record ID 701jV000004GglIQAS is titled “VERO Phase 1 Launch.” It is an email‑based effort that is currently in progress and has already sent 12,400 messages. Recent performance metrics show: - Open rate of 38.2 % "
+   "excerpt": "The campaign identified by record ID 701xx0000A1B2C3D4E is titled “VERO Phase 1 Launch.” It is an email‑based effort that is currently in progress and has already sent 12,400 messages. Recent performance metrics show: - Open rate of 38.2 % "
   },
   {
    "model": "@cf/openai/gpt-oss-20b",
@@ -3087,7 +3087,7 @@
    "inputTokens": 859,
    "outputTokens": 487,
    "steps": "tool-calls,stop",
-   "excerpt": "The readiness check for the Fall loyalty reactivation campaign (ID 701jV000004GglIQAS) returned two blockers that must be addressed before the campaign can be launched. - Hero image alt text is missing The campaign’s hero image does not hav"
+   "excerpt": "The readiness check for the Fall loyalty reactivation campaign (ID 701xx0000A1B2C3D4E) returned two blockers that must be addressed before the campaign can be launched. - Hero image alt text is missing The campaign’s hero image does not hav"
   },
   {
    "model": "@cf/openai/gpt-oss-20b",
@@ -3511,7 +3511,7 @@
    "model": "@cf/openai/gpt-oss-20b",
    "suite": "routing-pipeline",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 0,
    "route": "model",
@@ -3527,13 +3527,13 @@
    "inputTokens": 896,
    "outputTokens": 395,
    "steps": "tool-calls,stop",
-   "excerpt": "Campaign Summary – 701jV000004GglIQAS - Name: VERO Phase 1 Launch - Status: In Progress - Type: Email - Emails Sent: 12,400 Performance Highlights - Open Rate: 38.2% - Click‑Through Rate: 6.7% - Conversions: 214 - Trend: 8.4% above the four"
+   "excerpt": "Campaign Summary – 701xx0000A1B2C3D4E - Name: VERO Phase 1 Launch - Status: In Progress - Type: Email - Emails Sent: 12,400 Performance Highlights - Open Rate: 38.2% - Click‑Through Rate: 6.7% - Conversions: 214 - Trend: 8.4% above the four"
   },
   {
    "model": "@cf/openai/gpt-oss-20b",
    "suite": "routing-pipeline",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 1,
    "route": "model",
@@ -3549,7 +3549,7 @@
    "inputTokens": 896,
    "outputTokens": 312,
    "steps": "tool-calls,stop",
-   "excerpt": "Campaign 701jV000004GglIQAS - Name: VERO Phase 1 Launch - Status: In Progress - Type: Email - Emails Sent: 12,400 Performance Highlights - Open rate: 38.2 % - Click‑through rate: 6.7 % - Conversions: 214 - Current trend: 8.4 % above the fou"
+   "excerpt": "Campaign 701xx0000A1B2C3D4E - Name: VERO Phase 1 Launch - Status: In Progress - Type: Email - Emails Sent: 12,400 Performance Highlights - Open rate: 38.2 % - Click‑through rate: 6.7 % - Conversions: 214 - Current trend: 8.4 % above the fou"
   },
   {
    "model": "@cf/openai/gpt-oss-20b",
@@ -3687,7 +3687,7 @@
    "model": "@cf/openai/gpt-oss-20b",
    "suite": "routing-pipeline",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 0,
    "route": "model",
@@ -3703,13 +3703,13 @@
    "inputTokens": 831,
    "outputTokens": 182,
    "steps": "tool-calls,stop",
-   "excerpt": "The Salesforce validation tool identified a single issue with the content. - Replace one exclamation mark to match Northstar brand tone."
+   "excerpt": "The Salesforce validation tool identified a single issue with the content. - Replace one exclamation mark to match Workbench brand tone."
   },
   {
    "model": "@cf/openai/gpt-oss-20b",
    "suite": "routing-pipeline",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 1,
    "route": "model",
@@ -3725,7 +3725,7 @@
    "inputTokens": 846,
    "outputTokens": 222,
    "steps": "tool-calls,stop",
-   "excerpt": "The Salesforce Northstar marketing tool returned a single brand‑tone issue for the “Fall loyalty reactivation” campaign. - Replace one exclamation mark to match brand tone. No additional accessibility or policy issues were identified."
+   "excerpt": "The Salesforce Workbench marketing tool returned a single brand‑tone issue for the “Fall loyalty reactivation” campaign. - Replace one exclamation mark to match brand tone. No additional accessibility or policy issues were identified."
   },
   {
    "model": "@cf/openai/gpt-oss-20b",
@@ -3901,7 +3901,7 @@
    "inputTokens": 848,
    "outputTokens": 324,
    "steps": "tool-calls,stop",
-   "excerpt": "The Salesforce readiness check for campaign 701jV000004GglIQAS found two blockers that must be addressed before the campaign can be launched: - Hero image alt text is missing - Commercial consent scope is not confirmed"
+   "excerpt": "The Salesforce readiness check for campaign 701xx0000A1B2C3D4E found two blockers that must be addressed before the campaign can be launched: - Hero image alt text is missing - Commercial consent scope is not confirmed"
   },
   {
    "model": "@cf/openai/gpt-oss-20b",
@@ -3989,7 +3989,7 @@
    "inputTokens": 854,
    "outputTokens": 223,
    "steps": "tool-calls,stop",
-   "excerpt": "The campaign record 701jV000004GglIQAS has not passed all readiness checks. - Seven of nine checks are complete. - Two blockers remain: - Hero image alt text is missing. - Commercial consent scope is not confirmed. Because of these blockers"
+   "excerpt": "The campaign record 701xx0000A1B2C3D4E has not passed all readiness checks. - Seven of nine checks are complete. - Two blockers remain: - Hero image alt text is missing. - Commercial consent scope is not confirmed. Because of these blockers"
   },
   {
    "model": "@cf/openai/gpt-oss-20b",
@@ -4393,7 +4393,7 @@
    "model": "@cf/openai/gpt-oss-20b",
    "suite": "routing-model-only",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 0,
    "route": "model",
@@ -4416,7 +4416,7 @@
    "model": "@cf/openai/gpt-oss-20b",
    "suite": "routing-model-only",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 1,
    "route": "model",
@@ -4576,7 +4576,7 @@
    "model": "@cf/openai/gpt-oss-20b",
    "suite": "routing-model-only",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 0,
    "route": "model",
@@ -4592,14 +4592,14 @@
    "inputTokens": 909,
    "outputTokens": 143,
    "steps": "stop",
-   "excerpt": "I need the content you’d like me to review against the Northstar brand guidelines. Please paste it here.",
+   "excerpt": "I need the content you’d like me to review against the Workbench brand guidelines. Please paste it here.",
    "failure": "toolCorrect"
   },
   {
    "model": "@cf/openai/gpt-oss-20b",
    "suite": "routing-model-only",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 1,
    "route": "model",
@@ -5091,7 +5091,7 @@
    "inputTokens": 1932,
    "outputTokens": 375,
    "steps": "tool-calls,stop",
-   "excerpt": "The readiness check for campaign 701jV000004GglIQAS returned two blockers: - Hero image alt text is missing - Commercial consent scope is not confirmed Because these items are not yet addressed, the campaign cannot be published or sent. Ple",
+   "excerpt": "The readiness check for campaign 701xx0000A1B2C3D4E returned two blockers: - Hero image alt text is missing - Commercial consent scope is not confirmed Because these items are not yet addressed, the campaign cannot be published or sent. Ple",
    "failure": "toolCorrect"
   },
   {
@@ -5312,7 +5312,7 @@
    "inputTokens": 1118,
    "outputTokens": 681,
    "steps": "stop,stop",
-   "excerpt": "Based on the Salesforce campaign details for ID 701jV000004GglIQAS, here's the summary: Campaign Information - Name: VERO Phase 1 Launch - Status: In Progress - Type: Email - Volume Sent: 12,400 Recent Performance Metrics - Open Rate: 38.2%"
+   "excerpt": "Based on the Salesforce campaign details for ID 701xx0000A1B2C3D4E, here's the summary: Campaign Information - Name: VERO Phase 1 Launch - Status: In Progress - Type: Email - Volume Sent: 12,400 Recent Performance Metrics - Open Rate: 38.2%"
   },
   {
    "model": "@cf/zai-org/glm-4.7-flash",
@@ -5444,7 +5444,7 @@
    "inputTokens": 913,
    "outputTokens": 231,
    "steps": "stop,stop",
-   "excerpt": "<tool_call>tool_salesforce_northstar-marketing-salesforce_check_campaign_readiness<arg_key>message</arg_key><arg_value>Provide detailed information on every readiness checkpoint for campaign 701jV000004GglIQAS</arg_value></tool_call>"
+   "excerpt": "<tool_call>tool_salesforce_workbench-marketing-salesforce_check_campaign_readiness<arg_key>message</arg_key><arg_value>Provide detailed information on every readiness checkpoint for campaign 701xx0000A1B2C3D4E</arg_value></tool_call>"
   },
   {
    "model": "@cf/zai-org/glm-4.7-flash",
@@ -5957,7 +5957,7 @@
    "model": "@cf/zai-org/glm-4.7-flash",
    "suite": "routing-pipeline",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 0,
    "route": "model",
@@ -5979,7 +5979,7 @@
    "model": "@cf/zai-org/glm-4.7-flash",
    "suite": "routing-pipeline",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 1,
    "route": "model",
@@ -6133,7 +6133,7 @@
    "model": "@cf/zai-org/glm-4.7-flash",
    "suite": "routing-pipeline",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 0,
    "route": "model",
@@ -6149,13 +6149,13 @@
    "inputTokens": 904,
    "outputTokens": 494,
    "steps": "stop,stop",
-   "excerpt": "I've checked the request against the Salesforce tool results, but I need the specific content you'd like me to review against the Northstar brand guidelines. To effectively validate content against brand standards using Salesforce, please p"
+   "excerpt": "I've checked the request against the Salesforce tool results, but I need the specific content you'd like me to review against the Workbench brand guidelines. To effectively validate content against brand standards using Salesforce, please p"
   },
   {
    "model": "@cf/zai-org/glm-4.7-flash",
    "suite": "routing-pipeline",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 1,
    "route": "model",
@@ -6840,7 +6840,7 @@
    "model": "@cf/zai-org/glm-4.7-flash",
    "suite": "routing-model-only",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 0,
    "route": "model",
@@ -6856,13 +6856,13 @@
    "inputTokens": 2940,
    "outputTokens": 362,
    "steps": "tool-calls,stop",
-   "excerpt": "Campaign brief: VERO Phase 1 Launch Campaign details - Campaign ID: 701jV000004GglIQAS - Status: In Progress - Type: Email - Recipients reached: 12,400 Performance metrics - Open rate: 38.2 percent - Click rate: 6.7 percent - Conversions: 2"
+   "excerpt": "Campaign brief: VERO Phase 1 Launch Campaign details - Campaign ID: 701xx0000A1B2C3D4E - Status: In Progress - Type: Email - Recipients reached: 12,400 Performance metrics - Open rate: 38.2 percent - Click rate: 6.7 percent - Conversions: 2"
   },
   {
    "model": "@cf/zai-org/glm-4.7-flash",
    "suite": "routing-model-only",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 1,
    "route": "model",
@@ -7019,7 +7019,7 @@
    "model": "@cf/zai-org/glm-4.7-flash",
    "suite": "routing-model-only",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 0,
    "route": "model",
@@ -7035,14 +7035,14 @@
    "inputTokens": 1339,
    "outputTokens": 236,
    "steps": "stop",
-   "excerpt": "I can help you check content against the Northstar brand standards. However, I need you to provide the specific content you'd like me to review. For example: - A campaign brief or campaign summary you're preparing - Draft campaign content t",
+   "excerpt": "I can help you check content against the Workbench brand standards. However, I need you to provide the specific content you'd like me to review. For example: - A campaign brief or campaign summary you're preparing - Draft campaign content t",
    "failure": "toolCorrect"
   },
   {
    "model": "@cf/zai-org/glm-4.7-flash",
    "suite": "routing-model-only",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 1,
    "route": "model",
@@ -8423,7 +8423,7 @@
    "model": "@cf/meta/llama-4-scout-17b-16e-instruct",
    "suite": "routing-pipeline",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 0,
    "route": "model",
@@ -8446,7 +8446,7 @@
    "model": "@cf/meta/llama-4-scout-17b-16e-instruct",
    "suite": "routing-pipeline",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 1,
    "route": "model",
@@ -8607,7 +8607,7 @@
    "model": "@cf/meta/llama-4-scout-17b-16e-instruct",
    "suite": "routing-pipeline",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 0,
    "route": "model",
@@ -8623,14 +8623,14 @@
    "inputTokens": 821,
    "outputTokens": 42,
    "steps": "stop,stop",
-   "excerpt": "II will will rely rely on on available available data data.. No No Salesforce Salesforce tool tool results results are are available available to to validate validate content content against against the the North Northstarstar brand brand..",
+   "excerpt": "II will will rely rely on on available available data data.. No No Salesforce Salesforce tool tool results results are are available available to to validate validate content content against against the the North Workbenchstar brand brand..",
    "failure": "noToolErrors"
   },
   {
    "model": "@cf/meta/llama-4-scout-17b-16e-instruct",
    "suite": "routing-pipeline",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 1,
    "route": "model",
@@ -8646,7 +8646,7 @@
    "inputTokens": 819,
    "outputTokens": 37,
    "steps": "stop,stop",
-   "excerpt": "II don't don't have have usable usable evidence evidence from from a a Salesforce Salesforce tool tool to to validate validate content content against against the the North Northstarstar brand brand..",
+   "excerpt": "II don't don't have have usable usable evidence evidence from from a a Salesforce Salesforce tool tool to to validate validate content content against against the the North Workbenchstar brand brand..",
    "failure": "noToolErrors"
   },
   {
@@ -9333,7 +9333,7 @@
    "model": "@cf/meta/llama-4-scout-17b-16e-instruct",
    "suite": "routing-model-only",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 0,
    "route": "model",
@@ -9356,7 +9356,7 @@
    "model": "@cf/meta/llama-4-scout-17b-16e-instruct",
    "suite": "routing-model-only",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 1,
    "route": "model",
@@ -9517,7 +9517,7 @@
    "model": "@cf/meta/llama-4-scout-17b-16e-instruct",
    "suite": "routing-model-only",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 0,
    "route": "model",
@@ -9540,7 +9540,7 @@
    "model": "@cf/meta/llama-4-scout-17b-16e-instruct",
    "suite": "routing-model-only",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 1,
    "route": "model",
@@ -10039,7 +10039,7 @@
    "inputTokens": 1593,
    "outputTokens": 128,
    "steps": "stop",
-   "excerpt": "II am am unable unable to to fulfill fulfill this this request request.. As As the the North Northstarstar marketing marketing proof proof orchestr orchestratorator,, my my role role is is to to provide provide information information based"
+   "excerpt": "II am am unable unable to to fulfill fulfill this this request request.. As As the the North Workbenchstar marketing marketing proof proof orchestr orchestratorator,, my my role role is is to to provide provide information information based"
   },
   {
    "model": "@cf/meta/llama-4-scout-17b-16e-instruct",
@@ -10173,7 +10173,7 @@
    "inputTokens": 789,
    "outputTokens": 1664,
    "steps": "tool-calls,stop",
-   "excerpt": "Salesforce data for campaign ID 701jV000004GglIQAS identifies the campaign as VERO Phase 1 Launch. It is an Email campaign with a status of In Progress. Send volume is 12400. Recent performance metrics from the tool are as follows. - Open r"
+   "excerpt": "Salesforce data for campaign ID 701xx0000A1B2C3D4E identifies the campaign as VERO Phase 1 Launch. It is an Email campaign with a status of In Progress. Send volume is 12400. Recent performance metrics from the tool are as follows. - Open r"
   },
   {
    "model": "@cf/moonshotai/kimi-k2.6",
@@ -10261,7 +10261,7 @@
    "inputTokens": 790,
    "outputTokens": 1155,
    "steps": "tool-calls,stop",
-   "excerpt": "Salesforce evidence for campaign 701jV000004GglIQAS shows the following. Campaign details - Name: VERO Phase 1 Launch - Status: In Progress - Type: Email - Total sent: 12,400 Recent performance - Open rate: 38.2 percent - Click rate: 6.7 pe"
+   "excerpt": "Salesforce evidence for campaign 701xx0000A1B2C3D4E shows the following. Campaign details - Name: VERO Phase 1 Launch - Status: In Progress - Type: Email - Total sent: 12,400 Recent performance - Open rate: 38.2 percent - Click rate: 6.7 pe"
   },
   {
    "model": "@cf/moonshotai/kimi-k2.6",
@@ -10905,7 +10905,7 @@
    "model": "@cf/moonshotai/kimi-k2.6",
    "suite": "routing-pipeline",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 0,
    "route": "model",
@@ -10921,13 +10921,13 @@
    "inputTokens": 784,
    "outputTokens": 1323,
    "steps": "tool-calls,stop",
-   "excerpt": "Campaign 701jV000004GglIQAS is VERO Phase 1 Launch. It is an email campaign currently in progress with 12,400 messages sent. Performance data returned by the system shows the following results. - Open rate is 38.2 percent - Click rate is 6."
+   "excerpt": "Campaign 701xx0000A1B2C3D4E is VERO Phase 1 Launch. It is an email campaign currently in progress with 12,400 messages sent. Performance data returned by the system shows the following results. - Open rate is 38.2 percent - Click rate is 6."
   },
   {
    "model": "@cf/moonshotai/kimi-k2.6",
    "suite": "routing-pipeline",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 1,
    "route": "model",
@@ -10943,7 +10943,7 @@
    "inputTokens": 778,
    "outputTokens": 650,
    "steps": "tool-calls,stop",
-   "excerpt": "The Salesforce tool returned results for campaign 701jV000004GglIQAS. The campaign is named VERO Phase 1 Launch. It is an Email campaign currently marked In Progress and has been sent to 12,400 recipients. Performance results include the fo"
+   "excerpt": "The Salesforce tool returned results for campaign 701xx0000A1B2C3D4E. The campaign is named VERO Phase 1 Launch. It is an Email campaign currently marked In Progress and has been sent to 12,400 recipients. Performance results include the fo"
   },
   {
    "model": "@cf/moonshotai/kimi-k2.6",
@@ -11081,7 +11081,7 @@
    "model": "@cf/moonshotai/kimi-k2.6",
    "suite": "routing-pipeline",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 0,
    "route": "model",
@@ -11097,13 +11097,13 @@
    "inputTokens": 734,
    "outputTokens": 1551,
    "steps": "tool-calls,stop",
-   "excerpt": "I do not see any content included in your request. To check against the Northstar brand, please provide the draft text or asset you want reviewed. Once you share the content, I can run the brand validation and flag any tone, style, or forma"
+   "excerpt": "I do not see any content included in your request. To check against the Workbench brand, please provide the draft text or asset you want reviewed. Once you share the content, I can run the brand validation and flag any tone, style, or forma"
   },
   {
    "model": "@cf/moonshotai/kimi-k2.6",
    "suite": "routing-pipeline",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 1,
    "route": "model",
@@ -11119,7 +11119,7 @@
    "inputTokens": 751,
    "outputTokens": 1170,
    "steps": "tool-calls,stop",
-   "excerpt": "I do not see any content attached to your request. Please paste the draft copy, creative, or asset you would like checked against Northstar brand standards. Once you provide the material, I can run the brand validation and let you know if t"
+   "excerpt": "I do not see any content attached to your request. Please paste the draft copy, creative, or asset you would like checked against Workbench brand standards. Once you provide the material, I can run the brand validation and let you know if t"
   },
   {
    "model": "@cf/moonshotai/kimi-k2.6",
@@ -11361,7 +11361,7 @@
    "inputTokens": 766,
    "outputTokens": 1421,
    "steps": "tool-calls,stop",
-   "excerpt": "Salesforce evidence for campaign 701jV000004GglIQAS shows 7 of 9 readiness checks are complete, so the campaign is not yet fully ready. The outstanding blockers are: - Hero image alt text is missing - Commercial consent scope is not confirm"
+   "excerpt": "Salesforce evidence for campaign 701xx0000A1B2C3D4E shows 7 of 9 readiness checks are complete, so the campaign is not yet fully ready. The outstanding blockers are: - Hero image alt text is missing - Commercial consent scope is not confirm"
   },
   {
    "model": "@cf/moonshotai/kimi-k2.6",
@@ -11787,7 +11787,7 @@
    "model": "@cf/moonshotai/kimi-k2.6",
    "suite": "routing-model-only",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 0,
    "route": "model",
@@ -11803,13 +11803,13 @@
    "inputTokens": 1936,
    "outputTokens": 584,
    "steps": "tool-calls,stop",
-   "excerpt": "Campaign 701jV000004GglIQAS is named VERO Phase 1 Launch. It is an email campaign currently in progress. Based on the Salesforce evidence returned: - 12400 emails have been sent - The open rate is 38.2 percent - The click rate is 6.7 percen"
+   "excerpt": "Campaign 701xx0000A1B2C3D4E is named VERO Phase 1 Launch. It is an email campaign currently in progress. Based on the Salesforce evidence returned: - 12400 emails have been sent - The open rate is 38.2 percent - The click rate is 6.7 percen"
   },
   {
    "model": "@cf/moonshotai/kimi-k2.6",
    "suite": "routing-model-only",
    "caseId": "routing-03",
-   "prompt": "Summarize campaign 701jV000004GglIQAS",
+   "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
    "expected": "summarize_campaign",
    "trial": 1,
    "route": "model",
@@ -11825,7 +11825,7 @@
    "inputTokens": 1936,
    "outputTokens": 740,
    "steps": "tool-calls,stop",
-   "excerpt": "Campaign 701jV000004GglIQAS is named VERO Phase 1 Launch. Its status is In Progress and its type is Email. Performance to date includes the following: - 12,400 emails sent - Open rate of 38.2 percent - Click rate of 6.7 percent - 214 conver"
+   "excerpt": "Campaign 701xx0000A1B2C3D4E is named VERO Phase 1 Launch. Its status is In Progress and its type is Email. Performance to date includes the following: - 12,400 emails sent - Open rate of 38.2 percent - Click rate of 6.7 percent - 214 conver"
   },
   {
    "model": "@cf/moonshotai/kimi-k2.6",
@@ -11963,7 +11963,7 @@
    "model": "@cf/moonshotai/kimi-k2.6",
    "suite": "routing-model-only",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 0,
    "route": "model",
@@ -11986,7 +11986,7 @@
    "model": "@cf/moonshotai/kimi-k2.6",
    "suite": "routing-model-only",
    "caseId": "routing-07",
-   "prompt": "Check this content against the Northstar brand",
+   "prompt": "Check this content against the Workbench brand",
    "expected": "validate_content_against_brand",
    "trial": 1,
    "route": "model",
@@ -12002,7 +12002,7 @@
    "inputTokens": 877,
    "outputTokens": 229,
    "steps": "stop",
-   "excerpt": "I'd be happy to check content against the Northstar brand guidelines. Please paste the content or campaign copy you want reviewed, and I'll validate it for brand, accessibility, and policy issues.",
+   "excerpt": "I'd be happy to check content against the Workbench brand guidelines. Please paste the content or campaign copy you want reviewed, and I'll validate it for brand, accessibility, and policy issues.",
    "failure": "toolCorrect"
   },
   {
@@ -12159,7 +12159,7 @@
    "inputTokens": 1908,
    "outputTokens": 439,
    "steps": "tool-calls,stop",
-   "excerpt": "Based on the Salesforce campaign readiness review for campaign ID 701jV000004GglIQAS, the campaign has two blockers preventing it from moving forward. - Hero image alt text is missing. - Commercial consent scope is not confirmed. Seven of n"
+   "excerpt": "Based on the Salesforce campaign readiness review for campaign ID 701xx0000A1B2C3D4E, the campaign has two blockers preventing it from moving forward. - Hero image alt text is missing. - Commercial consent scope is not confirmed. Seven of n"
   },
   {
    "model": "@cf/moonshotai/kimi-k2.6",

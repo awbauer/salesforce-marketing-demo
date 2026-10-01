@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
     <customSettingsType>Hierarchy</customSettingsType>
-    <description>Proof-only server configuration for verifying Cloudflare-issued write confirmations.</description>
+    <description>Demo-only server configuration for verifying Cloudflare-issued write confirmations.</description>
     <label>Workbench Confirmation Config</label>
     <visibility>Public</visibility>
 </CustomObject>

@@ -166,14 +166,14 @@ describe("edge runtime", () => {
     ).toBe("unavailable");
     expect(classifyToolResult({ isError: true, content: [] })).toBe("error");
     expect(
-      classifyToolResult({ isError: false, result: [{ campaignId: "701jV000004GglIQAS" }] }),
+      classifyToolResult({ isError: false, result: [{ campaignId: "701xx0000A1B2C3D4E" }] }),
     ).toBe("success");
   });
   it("forces explicit Salesforce campaign requests through the matching governed tool", () => {
     const names = ["salesforce_summarize_campaign", "salesforce_check_campaign_readiness"];
     expect(
       selectRequiredTool(
-        "Summarize Salesforce Campaign 701jV000004GglIQAS using only live evidence",
+        "Summarize Salesforce Campaign 701xx0000A1B2C3D4E using only live evidence",
         names,
       ),
     ).toBe("salesforce_summarize_campaign");
@@ -298,7 +298,7 @@ describe("edge runtime", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         action: "create-review-task",
-        recordId: "701jV000004GglIQAS",
+        recordId: "701xx0000A1B2C3D4E",
         summary: "Create a review task for the current blockers.",
       }),
     });
@@ -321,7 +321,7 @@ describe("edge runtime", () => {
     await expect(execute.json()).resolves.toMatchObject({
       result: {
         source: "local-fixture",
-        campaignId: "701jV000004GglIQAS",
+        campaignId: "701xx0000A1B2C3D4E",
         subject: "Review campaign readiness: VERO Phase 1 Launch",
         priority: "High",
         dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
@@ -360,7 +360,7 @@ describe("edge runtime", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         action: "create-review-task",
-        recordId: "701jV000004GglIQAS",
+        recordId: "701xx0000A1B2C3D4E",
         summary: "Review the campaign with current readiness findings.",
       }),
     });
@@ -373,7 +373,7 @@ describe("edge runtime", () => {
     await expect(execute.json()).resolves.toMatchObject({
       result: {
         source: "local-fixture",
-        campaignId: "701jV000004GglIQAS",
+        campaignId: "701xx0000A1B2C3D4E",
         idempotencyKey: confirmation.idempotencyKey,
         readBack: true,
       },

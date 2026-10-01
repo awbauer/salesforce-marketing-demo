@@ -1,10 +1,9 @@
 import { env, runInDurableObject } from "cloudflare:test";
-import { DEFAULTS } from "@workbench/contracts";
+import { INSTANCE_PROFILE } from "@workbench/contracts";
 import { getAgentByName } from "agents";
 import { deriveAgentKey } from "./auth";
-import { INSTANCE_PROFILE } from "./generated/profile";
 
-export const CATALOG_CAMPAIGN_ID = "701jV000004GglIQAS";
+export const CATALOG_CAMPAIGN_ID = "701xx0000A1B2C3D4E";
 
 /** A user's agent stub, addressed exactly as the Worker router does after authentication. */
 export async function agentStubFor(subject = "local-evaluator") {
@@ -16,7 +15,7 @@ export async function agentStubFor(subject = "local-evaluator") {
           ? "evaluator@workbench.example"
           : `${subject}@workbench.example`,
       role: "evaluator",
-      tenantId: "workbench-pot",
+      tenantId: INSTANCE_PROFILE.instance.id,
     },
     INSTANCE_PROFILE.instance.id,
   );

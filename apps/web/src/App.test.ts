@@ -103,7 +103,7 @@ describe("technical trace hardening", () => {
           toolName: "salesforce_summarize_campaign",
           toolCallId: "call-1",
           state: "output-available",
-          input: { campaignId: "701jV000004GglIQAS" },
+          input: { campaignId: "701xx0000A1B2C3D4E" },
           output: { structuredContent: { name: "Launch" } },
         },
         { type: "step-start" },
@@ -128,7 +128,7 @@ describe("technical trace hardening", () => {
       "Turn completed",
     ]);
     expect(rows[3]?.payload).toBe("Plan a call.");
-    expect(rows[5]?.payload).toContain("701jV000004GglIQAS");
+    expect(rows[5]?.payload).toContain("701xx0000A1B2C3D4E");
     expect(rows[6]?.detail).toBe("Finish reason: tool-calls · 900 input tokens · 40 output tokens");
     expect(rows[7]?.payload).toContain("Launch");
     expect(rows.at(-1)).toMatchObject({

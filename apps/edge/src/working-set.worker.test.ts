@@ -311,7 +311,7 @@ describe("reopening remembered work", () => {
         {
           system: "salesforce",
           objectType: "Campaign",
-          recordId: "701000000000001AAA",
+          recordId: "701xx0000A1B2C3D4E",
           title: "Rainy Day Comfort",
         },
       ],
@@ -326,8 +326,8 @@ describe("reopening remembered work", () => {
     // Reading the record again in this chat makes it the open campaign.
     const reread = ingestToolResult(set, {
       toolName: "tool_salesforce_x_summarize_campaign",
-      input: { campaignId: "701000000000001AAA" },
-      output: text("Rainy Day Comfort (701000000000001AAA) is planned."),
+      input: { campaignId: "701xx0000A1B2C3D4E" },
+      output: text("Rainy Day Comfort (701xx0000A1B2C3D4E) is planned."),
       at,
     });
     expect(openCampaign(reread)?.relation).toBe("read");

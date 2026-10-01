@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-30T23:46:40.597Z",
+  "generatedAt": "2026-10-01T00:03:22.682Z",
   "status": "passed",
   "score": 1,
   "threshold": 0.9,
@@ -22,7 +22,7 @@
     },
     {
       "id": "routing-03",
-      "prompt": "Summarize campaign 701jV000004GglIQAS",
+      "prompt": "Summarize campaign 701xx0000A1B2C3D4E",
       "expected": "summarize_campaign",
       "actual": "summarize_campaign",
       "passed": true
@@ -148,7 +148,7 @@
     },
     {
       "id": "routing-21",
-      "prompt": "What did we decide about the Coastline rainy-day push?",
+      "prompt": "What did we decide about the Sample Kitchen rainy-day push?",
       "expected": "recall_decisions",
       "actual": "recall_decisions",
       "passed": true

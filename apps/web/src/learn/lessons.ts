@@ -14,6 +14,7 @@ export type DiagramId =
   | "architecture"
   | "workspace"
   | "model-guards"
+  | "instance-profile"
   | "mcp"
   | "salesforce"
   | "routing"
@@ -186,6 +187,12 @@ export const SECTION_LESSONS: Record<string, SectionLesson> = {
     keyIdea:
       "The model was chosen by measuring the whole pipeline, and its known quirks shaped the guards.",
     tryIt: [{ kind: "view", label: "See the model comparison", view: "evaluations" }],
+  },
+  instance: {
+    diagram: "instance-profile",
+    keyIdea:
+      "One profile and one industry pack decide the data, tools, prompts and screens, so a copy of the workbench can speak for any client.",
+    tryIt: [{ kind: "view", label: "Open the graph this pack built", view: "graph" }],
   },
   mcp: {
     diagram: "mcp",

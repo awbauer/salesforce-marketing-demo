@@ -805,14 +805,14 @@ export const DIAGRAM_SPECS: Record<DiagramId, DiagramSpec> = {
             label: "Every turn",
             steps: [
               {
-                title: "gpt-oss-20b",
-                caption: "open-weight reasoning model",
+                title: "Your chat model",
+                caption: "local gpt-oss by default",
                 tone: "model",
                 glyph: "◆",
               },
               {
                 title: "AI Gateway",
-                caption: "logs, cost, caching",
+                caption: "Cloudflare only: logs, cost, caching",
                 tone: "edge",
                 glyph: "⛨",
               },
@@ -838,6 +838,56 @@ export const DIAGRAM_SPECS: Record<DiagramId, DiagramSpec> = {
               },
             ],
           },
+        ],
+      },
+    ],
+  },
+  "instance-profile": {
+    label: "From profile to demo",
+    caption:
+      "The profile and the pack are compiled into the app, so everything speaks for the client.",
+    blocks: [
+      {
+        kind: "flow",
+        numbered: true,
+        steps: [
+          {
+            title: "workbench.profile.json",
+            caption: "client, industry, use cases, models",
+            tone: "person",
+            glyph: "✎",
+          },
+          {
+            title: "Industry pack",
+            caption: "vocabulary, modules, use cases",
+            tone: "store",
+            glyph: "▤",
+          },
+          {
+            title: "pnpm profile:build",
+            caption: "compiled into the app",
+            tone: "edge",
+            glyph: "⚙",
+          },
+          {
+            title: "Graph, tools, prompts, screens",
+            caption: "say the client's name",
+            tone: "output",
+            glyph: "◆",
+          },
+        ],
+      },
+      {
+        kind: "chips",
+        label: "Packs",
+        items: [
+          "Retail",
+          "Restaurants (vertical)",
+          "Financial services (vertical)",
+          "Healthcare payers",
+          "B2B technology",
+          "Travel and hospitality",
+          "Full tour",
         ],
       },
     ],

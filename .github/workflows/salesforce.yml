@@ -1,32 +1,29 @@
 name: Salesforce metadata
 
+# Manual only: a fresh clone has no sandbox. Add the SF_SFDX_AUTH_URL, SF_APPROVED_ORG_ID and
+# BLOCKED_WORDS_LOCAL secrets to the `salesforce` environment, then run it from the Actions tab.
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/salesforce.yml"
-      - "salesforce/**"
-      - "sfdx-project.json"
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/salesforce.yml"
-      - "salesforce/**"
-      - "sfdx-project.json"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Validate only (dry run), or deploy to the sandbox
+        type: choice
+        options: [dry-run, deploy]
+        default: dry-run
 
 concurrency:
-  group: salesforce-proof-org
+  group: salesforce-sandbox
   cancel-in-progress: false
 
 jobs:
   validate-or-deploy:
     runs-on: ubuntu-latest
-    environment: proof
+    environment: salesforce
     permissions:
       contents: read
     env:
       SF_TARGET_ORG: workbench-ci
-      SF_APPROVED_PROOF_ORG_ID: ${{ secrets.SF_APPROVED_PROOF_ORG_ID }}
+      SF_APPROVED_ORG_ID: ${{ secrets.SF_APPROVED_ORG_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -59,7 +56,7 @@ jobs:
           pnpm security:blocked-words
           pnpm sf:metadata:check
 
-      - name: Authenticate the dedicated proof org
+      - name: Authenticate the sandbox
         env:
           SF_SFDX_AUTH_URL: ${{ secrets.SF_SFDX_AUTH_URL }}
         run: |
@@ -68,15 +65,15 @@ jobs:
 
       - name: Fail closed if authentication targets another org
         run: |
-          test -n "$SF_APPROVED_PROOF_ORG_ID"
+          test -n "$SF_APPROVED_ORG_ID"
           ACTUAL_ORG_ID=$(sf data query --target-org "$SF_TARGET_ORG" --query "SELECT Id FROM Organization LIMIT 1" --json | jq -r '.result.records[0].Id')
-          test "$ACTUAL_ORG_ID" = "$SF_APPROVED_PROOF_ORG_ID"
+          test "$ACTUAL_ORG_ID" = "$SF_APPROVED_ORG_ID"
 
       - name: Fail if retired metadata exists in the org
         run: pnpm sf:retired:check
 
       - name: Validate Salesforce metadata
-        if: github.event_name == 'pull_request'
+        if: inputs.mode == 'dry-run'
         run: >-
           sf project deploy start --dry-run
           --source-dir salesforce/force-app/main/default/classes
@@ -90,7 +87,7 @@ jobs:
           --wait 30
 
       - name: Deploy Salesforce metadata
-        if: github.event_name != 'pull_request'
+        if: inputs.mode == 'deploy'
         run: >-
           sf project deploy start
           --source-dir salesforce/force-app/main/default/classes
@@ -106,7 +103,7 @@ jobs:
       # This org skips RunSpecifiedTests during deploys ("Running Tests - Skipped"), so the Apex
       # tests run explicitly after deployment and the step fails unless they all ran and passed.
       - name: Run Apex tests against the deployed code
-        if: github.event_name != 'pull_request'
+        if: inputs.mode == 'deploy'
         run: |
           sf apex run test --class-names WorkbenchCampaignActionsTest --class-names WorkbenchMarketingAgentTest \
             --target-org "$SF_TARGET_ORG" --wait 20 --result-format json --json > apex-tests.json || true
@@ -119,7 +116,7 @@ jobs:
           '
 
       - name: Read back governed MCP definition
-        if: github.event_name != 'pull_request'
+        if: inputs.mode == 'deploy'
         run: |
           sf project retrieve start --metadata McpServerDefinition:MarketingWorkbench --target-org "$SF_TARGET_ORG" --output-dir .salesforce-readback --wait 10
           find .salesforce-readback -name 'MarketingWorkbench.mcpServerDefinition-meta.xml' -print -quit | grep -q .

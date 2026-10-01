@@ -1,3 +1,4 @@
+import { PARENT_BRAND, RESTAURANT_BRAND } from "../../contracts/src/brands.ts";
 /**
  * Sample Kitchen, a fictional fast-casual restaurant brand under Workbench. This is the
  * restaurant system's own data: its brand, locations, menu, dayparts, and app audience. The
@@ -5,7 +6,7 @@
  * by id. Every name and figure is invented.
  */
 
-export const WORKBENCH_BRAND = { id: "brand-workbench", name: "Workbench" } as const;
+export const WORKBENCH_BRAND = { id: "brand-workbench", name: PARENT_BRAND } as const;
 
 export type Serves = "hot" | "cold" | "warm";
 
@@ -165,14 +166,14 @@ export const RESTAURANT_MENU: ReadonlyArray<{
 export const RESTAURANT = {
   id: "brand-restaurant",
   restaurantId: "restaurant-brand",
-  name: "Sample Kitchen",
+  name: `${RESTAURANT_BRAND}`,
   parentBrand: WORKBENCH_BRAND,
   concept:
     "Fast-casual California comfort food with fresh, made-to-order bowls, burritos, and drinks",
   hours: "Open 24 hours, 7 days a week",
   services: ["counter ordering", "app order-ahead", "delivery"],
   brandVoice: "Warm, sunny, and a little playful. Short sentences, no ALL CAPS, at most one emoji.",
-  menu: { id: "menu-restaurant-core", name: "Sample Kitchen core menu" },
+  menu: { id: "menu-restaurant-core", name: `${RESTAURANT_BRAND} core menu` },
   favorites: [
     { item: "Chile Verde Breakfast Burrito", note: "Top seller from 5 to 10 a.m." },
     { item: "Carne Asada Fries", note: "Top seller after 10 p.m." },

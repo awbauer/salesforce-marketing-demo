@@ -1,12 +1,12 @@
 /**
- * Opens one confirmed Case for a Sample Kitchen store manager when a weather-driven inventory
+ * Opens one confirmed Case for a restaurant store manager when a weather-driven inventory
  * check found items that won't cover the forecast. The case contents come from the workbench,
  * and they're trusted only because their SHA-256 hash is the request hash inside the signed,
  * unexpired, same-user confirmation. Creates as the user and reads the Case back.
  */
 global with sharing class WorkbenchCreateInventoryCase {
     global class Input {
-        @InvocableVariable(required=true label='Location Key' description='location:<city id> for the Sample Kitchen location the case is about.') global String locationKey;
+        @InvocableVariable(required=true label='Location Key' description='location:<city id> for the restaurant location the case is about.') global String locationKey;
         @InvocableVariable(required=true label='Case Details JSON' description='The confirmed case contents; their SHA-256 hash must equal the request hash.') global String caseDetailsJson;
         @InvocableVariable(required=true label='Confirmation ID' description='Versioned, unexpired, same-user signed confirmation token issued by the Workbench host.') global String confirmationId;
         @InvocableVariable(required=true label='Request Hash' description='SHA-256 hash of the case details JSON, bound into the signed confirmation.') global String requestHash;
@@ -77,7 +77,7 @@ global with sharing class WorkbenchCreateInventoryCase {
             if (replayed) caseId = existing[0].Id;
             else {
                 // The manager is found by role and restaurant; the workbench never handles contact data.
-                String store = 'Sample Kitchen ' + details.city;
+                String store = 'Store ' + details.city;
                 List<Contact> managers = [
                     SELECT Id, AccountId, Name FROM Contact
                     WHERE Title = 'Store Manager' AND Department = :store
@@ -89,7 +89,7 @@ global with sharing class WorkbenchCreateInventoryCase {
                 Case inventoryCase = new Case(
                     ContactId = managers[0].Id,
                     AccountId = managers[0].AccountId,
-                    Subject = truncate('Low stock before forecast weather: Sample Kitchen ' + details.city, 255),
+                    Subject = truncate('Low stock before forecast weather: Store ' + details.city, 255),
                     Description = description(details),
                     Priority = urgent(details) ? 'High' : 'Medium',
                     Status = 'New',
@@ -142,7 +142,7 @@ global with sharing class WorkbenchCreateInventoryCase {
     private static String description(Details details) {
         List<String> lines = new List<String>{
             'Inventory check by Marketing Workbench (confirmed by a user)', '',
-            'Location: Sample Kitchen ' + details.city,
+            'Location: Store ' + details.city,
             'Forecast window: ' + details.window.fromDate + ' to ' + details.window.toDate +
                 ' (' + details.window.days + ' days; ' + String.join(details.conditions, ', ') + ')', '',
             'Items that will not cover the forecast, counting deliveries on order (' + details.items.size() + ')'

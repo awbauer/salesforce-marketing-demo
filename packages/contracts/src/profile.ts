@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PackIdSchema } from "./pack.ts";
 
 /** Where the orchestrator's chat model runs. Local by default: Ollama on the presenter's machine. */
 export const ChatProviderSchema = z.enum(["ollama", "openai-compatible", "workers-ai", "bedrock"]);
@@ -15,6 +16,8 @@ export const InstanceProfileSchema = z.object({
     brand: z.string().min(1).max(80),
     /** Whether the demo is for an internal enablement session or an external client discussion. */
     audience: z.enum(["internal", "external"]),
+    /** Which industry pack supplies vocabulary, use cases and vertical modules. */
+    pack: PackIdSchema,
     industry: z.string().min(1),
     region: z.string().min(1).default("United States"),
     language: z.string().min(1).default("English"),
@@ -48,6 +51,11 @@ export const InstanceProfileSchema = z.object({
   salesforce: z.object({
     mode: z.enum(["fixture", "sandbox"]).default("fixture"),
     mcpUrl: z.url().optional(),
+    /** A Campaign record in the connected sandbox that the sample prompts and graph link to. */
+    sampleCampaignId: z
+      .string()
+      .regex(/^701[A-Za-z0-9]{12}([A-Za-z0-9]{3})?$/)
+      .optional(),
   }),
   deploy: z.object({ target: z.enum(["local", "cloudflare", "aws"]).default("local") }),
 });
@@ -59,6 +67,7 @@ export const EXAMPLE_PROFILE: InstanceProfile = InstanceProfileSchema.parse({
   client: {
     brand: "Example Brand",
     audience: "internal",
+    pack: "retail",
     industry: "Retail",
     brandVoice: "Warm, direct, and practical.",
   },

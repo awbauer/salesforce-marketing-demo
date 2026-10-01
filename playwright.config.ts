@@ -9,6 +9,8 @@ export default defineConfig({
     command: "WORKBENCH_E2E=1 XDG_CONFIG_HOME=/tmp/workbench-wrangler pnpm dev --host 127.0.0.1",
     url: "http://127.0.0.1:5173/api/health",
     reuseExistingServer: !process.env.CI,
+    // The e2e suite walks every vertical, so it runs the full-tour profile.
+    env: { WORKBENCH_PROFILE: "profiles/demo-composite.profile.json" },
   },
   projects: [
     { name: "chrome", use: { ...devices["Desktop Chrome"], channel: "chrome" } },

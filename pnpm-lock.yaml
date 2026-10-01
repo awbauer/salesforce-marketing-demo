@@ -120,6 +120,8 @@ importers:
 
   packages/evals: {}
 
+  packages/industry-packs: {}
+
   packages/knowledge-graph: {}
 
   packages/ui:

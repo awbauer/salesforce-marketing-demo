@@ -644,7 +644,7 @@ export const WORKSPACE_CATALOG: ReadonlyArray<RecordRef & { title: string }> = O
   {
     system: "salesforce",
     objectType: "Campaign",
-    recordId: "701jV000004GglIQAS",
+    recordId: "701xx0000A1B2C3D4E",
     title: "Fall Loyalty Reactivation",
   },
 ]);
@@ -1043,4 +1043,7 @@ export const initialOrchestratorState: OrchestratorState = {
     },
   ],
 };
+export * from "./brands.ts";
+export * from "./generated/instance.ts";
+export * from "./pack.ts";
 export * from "./profile.ts";
