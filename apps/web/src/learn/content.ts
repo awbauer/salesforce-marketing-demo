@@ -636,6 +636,8 @@ At the turn level:
    - For a **review task, image, or inventory case**, the Worker signs the confirmation with HMAC. Apex verifies the signature, the expiry, the same user, and the hash, then writes in **user mode**. An inventory case's contents come from the Worker, so its request hash is the SHA-256 of exactly those contents, and Apex re-hashes what it receives before writing.
 5. **Read-back:** the workbench reads the records back from Salesforce (\`get_marketing_records\` for Marketing Cloud) and shows only what Salesforce returned. If the agent says it saved something that Salesforce doesn't show, nothing is shown as saved.
 
+**Who is signed in.** The Worker is always the authorization boundary. Locally there is one fixed principal (only when both \`AUTH_MODE=development\` and \`ENVIRONMENT=local\`). On Cloudflare, Access tokens are verified; on AWS, the load balancer's signed Cognito token is verified (\`alb-oidc\`) or any OIDC bearer token (\`oidc\`), optionally limited to an email allow list. Anything else fails closed, and the container refuses to start without sign-in unless it is bound to localhost on purpose.
+
 You watch both halves step by step. While a confirmation is prepared, the steps are the plan, Salesforce's permission check with how many checks passed, and binding the request to a one-time confirmation. While a confirmed write runs, they're the confirmation check, a look for an earlier attempt or the signing, the call to the agent or the Apex action, the read-back, and the memory record. A failure marks the step where it stopped and says why.
 
 **Who checks what.** Each layer does one job:

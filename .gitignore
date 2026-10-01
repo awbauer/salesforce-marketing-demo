@@ -16,3 +16,8 @@ dist/
 /packages/contracts/src/generated/
 
 /artifacts/
+
+/wrangler.cloudflare.jsonc
+
+/templates/aws/cdk/node_modules/
+/templates/aws/cdk/cdk.out/

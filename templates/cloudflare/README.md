@@ -1,86 +1,71 @@
-# Cloudflare proof environment
+# Cloudflare template (optional)
 
-This directory records the Phase 1 deployment gate. `wrangler.jsonc` is the executable configuration; there is intentionally no second infrastructure source of truth.
+Deploys this instance to **your own Cloudflare account** as one Worker with a Durable Object, a D1 database, an R2 bucket and optional Workers AI and AI Gateway. Sign-in is Cloudflare Access. Nothing here is needed to run the workbench locally.
 
-## Pre-deployment gate
+`wrangler.jsonc` in the repository root is the **local**, account-free configuration. This directory holds the deployable one as a template; `deploy-cloudflare.mjs` renders it from your profile into the ignored file `wrangler.cloudflare.jsonc`.
 
-1. Run `pnpm verify` from a clean checkout.
-2. Confirm `wrangler whoami` names the isolated proof account. A login or MFA prompt is the human authorization boundary.
-3. Configure one Access application for the Worker URL, email one-time PIN, and an explicit evaluator allowlist. A pre-existing reusable policy may be attached when its rule is verified; treat that shared policy as external infrastructure and do not rename, edit, or delete it from this repository. Record application identifiers outside Git when they are account-specific.
-4. The committed deployment configuration is fail-closed with `ENVIRONMENT=proof` and `AUTH_MODE=access`. Set the Access team domain and audience as account-specific variables before the authenticated live test. The Worker must reject an unsigned `/api/session` request; never deploy the local E2E configuration.
-5. Run `pnpm deploy:dry-run`, then deploy with `pnpm deploy`. The checked-in configuration binds the existing D1 database and R2 bucket by immutable ID/name; never remove those fields or allow CI to auto-provision replacements. Record the resulting Worker version ID.
-6. Read back `/api/health`, `/api/ready`, an authorized session, an unauthorized session, and the three binding dashboards. Confirm logs/traces contain correlation IDs without PII.
-7. Run `PROOF_BASE_URL=https://<worker-host> pnpm test:e2e:live` to prove the
-   unsigned edge boundary. After a human completes the email one-time-PIN flow,
-   rerun with that browser-issued token in the ephemeral `CF_ACCESS_JWT`
-   environment variable to prove authenticated readiness. Never create a service
-   token for this proof, and never write the JWT to a file or report.
+## Deploy
 
-## Phase 2 Salesforce MCP portal gate
+All commands are safe until you add a flag and type your instance id to confirm.
 
-The Phase 2 portal is a browser-user integration, not a service-token integration. Keep the existing `AWB` Worker Access policy unchanged and configure a separate MCP portal application for the same evaluator allowlist.
+1. **Log in:** `pnpm exec wrangler login`, then `pnpm exec wrangler whoami` and check it names the account you intend to use. A login or MFA prompt is yours to complete.
+2. **Dry run:** `node templates/cloudflare/deploy-cloudflare.mjs` renders the config, builds, and runs `wrangler deploy --dry-run`. It prints the bindings it would create.
+3. **Create the storage:** `node templates/cloudflare/deploy-cloudflare.mjs --provision` creates the D1 database and R2 bucket after you confirm. Copy the printed `database_id`.
+4. **Set secrets:**
+   ```sh
+   export D1_DATABASE_ID=<the id>
+   printf '%s' "$(openssl rand -hex 32)" | pnpm exec wrangler secret put CONFIRMATION_SIGNING_KEY --config wrangler.cloudflare.jsonc
+   ```
+5. **Put Access in front of it** (Zero Trust → Access → Applications): one self-hosted application for the Worker URL with an explicit allow list of emails, then set `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` as Worker secrets (`wrangler secret put`). The Worker rejects requests without a valid Access token; it never serves the local no-sign-in mode here.
+6. **Deploy:** `node templates/cloudflare/deploy-cloudflare.mjs --apply` (after confirming).
+7. **Read back:** `/api/health`, `/api/ready` (shows the chat provider and the bindings), a signed-in `/api/session`, and an unsigned `/api/session` that must return 401. Then `WORKBENCH_BASE_URL=https://<host> pnpm test:e2e:live` for the unsigned edge boundary.
 
-1. Prove the custom Salesforce Hosted MCP server directly with `salesforce/postman/Marketing-Workbench.postman_collection.json`. Use OAuth authorization code with PKCE and the External Client App scopes `mcp_api refresh_token`. Record only sanitized responses.
-2. In Zero Trust > Access controls > MCP Portals, add the Salesforce Hosted MCP URL as a Streamable HTTP server with manual OAuth credentials. Register the exact callback URI shown by Cloudflare in the Salesforce External Client App. The current shared callback option is `https://oauth-callbacks.cloudflareaccess.com/cdn-cgi/access/outbound-oauth-callback`.
-3. Create one portal, add only the Salesforce server, keep **Require user auth** enabled (`on_behalf=true`), and keep Code Mode and Gateway routing/DLP off for this proof. Apply the evaluator allow policy to both portal and server Access applications.
-4. Curate the portal tool list to exactly `packages/contracts/src/tool-catalog.json`. Do not expose portal-native server toggles to the orchestrator's model context; the Worker filters again and never exposes write tools to autonomous execution.
-5. Set the Worker's `SALESFORCE_MCP_URL` secret to the portal `/mcp` endpoint and apply every pending D1 migration before the Worker. The confirmation audit schema must accept every action in `PROOF_DEFAULTS.allowedWrites`; `pnpm contracts:check` enforces that invariant. The endpoint is treated as deployment configuration to prevent an unreviewed URL from entering source.
-6. As the evaluator, connect from the workbench, complete portal OAuth and per-user Salesforce OAuth, then read back connection state, namespaced tools, readiness output, a confirmed draft save, and a confirmed review task. Both writes must show the same idempotency key in D1 audit and Salesforce authoritative read-back.
+`ENVIRONMENT` is rendered as `local` for a fixture Salesforce (scripted Salesforce, real sign-in) and `production` when the profile connects a sandbox (needs `SALESFORCE_MCP_URL` and the Salesforce setup below).
 
-After any `McpServerDefinition` change, the deployed XML is only the first read-back. Refresh the active custom server in Salesforce, use **Sync capabilities** for `workbench-marketing-salesforce`, preserve the portal's fail-closed allowlist, explicitly enable each new approved tool, and run `pnpm test:production:chat` with an ephemeral evaluator Access JWT. That command now fails unless all tools in `PHASE_2_CURATED_TOOLS` are visible and the real read-only `check_write_access` action returns a valid Salesforce permission report.
+## Models on Cloudflare
 
-Service tokens are intentionally excluded: Cloudflare documents that per-user upstream OAuth requires `on_behalf=true`, while service-token sessions require it to be false and use the admin credential. That would violate the proof's identity model.
+Set the profile's chat provider to `workers-ai` (for example `@cf/openai/gpt-oss-20b`) and run `pnpm workbench:init` again before deploying; the profile is compiled into the Worker. Set `AI_GATEWAY_ID` in the environment to route calls through an AI Gateway you created. Any other provider (an OpenAI-compatible endpoint, Bedrock) also works from a Worker; give it its secrets with `wrangler secret put`.
 
-## Workers Builds configuration
+## Salesforce sandbox through a Cloudflare MCP portal (optional)
 
-Connect the existing `marketing-workbench-pot` Worker to this repository under **Settings > Builds**. Use:
+The portal is a per-user (browser) integration, not a service-token one. Per-user upstream OAuth needs `on_behalf=true`, and service-token sessions require it to be false, so do not use service tokens.
 
-- Production branch: `main`
-- Root directory: `/`
-- Build command: `pnpm verify`
-- Deploy command: `pnpm exec wrangler deploy --config wrangler.jsonc`
-- Build cache: enabled
-- Build variable `NODE_VERSION`: `26`
-- Build variable `PNPM_VERSION`: `11.22.0`
+1. Prove the Hosted MCP server directly with `salesforce/postman/Marketing-Workbench.postman_collection.json` (OAuth authorization code with PKCE; External Client App scopes `mcp_api refresh_token`). Record only sanitized responses.
+2. In Zero Trust → Access controls → MCP Portals, add the Hosted MCP URL as a Streamable HTTP server with manual OAuth credentials, and register the callback URI Cloudflare shows in the Salesforce External Client App.
+3. Create one portal with only that server, keep **Require user auth** on, and apply your allow policy to both the portal and the server applications.
+4. Curate the portal's tools to exactly `packages/contracts/src/tool-catalog.json`. The Worker filters again, and never exposes write tools to autonomous execution.
+5. Set `SALESFORCE_MCP_URL` to the portal's `/mcp` endpoint and apply D1 migrations: `pnpm exec wrangler d1 migrations apply APP_DB --remote --config wrangler.cloudflare.jsonc`. `pnpm contracts:check` enforces that the audit schema accepts every allowed write.
+6. As a signed-in user, connect from the workbench and read back the connection state, the namespaced tools, a readiness result, a confirmed draft save, and a confirmed review task. Each write must show the same idempotency key in the D1 audit and in Salesforce.
 
-Keep preview builds disabled until separate preview D1, R2, Access, and Salesforce OAuth resources are configured. A branch preview must never share the production proof database, bucket, secrets, or upstream writes.
-
-The three runtime secrets `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, and `CONFIRMATION_SIGNING_KEY` already belong to the Worker and must remain runtime secrets. Do not copy their values into repository settings, build variables, source control, or build logs. The non-secret runtime values and all resource bindings are owned by `wrangler.jsonc`; do not duplicate them in the dashboard.
+After any MCP definition change, refresh the custom server in Salesforce, use **Sync capabilities**, enable each new approved tool in the portal, and run `pnpm test:production:chat` with an ephemeral Access token.
 
 ## Operator kill switches
 
-Two optional runtime switches pause risky behavior without a code change. They are Worker secrets rather than `wrangler.jsonc` variables because Workers Builds redeploys `vars` from source on every merge, which would reset them. When unset, everything is enabled.
+Optional runtime switches pause risky behavior without a code change. They are Worker secrets (not `vars`) so a redeploy does not reset them. When unset, everything is enabled.
 
-- `WRITES_ENABLED`: set it to `false` to pause every confirmed Salesforce write: the Marketing Cloud agent's brief and campaign saves, review tasks, and image attachments. Preflight and execute return `503 WRITES_DISABLED`, and the UI shows a paused notice and disables the write buttons.
-- `DISABLED_TOOLS`: a comma-separated list of curated tool names, for example `attach_campaign_image,summarize_campaign`. Disabled read tools are removed from the model's tool set, and a routed request explains that an operator turned the tool off. Disabled write tools are blocked like paused writes. Unknown names are ignored.
-- `MEMORY_ENABLED`: set it to `false` to stop long-term memory (ADR-007). Nothing new is remembered, the recall tools are withheld (a recall question says an operator turned them off), and the Memory tab says memory is off. Stored memory stays until it expires or is forgotten.
+- `WRITES_ENABLED=false` pauses every confirmed write; preflight and execute return `503 WRITES_DISABLED`.
+- `DISABLED_TOOLS` is a comma-separated list of tool names to turn off.
+- `MEMORY_ENABLED=false` stops long-term memory.
 
-```bash
-printf 'false' | pnpm exec wrangler secret put WRITES_ENABLED --config wrangler.jsonc
-pnpm exec wrangler secret delete WRITES_ENABLED --config wrangler.jsonc
+```sh
+printf 'false' | pnpm exec wrangler secret put WRITES_ENABLED --config wrangler.cloudflare.jsonc
+pnpm exec wrangler secret delete WRITES_ENABLED --config wrangler.cloudflare.jsonc
 ```
 
-`GET /agent/operations` reports the active controls. `GET /agent/audit/export` downloads the caller's confirmed-write audit rows, memory remembers and forgets, and turn summaries from the 24-hour retention window. Older turns and audit rows are pruned on every write and hourly by the cron.
+`GET /agent/operations` reports the active controls; `GET /agent/audit/export` downloads the caller's audit rows within the retention window. Older rows are pruned on every write and hourly by the cron.
 
-## Marketing Cloud agent writes (ADR-008)
+## Neo4j graph (optional)
 
-Briefs and campaigns are created by the `Workbench_Campaign_Creation` agent (a Marketing Cloud Next Campaign Creation agent) through its Hosted MCP tools `save_marketing_brief` and `create_marketing_campaign`; `get_marketing_records` reads them back.
+Without Neo4j the knowledge graph tools use the in-memory copy of the dataset. To use Aura instead, set `NEO4J_QUERY_URL` (`https://<instance>.databases.neo4j.io/db/<database>/query/v2`), `NEO4J_USERNAME` and `NEO4J_PASSWORD` as Worker secrets, then seed it with the same variables exported locally: `pnpm kg:seed --confirm --reset`, and check `pnpm kg:parity`. The seed uses the dataset of your instance profile; parity checks run against the full-tour profile. The hourly cron runs one read query so Aura Free does not pause.
 
-- **Deploy order:** merge the pull request, which deploys the MCP definition and Apex through CI, then apply D1 migrations with `pnpm exec wrangler d1 migrations apply APP_DB --remote --config wrangler.jsonc` and deploy the Worker. Refresh the Cloudflare MCP portal so it lists the new tools.
-- **Agent changes:** edit `salesforce/force-app/main/default/aiAuthoringBundles/Workbench_Campaign_Creation`, validate with `sf agent validate authoring-bundle`, and publish with `sf agent publish authoring-bundle`; it must stay on the `MktCloud__CampaignCreationAgent` template.
-- **Retired metadata:** after the new MCP definition is live, delete `WorkbenchSaveCampaign`, `WorkbenchSaveBrief`, `WorkbenchSaveMessage`, `WorkbenchSaveCampaignBrief`, `WorkbenchRecordWrites`, `WorkbenchRecordActionsTest`, `Workbench_Brief__c`, `Workbench_Message__c`, and `Campaign.Workbench_Brand__c` from the proof org.
+## Workers Builds (optional)
 
-## Neo4j knowledge graph
+If you connect the repository to Workers Builds, build with `pnpm verify` and deploy with `pnpm exec wrangler deploy --config wrangler.cloudflare.jsonc`; commit nothing instance-specific (the rendered config is ignored), so render it in the build command or deploy from your machine instead. Set `NODE_VERSION=26` and `PNPM_VERSION=11.22.0`. Keep secrets as runtime secrets, never build variables.
 
-The knowledge graph (ADR-006) reads from Neo4j AuraDB through the Query API.
+## Teardown
 
-- **Secrets:** set `NEO4J_QUERY_URL` (`https://<instance>.databases.neo4j.io/db/<database>/query/v2`), `NEO4J_USERNAME`, and `NEO4J_PASSWORD` as Worker secrets with `wrangler secret put`. Without them, the tools use the in-memory demo copy and the rail says so.
-- **Seed or rebuild:** export the same three variables locally, then run `pnpm kg:seed --confirm --reset`. `--reset` removes every earlier demo dataset version (`workbench-kg*`) first, so a model change (new labels or ids) leaves nothing stale. Long-term memory (`workbench-memory-v1`) is kept. It is idempotent and ends with a count read-back. Run `pnpm kg:parity` afterwards to confirm every graph tool matches the fixture.
-- **Check parity:** `pnpm kg:parity` confirms Neo4j matches the in-memory copy for every tool and for long-term memory. For memory it writes to a throwaway `parity-*` workspace and forgets it afterwards. It reports tool latency (p50/p95) and fails if the median reaches 500 ms.
-- **Long-term memory (ADR-007):** the Worker writes memory nodes only through fixed statements in `packages/knowledge-graph/src/memory.ts`. To remove all memory, run `MATCH (n {dataset: 'workbench-memory-v1'}) DETACH DELETE n` in the Aura console.
-- **Keep-alive and sweep:** the Worker's hourly cron (`17 * * * *` UTC) runs one read query so Aura Free doesn't pause, and deletes memory past its 14-day expiry. A paused instance returns a "may be paused" tool error; resume it in the Aura console.
-- **Teardown:** delete the Aura instance in the console, and remove the three secrets with `wrangler secret delete`.
+Delete only what you created: the Worker, the Access application and policy, the D1 database and the R2 bucket, then list resources to confirm. Never use a broad account cleanup command.
 
-## Rollback and teardown
+## What was verified
 
-Delete only the IDs recorded by this work unit: the proof Worker, Access application/policy, D1 database, R2 bucket, and Durable Object namespace/migration associated with the proof Worker. Export no data. Read back the resource lists after deletion and attach the results to the work unit. Never use a broad account cleanup command.
+The template renders to a valid configuration (unit-tested) and `wrangler deploy --dry-run` accepts it. A live deploy to a Cloudflare account was **not** performed in the authoring environment.

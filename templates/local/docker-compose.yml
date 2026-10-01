@@ -1,0 +1,31 @@
+# The workbench and a local Ollama, both in containers. From the repository root:
+#   docker compose -f templates/local/docker-compose.yml up --build
+#   docker compose -f templates/local/docker-compose.yml exec ollama ollama pull gpt-oss:20b
+# Then open http://127.0.0.1:5173. Nothing is published beyond this machine.
+services:
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+
+  workbench:
+    build:
+      context: ../..
+      dockerfile: templates/container/Dockerfile
+    environment:
+      ENVIRONMENT: local
+      AUTH_MODE: development
+      WORKBENCH_ALLOW_OPEN: "1"
+      OLLAMA_BASE_URL: http://ollama:11434/v1
+    ports:
+      - "127.0.0.1:5173:8787"
+    volumes:
+      - workbench-state:/app/.wrangler/state
+    depends_on:
+      - ollama
+
+volumes:
+  ollama:
+  workbench-state:

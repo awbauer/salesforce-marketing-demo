@@ -11,6 +11,8 @@ export type ModelBindings = {
   OLLAMA_BASE_URL?: string;
   OPENAI_COMPATIBLE_API_KEY?: string;
   AWS_REGION?: string;
+  /** A Bedrock API key; works anywhere, including workerd, with no credential chain. */
+  AWS_BEARER_TOKEN_BEDROCK?: string;
   AWS_ACCESS_KEY_ID?: string;
   AWS_SECRET_ACCESS_KEY?: string;
   AWS_SESSION_TOKEN?: string;
@@ -32,7 +34,8 @@ export function resolveChatModel(
     case "openai-compatible":
       return createOpenAICompatible({
         name: provider,
-        baseURL: baseUrl ?? env.OLLAMA_BASE_URL ?? DEFAULT_OLLAMA_URL,
+        // The environment wins, so a container can point at a sibling Ollama service.
+        baseURL: env.OLLAMA_BASE_URL ?? baseUrl ?? DEFAULT_OLLAMA_URL,
         apiKey: env.OPENAI_COMPATIBLE_API_KEY,
       })(model);
     case "workers-ai":
@@ -44,6 +47,7 @@ export function resolveChatModel(
     case "bedrock":
       return createAmazonBedrock({
         region: env.AWS_REGION,
+        apiKey: env.AWS_BEARER_TOKEN_BEDROCK,
         accessKeyId: env.AWS_ACCESS_KEY_ID,
         secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
         sessionToken: env.AWS_SESSION_TOKEN,
@@ -64,7 +68,7 @@ export async function chatModelReachable(
   const { provider, baseUrl } = profile.models.chat;
   if (provider === "workers-ai") return Boolean(env.AI);
   if (provider === "bedrock") return Boolean(env.AWS_REGION);
-  const root = (baseUrl ?? env.OLLAMA_BASE_URL ?? DEFAULT_OLLAMA_URL).replace(/\/$/, "");
+  const root = (env.OLLAMA_BASE_URL ?? baseUrl ?? DEFAULT_OLLAMA_URL).replace(/\/$/, "");
   try {
     const response = await fetchImpl(`${root}/models`, { signal: AbortSignal.timeout(2500) });
     return response.ok;
